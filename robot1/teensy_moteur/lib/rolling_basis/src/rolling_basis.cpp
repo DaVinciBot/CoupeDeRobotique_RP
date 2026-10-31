@@ -134,43 +134,5 @@ void Rolling_Basis::odometrie_handle() {
  * Compute the PID and set the motors new command.
  */
 void Rolling_Basis::handle(Point target_position, Com* com) {
-    /* Position part */
-    // We already have the current robot's position with odometrie (X, Y, THETA)
-
-    // Compute distance and orientation error (difference between target and
-    // real)
-    double xerr = target_position.x - this->X;
-    double yerr = target_position.y - this->Y;
-
-    double distance_error = xerr * cosf(this->THETA) + yerr * sinf(this->THETA);
-    double norm = sqrt(pow(xerr, 2) + pow(yerr, 2));
-    double sign = (distance_error >= 0.0) ? +1.0 : -1.0;
-    distance_error = norm * sign;
-
-    double theta_error = target_position.theta - this->THETA;
-    /*+ Point::angle(
-        Point(this->X, this->Y, this->THETA),
-        target_position
-    ) - this->THETA;*/
-
-    theta_error = normalizeAngle(theta_error);
-
-    // Consigne vitesse
-    // Compute PID output based on errors
-    double linear_correction =
-        this->linear_distance_pid.compute(distance_error);
-    double angular_correction = this->angular_distance_pid.compute(theta_error);
-
-    double right_pwm = linear_correction + angular_correction;
-    double left_pwm = linear_correction - angular_correction;
-
-    // static long ticks_counter = 0;
-    // if (ticks_counter++ > 10) {
-    //     ticks_counter = 0;
-    //     String pwms = "PWMs: " + String(right_pwm) + ", " + String(left_pwm);
-    //     com->print((char *)pwms.c_str());
-    // }
-
-    this->right_motor->set_motor(right_pwm);
-    this->left_motor->set_motor(left_pwm);
+    // TODO: réimplémenter l'asservissement (cf. doc de Fadi)
 }
