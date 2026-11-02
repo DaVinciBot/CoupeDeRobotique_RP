@@ -12,25 +12,15 @@
 
 // 1. Instanciate the Rolling Basis object
 // a. Define the PID controllers
-PID linear_distance_pid(KP_LINEAR_DISTANCE,
-                        KI_LINEAR_DISTANCE,
-                        KD_LINEAR_DISTANCE,
-                        -240,
-                        240,
-                        5.0);
-PID angular_distance_pid(KP_ANGULAR_DISTANCE,
-                         KI_ANGULAR_DISTANCE,
-                         KD_ANGULAR_DISTANCE,
-                         -200,
-                         200,
-                         2.0);
+PID linear_position_pid(KP_LINEAR_POSITION, 0, 0, -V_MAX, V_MAX, 5.0);
+PID angular_position_pid(KP_ANGULAR_POSITION, 0, 0, -W_MAX, W_MAX, 2.0);
 
 // b. Instanciate the Rolling Basis object
 Rolling_Basis* rolling_basis_ptr = new Rolling_Basis(ENCODER_RESOLUTION,
                                                      ENTRAXE,
                                                      WHEEL_DIAMETER,
-                                                     linear_distance_pid,
-                                                     angular_distance_pid);
+                                                     linear_position_pid,
+                                                     angular_position_pid);
 
 // 2. Instanciate the Communication object
 Com* com;
@@ -143,7 +133,7 @@ void setup() {
                     RISING);
 
     // Init motors handle timer
-    Timer1.initialize(ASSERVISSEMENT_FREQUENCY);
+    Timer1.initialize(ASSERVISSEMENT_PERIOD);
     Timer1.attachInterrupt(handle);
 
     // Initialize callback functions

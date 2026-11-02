@@ -22,39 +22,49 @@
 #define R_IN2 1
 #define R_IN1 0
 
-// Creation Rolling Basis
-// Motor
-#define MAX_PWM 240
-
 // Encoder
 #define ENCODER_RESOLUTION 1024
 #define ENTRAXE 29.5
 #define WHEEL_DIAMETER 5.9
 
-// PIDs
-// #define KP_LINEAR_DISTANCE 1.2
-// #define KI_LINEAR_DISTANCE 0.02
-// #define KD_LINEAR_DISTANCE 0.10
+// PIs for each wheels
+#define KP_SPEED_LEFT 0
+#define KI_SPEED_LEFT 0
 
-// #define KP_ANGULAR_DISTANCE 4.0
-// #define KI_ANGULAR_DISTANCE 0.1
-// #define KD_ANGULAR_DISTANCE 0.20
-#define KP_LINEAR_DISTANCE 0
-#define KI_LINEAR_DISTANCE 0
-#define KD_LINEAR_DISTANCE 0
+#define KP_SPEED_RIGHT 0
+#define KI_SPEED_RIGHT 0
 
-#define KP_ANGULAR_DISTANCE 0
-#define KI_ANGULAR_DISTANCE 0
-#define KD_ANGULAR_DISTANCE 0
+// Niveau 2 de l'asservissement
+#define KP_LINEAR_POSITION 0
 
+#define KP_ANGULAR_POSITION 0
+
+// PID IDS
 #define LINEAR_POSITION_PID_ID 0
 #define ANGULAR_POSITION_PID_ID 1
+#define LEFT_SPEED_PID_ID 2
+#define RIGHT_SPEED_PID_ID 3
 
-// PWM frequency
+// PWM
+#define MAX_PWM 240
 #define PWM_FREQUENCY 40000
+#define PWM_RESOLUTION 12
+#define PWM_MAX 4095  // (2 ** PWM_RESOLUTION) - 1
 
 // Asservissement echantillonage fréquence
-#define ASSERVISSEMENT_FREQUENCY 5000
+#define ASSERVISSEMENT_PERIOD 5000  // 5ms
+#define TS (ASSERVISSEMENT_PERIOD * 1e-6)  // en s
 
 // Com baudrate
 #define BAUDRATE 115200
+
+// Tension
+#define U_MAX 12.0  // en V
+#define U_MIN 0.0 // zone morte : tension min pour que la roue démarre, à mesurer
+#define VBAT_DEFAULT 14.8  // la tension de la batterie par default
+
+// SPEED AND TURN LIMIT
+#define V_MAX 1.0      // en cm/s
+#define ACC_MAX 1.0    // en cm/s²
+#define W_MAX 1.0      // en rad/s
+#define W_ACC_MAX 1.0  // en rad/s²
