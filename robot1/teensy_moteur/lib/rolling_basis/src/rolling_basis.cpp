@@ -63,9 +63,10 @@ void Rolling_Basis::define_right_motor(byte enca,
                                        byte pwm,
                                        byte in2,
                                        byte in1,
-                                       byte max_pwm) {
+                                       byte max_pwm,
+                                       double ts) {
     this->right_motor = new Motor(in1, in2, pwm, enca, encb,
-                                  this->wheel_unit_tick_cm(), max_pwm);
+                                  this->wheel_unit_tick_cm(), max_pwm, ts);
 }
 
 /**
@@ -77,9 +78,10 @@ void Rolling_Basis::define_left_motor(byte enca,
                                       byte pwm,
                                       byte in2,
                                       byte in1,
-                                      byte max_pwm) {
+                                      byte max_pwm,
+                                      double ts) {
     this->left_motor = new Motor(in1, in2, pwm, enca, encb,
-                                 this->wheel_unit_tick_cm(), max_pwm);
+                                 this->wheel_unit_tick_cm(), max_pwm, ts);
 }
 
 /**
@@ -120,6 +122,9 @@ void Rolling_Basis::odometrie_handle() {
     double delta_theta =
         (this->right_motor->distance - this->left_motor->distance) /
         this->center_distance;
+
+    this->delta_mes += delta_distance;
+    this->psi_mes += delta_theta;
 
     // Determine the new cartesian position of the robot
     this->X += cosf(this->THETA + (delta_theta / 2.0f)) * delta_distance;

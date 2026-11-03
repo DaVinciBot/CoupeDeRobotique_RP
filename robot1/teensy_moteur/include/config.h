@@ -16,14 +16,14 @@
 #define L_IN1 4
 
 // Motor Right
-#define R_ENCA 14  // Va te faire foutre (Flo)
-#define R_ENCB 13  // Si rien ne marche change les pins
+#define R_ENCA 14
+#define R_ENCB 13
 #define R_PWM 2
 #define R_IN2 1
 #define R_IN1 0
 
 // Encoder
-#define ENCODER_RESOLUTION 1024
+#define ENCODER_RESOLUTION 4096 //comme on a 4 ticks par impulsions, on aura 4*1024 = 4096 ticks par tour comme résolution
 #define ENTRAXE 29.5
 #define WHEEL_DIAMETER 5.9
 
@@ -52,7 +52,7 @@
 #define PWM_MAX 4095  // (2 ** PWM_RESOLUTION) - 1
 
 // Asservissement echantillonage fréquence
-#define ASSERVISSEMENT_PERIOD 5000  // 5ms
+#define ASSERVISSEMENT_PERIOD 5000         // 5ms
 #define TS (ASSERVISSEMENT_PERIOD * 1e-6)  // en s
 
 // Com baudrate

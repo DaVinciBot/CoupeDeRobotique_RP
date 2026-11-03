@@ -42,6 +42,9 @@ class Rolling_Basis {
     double Y = 0.0f;
     double THETA = 0.0f;
 
+    double delta_mes = 0.0;  // distance cumulée, en cm, jamais recalée
+    double psi_mes = 0.0;    // angle cumulé, en rad, jamais recalé
+
     // Rolling basis params
     unsigned short encoder_resolution;
     double center_distance;
@@ -74,7 +77,8 @@ class Rolling_Basis {
                             byte pwm,
                             byte in2,
                             byte in1,
-                            byte max_pwm);
+                            byte max_pwm,
+                            double ts);
     /**
      * @brief Define left motor with pins, related encoders pin and properties
      * of the wheel attached to the motor.
@@ -84,7 +88,8 @@ class Rolling_Basis {
                            byte pwm,
                            byte in2,
                            byte in1,
-                           byte max_pwm);
+                           byte max_pwm,
+                           double ts);
     /**
      * @brief Initialize both motors
      */

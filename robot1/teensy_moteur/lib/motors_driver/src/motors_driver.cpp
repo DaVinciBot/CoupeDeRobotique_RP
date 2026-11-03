@@ -18,7 +18,8 @@ Motor::Motor(byte pin_forward,
              byte pin_enca,
              byte pin_encb,
              double wheel_unit_tick_cm,
-             byte max_pwm) {
+             byte max_pwm,
+             double ts) {
     this->pin_forward = pin_forward;
     this->pin_backward = pin_backward;
 
@@ -27,8 +28,11 @@ Motor::Motor(byte pin_forward,
     this->pin_encb = pin_encb;  // AttachInterrupt pin only !
 
     this->max_pwm = max_pwm;
+    this->ts = ts;
 
     this->wheel_unit_tick_cm = wheel_unit_tick_cm;
+
+    this->encoder = new Encoder(pin_enca, pin_encb);
 }
 
 /**
@@ -38,9 +42,7 @@ void Motor::init() {
     pinMode(this->pin_forward, OUTPUT);
     pinMode(this->pin_backward, OUTPUT);
     pinMode(this->pin_pwm, OUTPUT);
-
-    pinMode(this->pin_enca, INPUT);
-    pinMode(this->pin_encb, INPUT);
+    // la lib Encoder s'occupe de l'initialisation des pins des encodeurs
 }
 
 /**
@@ -71,9 +73,11 @@ void Motor::set_motor(int pwmVal) {
  */
 void Motor::handle_odometrie() {
     // Update Ticks
-    long delta_ticks = this->ticks - this->last_ticks;
-    this->last_ticks = this->ticks;
+    long ticks = this->encoder->read();
+    long delta_ticks = ticks - this->last_ticks;
+    this->last_ticks = ticks;
 
     // Compute new distance travelled
     this->distance = delta_ticks * this->wheel_unit_tick_cm;
+    this->speed = this->distance / this->ts;  // en cm/s
 }

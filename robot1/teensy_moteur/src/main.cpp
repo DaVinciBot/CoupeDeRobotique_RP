@@ -25,22 +25,6 @@ Rolling_Basis* rolling_basis_ptr = new Rolling_Basis(ENCODER_RESOLUTION,
 // 2. Instanciate the Communication object
 Com* com;
 
-// c. Define the motors interrupt functions
-/******* Attach Interrupt *******/
-inline void left_motor_read_encoder() {
-    if (digitalRead(L_ENCB))
-        rolling_basis_ptr->left_motor->ticks--;
-    else
-        rolling_basis_ptr->left_motor->ticks++;
-}
-
-inline void right_motor_read_encoder() {
-    if (digitalRead(R_ENCB))
-        rolling_basis_ptr->right_motor->ticks--;
-    else
-        rolling_basis_ptr->right_motor->ticks++;
-}
-
 // 3. Define all com callback functions
 // a. define globals variables to keep in memory callback functions updated
 Point target_position(START_X, START_Y, START_THETA);
@@ -121,16 +105,12 @@ void setup() {
 
     // Init Rolling Basis
     rolling_basis_ptr->define_right_motor(R_ENCA, R_ENCB, R_PWM, R_IN2, R_IN1,
-                                          MAX_PWM);
+                                          MAX_PWM, TS);
     rolling_basis_ptr->define_left_motor(L_ENCA, L_ENCB, L_PWM, L_IN2, L_IN1,
-                                         MAX_PWM);
+                                         MAX_PWM, TS);
     rolling_basis_ptr->init_motors();
 
     rolling_basis_ptr->init_rolling_basis(START_X, START_Y, START_THETA);
-    attachInterrupt(digitalPinToInterrupt(L_ENCA), left_motor_read_encoder,
-                    RISING);
-    attachInterrupt(digitalPinToInterrupt(R_ENCA), right_motor_read_encoder,
-                    RISING);
 
     // Init motors handle timer
     Timer1.initialize(ASSERVISSEMENT_PERIOD);
@@ -159,13 +139,3 @@ void loop() {
         counter = 0;
     }
 }
-
-/*
-
- This code was realized by Florian BARRE
-    ____ __
-   / __// /___
-  / _/ / // _ \
- /_/  /_/ \___/
-
-*/

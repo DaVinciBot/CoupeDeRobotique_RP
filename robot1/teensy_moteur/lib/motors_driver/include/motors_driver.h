@@ -5,6 +5,7 @@
  */
 
 #include <Arduino.h>
+#include <Encoder.h>
 
 // Motor class
 class Motor {
@@ -21,14 +22,16 @@ class Motor {
     // Ticks distance
     double wheel_unit_tick_cm;
 
+    double ts;  // période de la boucle, en s
    public:
-    volatile long ticks = 0L;
+    Encoder* encoder;  // Encoder object to handle the encoder of the motor
 
     // Motor description (it is the last data calculated by the motor odometer
     // handle method)
     double distance = 0.0;  // Distance in cm
     long last_ticks = 0L;   // Ticks distance used to compute distance and speed
                             // (updated at the last odometer handle call)
+    double speed = 0.0;     // en cm/s
 
     // Constructor
     /**
@@ -42,7 +45,8 @@ class Motor {
           byte pin_enca,
           byte pin_encb,
           double wheel_unit_tick_cm,
-          byte max_pwm);
+          byte max_pwm,
+          double ts);
     ~Motor() = default;
 
     // Methods
