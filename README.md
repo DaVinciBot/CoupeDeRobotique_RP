@@ -24,6 +24,7 @@ Code du robot principal de l'équipe DaVinciBot, pour la Coupe de France de Robo
 
 ## Structure du dépôt
 
+lidar + doc dans /LIDAR
 <!-- À compléter -->
 
 ## Organisation des branches
