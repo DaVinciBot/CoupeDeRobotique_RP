@@ -50,6 +50,18 @@ class Rolling_Basis {
     double center_distance;
     double wheel_diameter;
 
+    // V de la batterie
+    double vbat = 0.0;  // en V
+
+    // OPEN_LOOP : tension imposée, SPEED : vitesse imposée, POSITION : cascade
+    enum class Mode { OPEN_LOOP, SPEED, POSITION };
+    volatile Mode mode = Mode::OPEN_LOOP;
+
+    // tension demandée au moteur gauche, en V
+    volatile double u_left_target = 0.0;
+    // tension demandée au moteur droit, en V
+    volatile double u_right_target = 0.0;
+
     // Constructor
     /**
      * @brief constructor of the Rolling Basis class
@@ -69,26 +81,40 @@ class Rolling_Basis {
 
     // Inits function
     /**
-     * @brief Define right motor with pins, related encoders pin and properties
-     * of the wheel attached to the motor.
+     * @brief Crée le moteur droit avec ses broches et ses paramètres
+     *
+     * @param enca Broche A de l'encodeur
+     * @param encb Broche B de l'encodeur
+     * @param pwm Broche PWM du driver
+     * @param dir Broche de sens du driver
+     * @param pwm_max Valeur PWM maximale (dépend de la résolution)
+     * @param u_max Tension maximale du moteur, en V
+     * @param ts Période de la boucle, en s
      */
     void define_right_motor(byte enca,
                             byte encb,
                             byte pwm,
-                            byte in2,
-                            byte in1,
-                            byte max_pwm,
+                            byte dir,
+                            int pwm_max,
+                            double u_max,
                             double ts);
     /**
-     * @brief Define left motor with pins, related encoders pin and properties
-     * of the wheel attached to the motor.
+     * @brief Crée le moteur gauche avec ses broches et ses paramètres
+     *
+     * @param enca Broche A de l'encodeur
+     * @param encb Broche B de l'encodeur
+     * @param pwm Broche PWM du driver
+     * @param dir Broche de sens du driver
+     * @param pwm_max Valeur PWM maximale (dépend de la résolution)
+     * @param u_max Tension maximale du moteur, en V
+     * @param ts Période de la boucle, en s
      */
     void define_left_motor(byte enca,
                            byte encb,
                            byte pwm,
-                           byte in2,
-                           byte in1,
-                           byte max_pwm,
+                           byte dir,
+                           int pwm_max,
+                           double u_max,
                            double ts);
     /**
      * @brief Initialize both motors
@@ -101,20 +127,36 @@ class Rolling_Basis {
 
     // Odometrie function
     /**
-     * @brief Handle the odometry computation
+     * @brief Calcule le déplacement du robot sur la dernière période
      *
-     * Update motors position sthen compute displacement of both motors.
-     * The with these results, estimate the robot position and orientation.
-     * Finally update the rolling basis state.
+     * Met à jour les deux roues, puis en déduit la distance et la rotation du
+     * robot. Ces valeurs sont ajoutées à delta_mes et psi_mes, qui servent aux
+     * correcteurs et ne sont jamais recalés, puis à la pose X, Y, THETA.
      */
     void odometrie_handle();
     /**
-     * @brief Handle the correction computation
+     * @brief Calcule et applique la commande des moteurs
      *
-     * Compute the distance and orientation error in terms of position.A0
-     * Compute the PID and set the motors new command.
+     * Appelée par le timer à chaque période, après odometrie_handle().
+     * Selon le mode :
+     * - OPEN_LOOP : applique directement u_left_target et u_right_target.
+     * - SPEED et POSITION : pas encore implémentés, les moteurs restent à 0 V.
+     *
+     * @param target_position Position cible du robot
+     * @param com Objet de communication avec la Raspberry
      */
     void handle(Point target_position, Com* com);
+
+    /**
+     * @brief Passe en mode OPEN_LOOP avec une tension par moteur
+     *
+     * Le bloc atomique empêche le timer de s'exécuter pendant l'écriture : il
+     * ne peut pas lire une consigne à moitié écrite, ni une seule des deux.
+     *
+     * @param u_left Tension du moteur gauche, en V
+     * @param u_right Tension du moteur droit, en V
+     */
+    void set_open_loop(double u_left, double u_right);
 
     void pi_mod_signed(double theta);
 

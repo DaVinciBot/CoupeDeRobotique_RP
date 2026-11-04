@@ -12,23 +12,24 @@
  * Define the pins of the motor, the related encoder pins and the properties of
  * the wheel attached to the motor
  */
-Motor::Motor(byte pin_forward,
-             byte pin_backward,
+Motor::Motor(byte pin_dir,
              byte pin_pwm,
              byte pin_enca,
              byte pin_encb,
              double wheel_unit_tick_cm,
-             byte max_pwm,
+             int pwm_max,
+             double u_max,
              double ts) {
-    this->pin_forward = pin_forward;
-    this->pin_backward = pin_backward;
+    this->pin_dir = pin_dir;  // PIN de direction
 
     this->pin_pwm = pin_pwm;    // PWM pin only !
     this->pin_enca = pin_enca;  // AttachInterrupt pin only !
     this->pin_encb = pin_encb;  // AttachInterrupt pin only !
 
-    this->max_pwm = max_pwm;
+    this->pwm_max = pwm_max;
     this->ts = ts;
+
+    this->u_max = u_max;
 
     this->wheel_unit_tick_cm = wheel_unit_tick_cm;
 
@@ -39,37 +40,60 @@ Motor::Motor(byte pin_forward,
  * @brief Initialize the mode of the pins define for the motor
  */
 void Motor::init() {
-    pinMode(this->pin_forward, OUTPUT);
-    pinMode(this->pin_backward, OUTPUT);
+    pinMode(this->pin_dir, OUTPUT);
     pinMode(this->pin_pwm, OUTPUT);
     // la lib Encoder s'occupe de l'initialisation des pins des encodeurs
 }
 
 /**
- * @brief Set motor PWM and direction
+ * @brief Applique une tension au moteur
  *
- * @param pwmVal Power value of the motor
+ * Borne u à +/- u_max, puis calcule le rapport cyclique alpha = u / vbat.
+ * Diviser par vbat garde la même tension moteur quand la batterie baisse.
+ * Le signe d'alpha donne le sens (DIR) et sa valeur absolue donne la PWM.
+ * Si vbat n'est pas valide, le moteur est coupé.
+ *
+ * @param u Tension à appliquer, en V (le signe donne le sens)
+ * @param vbat Tension de la batterie, en V
  */
-void Motor::set_motor(int pwmVal) {
-    int16_t dir = pwmVal > 0 ? 1 : -1;
-    pwmVal = constrain(abs(pwmVal), 0, this->max_pwm);
-    analogWrite(this->pin_pwm, pwmVal);
-    if (dir == 1) {
-        digitalWrite(this->pin_forward, HIGH);
-        digitalWrite(this->pin_backward, LOW);
-    } else if (dir == -1) {
-        digitalWrite(this->pin_forward, LOW);
-        digitalWrite(this->pin_backward, HIGH);
-    } else {
-        digitalWrite(this->pin_forward, LOW);
-        digitalWrite(this->pin_backward, LOW);
+void Motor::set_voltage(double u, double vbat) {
+    // on borne u
+    if (u > this->u_max) {
+        u = this->u_max;
     }
+    if (u < -this->u_max) {
+        u = -this->u_max;
+    }
+
+    // si vbat n'est pas valide, alpha reste à 0 et le moteur s'arrête
+    double alpha = 0.0;
+    if (vbat > 0.05) {
+        alpha = u / vbat;
+    }
+
+    // borner alpha entre -1 et 1 pour ne pas depasser la tension de la batterie
+    if (alpha > 1.0) {
+        alpha = 1.0;
+    }
+    if (alpha < -1.0) {
+        alpha = -1.0;
+    }
+    this->voltage = alpha * vbat;
+
+    // on choisit le sens avec le signe d'alpha
+    digitalWrite(this->pin_dir, alpha >= 0);
+
+    // envoie du pwm
+    analogWrite(this->pin_pwm, fabs(alpha) * this->pwm_max);
 }
 
 /**
- * @brief Compute odometry.
- * Compute distance travelled by the encoders wheel and the speed of the
- * encoders wheel.
+ * @brief Met à jour la distance et la vitesse de la roue
+ *
+ * Lit le compteur de l'encodeur et le compare à la lecture précédente.
+ * Les tics parcourus sont convertis en cm, puis divisés par la période ts
+ * pour obtenir la vitesse en cm/s.
+ * A appeler une seule fois par période.
  */
 void Motor::handle_odometrie() {
     // Update Ticks

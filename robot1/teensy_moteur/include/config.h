@@ -12,15 +12,13 @@
 #define L_ENCA 12
 #define L_ENCB 11
 #define L_PWM 5
-#define L_IN2 3
-#define L_IN1 4
+#define L_DIR 4  // a changer surement
 
 // Motor Right
 #define R_ENCA 14
 #define R_ENCB 13
 #define R_PWM 2
-#define R_IN2 1
-#define R_IN1 0
+#define R_DIR 0  // a changer surement
 
 // Encoder
 #define ENCODER_RESOLUTION 4096 //comme on a 4 ticks par impulsions, on aura 4*1024 = 4096 ticks par tour comme résolution
@@ -46,7 +44,6 @@
 #define RIGHT_SPEED_PID_ID 3
 
 // PWM
-#define MAX_PWM 240
 #define PWM_FREQUENCY 40000
 #define PWM_RESOLUTION 12
 #define PWM_MAX 4095  // (2 ** PWM_RESOLUTION) - 1

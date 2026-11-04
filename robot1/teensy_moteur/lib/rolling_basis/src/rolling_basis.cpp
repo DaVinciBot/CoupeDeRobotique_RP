@@ -55,33 +55,47 @@ Rolling_Basis::Rolling_Basis(unsigned short encoder_resolution,
 // Methods
 // Inits function
 /**
- * @brief Define right motor with pins, related encoders pin and properties of
- * the wheel attached to the motor.
+ * @brief Crée le moteur droit avec ses broches et ses paramètres
+ *
+ * @param enca Broche A de l'encodeur
+ * @param encb Broche B de l'encodeur
+ * @param pwm Broche PWM du driver
+ * @param dir Broche de sens du driver
+ * @param pwm_max Valeur PWM maximale (dépend de la résolution)
+ * @param u_max Tension maximale du moteur, en V
+ * @param ts Période de la boucle, en s
  */
 void Rolling_Basis::define_right_motor(byte enca,
                                        byte encb,
                                        byte pwm,
-                                       byte in2,
-                                       byte in1,
-                                       byte max_pwm,
+                                       byte dir,
+                                       int pwm_max,
+                                       double u_max,
                                        double ts) {
-    this->right_motor = new Motor(in1, in2, pwm, enca, encb,
-                                  this->wheel_unit_tick_cm(), max_pwm, ts);
+    this->right_motor = new Motor(
+        dir, pwm, enca, encb, this->wheel_unit_tick_cm(), pwm_max, u_max, ts);
 }
 
 /**
- * @brief Define left motor with pins, related encoders pin and properties of
- * the wheel attached to the motor.
+ * @brief Crée le moteur gauche avec ses broches et ses paramètres
+ *
+ * @param enca Broche A de l'encodeur
+ * @param encb Broche B de l'encodeur
+ * @param pwm Broche PWM du driver
+ * @param dir Broche de sens du driver
+ * @param pwm_max Valeur PWM maximale (dépend de la résolution)
+ * @param u_max Tension maximale du moteur, en V
+ * @param ts Période de la boucle, en s
  */
 void Rolling_Basis::define_left_motor(byte enca,
                                       byte encb,
                                       byte pwm,
-                                      byte in2,
-                                      byte in1,
-                                      byte max_pwm,
+                                      byte dir,
+                                      int pwm_max,
+                                      double u_max,
                                       double ts) {
-    this->left_motor = new Motor(in1, in2, pwm, enca, encb,
-                                 this->wheel_unit_tick_cm(), max_pwm, ts);
+    this->left_motor = new Motor(
+        dir, pwm, enca, encb, this->wheel_unit_tick_cm(), pwm_max, u_max, ts);
 }
 
 /**
@@ -103,11 +117,11 @@ void Rolling_Basis::init_rolling_basis(double x, double y, double theta) {
 
 // Odometrie function
 /**
- * @brief Handle the odometry computation
+ * @brief Calcule le déplacement du robot sur la dernière période
  *
- * Update motors position sthen compute displacement of both motors.
- * The with these results, estimate the robot position and orientation.
- * Finally update the rolling basis state.
+ * Met à jour les deux roues, puis en déduit la distance et la rotation du
+ * robot. Ces valeurs sont ajoutées à delta_mes et psi_mes, qui servent aux
+ * correcteurs et ne sont jamais recalés, puis à la pose X, Y, THETA.
  */
 void Rolling_Basis::odometrie_handle() {
     /* Update motors positions by calling odometer_handle */
@@ -133,11 +147,52 @@ void Rolling_Basis::odometrie_handle() {
 }
 
 /**
- * @brief Handle the correction computation
+ * @brief Calcule et applique la commande des moteurs
  *
- * Compute the distance and orientation error in terms of position.A0
- * Compute the PID and set the motors new command.
+ * Appelée par le timer à chaque période, après odometrie_handle().
+ * Selon le mode :
+ * - OPEN_LOOP : applique directement u_left_target et u_right_target.
+ * - SPEED et POSITION : pas encore implémentés, les moteurs restent à 0 V.
+ *
+ * @param target_position Position cible du robot
+ * @param com Objet de communication avec la Raspberry
  */
 void Rolling_Basis::handle(Point target_position, Com* com) {
-    // TODO: réimplémenter l'asservissement (cf. doc de Fadi)
+    // le mode décide quels étages de l'asservissement tournent
+    switch (this->mode) {
+        // aucun correcteur : les tensions vont directement aux moteurs
+        case Mode::OPEN_LOOP:
+            // consignes écrites par set_open_loop(), converties en PWM + DIR
+            this->left_motor->set_voltage(this->u_left_target, this->vbat);
+            this->right_motor->set_voltage(this->u_right_target, this->vbat);
+            break;
+
+        // correcteurs pas encore implémentés
+        case Mode::SPEED:
+        case Mode::POSITION:
+            // 0 V explicite, sinon les moteurs gardent leur dernière PWM
+            this->left_motor->set_voltage(0.0, this->vbat);
+            this->right_motor->set_voltage(0.0, this->vbat);
+            break;
+    }
+}
+
+/**
+ * @brief Passe en mode OPEN_LOOP avec une tension par moteur
+ *
+ * Le bloc atomique empêche le timer de s'exécuter pendant l'écriture : il
+ * ne peut pas lire une consigne à moitié écrite, ni une seule des deux.
+ *
+ * @param u_left Tension du moteur gauche, en V
+ * @param u_right Tension du moteur droit, en V
+ */
+void Rolling_Basis::set_open_loop(double u_left, double u_right) {
+    // le timer attend la fin du bloc : il voit les trois valeurs d'un coup
+    ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
+        // tensions que handle() appliquera à la prochaine période
+        this->u_left_target = u_left;
+        this->u_right_target = u_right;
+        // handle() utilise ces tensions uniquement dans ce mode
+        this->mode = Mode::OPEN_LOOP;
+    }
 }

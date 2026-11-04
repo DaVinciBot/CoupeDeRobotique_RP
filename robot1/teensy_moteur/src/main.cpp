@@ -90,7 +90,7 @@ void initialize_callback_functions() {
 }
 
 // 4. Define the timer interrupt handle function (this function will be called
-// every 10ms, and which manage the robot position and speed: asservissement)
+// every 5ms, and which manage the robot position and speed: asservissement)
 void handle() {
     rolling_basis_ptr->odometrie_handle();
     rolling_basis_ptr->handle(target_position, com);
@@ -103,14 +103,19 @@ void setup() {
     analogWriteFrequency(R_PWM, PWM_FREQUENCY);
     analogWriteFrequency(L_PWM, PWM_FREQUENCY);
 
+    // change pwm resolution
+    analogWriteResolution(PWM_RESOLUTION);
+
     // Init Rolling Basis
-    rolling_basis_ptr->define_right_motor(R_ENCA, R_ENCB, R_PWM, R_IN2, R_IN1,
-                                          MAX_PWM, TS);
-    rolling_basis_ptr->define_left_motor(L_ENCA, L_ENCB, L_PWM, L_IN2, L_IN1,
-                                         MAX_PWM, TS);
+    rolling_basis_ptr->define_right_motor(R_ENCA, R_ENCB, R_PWM, R_DIR, PWM_MAX,
+                                          U_MAX, TS);
+    rolling_basis_ptr->define_left_motor(L_ENCA, L_ENCB, L_PWM, L_DIR, PWM_MAX,
+                                         U_MAX, TS);
     rolling_basis_ptr->init_motors();
 
     rolling_basis_ptr->init_rolling_basis(START_X, START_Y, START_THETA);
+
+    rolling_basis_ptr->vbat = VBAT_DEFAULT;
 
     // Init motors handle timer
     Timer1.initialize(ASSERVISSEMENT_PERIOD);
