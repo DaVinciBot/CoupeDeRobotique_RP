@@ -15,8 +15,10 @@
 class Rolling_Basis {
    public:
     // PID controllers
-    PID linear_distance_pid;
-    PID angular_distance_pid;
+    PID linear_distance_pid;   // sortie : vitesse, en cm/s
+    PID angular_distance_pid;  // sortie : vitesse, en rad/s
+    PID left_speed_pid;        // sortie : tension, en V
+    PID right_speed_pid;       // sortie : tension, en V
 
     // Rolling basis's params
     inline double radius() { return this->center_distance / 2.0; };
@@ -61,6 +63,10 @@ class Rolling_Basis {
     volatile double u_left_target = 0.0;
     // tension demandée au moteur droit, en V
     volatile double u_right_target = 0.0;
+    // vitesse demandée à la roue gauche, en cm/s
+    volatile double v_left_target = 0.0;
+    // vitesse demandée à la roue droite, en cm/s
+    volatile double v_right_target = 0.0;
 
     // Constructor
     /**
@@ -72,7 +78,9 @@ class Rolling_Basis {
                   double center_distance,
                   double wheel_diameter,
                   const PID& linear_distance_pid,
-                  const PID& angular_distance_pid);
+                  const PID& angular_distance_pid,
+                  const PID& left_speed_pid,
+                  const PID& right_speed_pid);
 
     /**
      * @brief Destructor of Rolling Basis class
@@ -140,7 +148,8 @@ class Rolling_Basis {
      * Appelée par le timer à chaque période, après odometrie_handle().
      * Selon le mode :
      * - OPEN_LOOP : applique directement u_left_target et u_right_target.
-     * - SPEED et POSITION : pas encore implémentés, les moteurs restent à 0 V.
+     * - SPEED : chaque PI calcule la tension de sa roue.
+     * - POSITION : pas encore implémenté, les moteurs restent à 0 V.
      *
      * @param target_position Position cible du robot
      * @param com Objet de communication avec la Raspberry
@@ -157,6 +166,17 @@ class Rolling_Basis {
      * @param u_right Tension du moteur droit, en V
      */
     void set_open_loop(double u_left, double u_right);
+
+    /**
+     * @brief Passe en mode SPEED avec une vitesse par roue
+     *
+     * Les intégrales sont effacées seulement en entrant dans le mode SPEED.
+     * Changer de vitesse quand on y est déjà ne les efface pas.
+     *
+     * @param v_left Vitesse de la roue gauche, en cm/s
+     * @param v_right Vitesse de la roue droite, en cm/s
+     */
+    void set_speed_targets(double v_left, double v_right);
 
     void pi_mod_signed(double theta);
 

@@ -12,15 +12,22 @@
 
 // 1. Instanciate the Rolling Basis object
 // a. Define the PID controllers
-PID linear_position_pid(KP_LINEAR_POSITION, 0, 0, -V_MAX, V_MAX, 5.0);
-PID angular_position_pid(KP_ANGULAR_POSITION, 0, 0, -W_MAX, W_MAX, 2.0);
+PID linear_position_pid(KP_LINEAR_POSITION, 0, 0, -V_MAX, V_MAX, TS);
+PID angular_position_pid(KP_ANGULAR_POSITION, 0, 0, -W_MAX, W_MAX, TS);
+
+// PI de vitesse : un par roue, leur sortie est une tension
+// Rolling_Basis en garde une copie, ces objets servent de valeurs de départ
+PID left_speed_pid(KP_SPEED_LEFT, KI_SPEED_LEFT, 0, -U_MAX, U_MAX, TS);
+PID right_speed_pid(KP_SPEED_RIGHT, KI_SPEED_RIGHT, 0, -U_MAX, U_MAX, TS);
 
 // b. Instanciate the Rolling Basis object
 Rolling_Basis* rolling_basis_ptr = new Rolling_Basis(ENCODER_RESOLUTION,
                                                      ENTRAXE,
                                                      WHEEL_DIAMETER,
                                                      linear_position_pid,
-                                                     angular_position_pid);
+                                                     angular_position_pid,
+                                                     left_speed_pid,
+                                                     right_speed_pid);
 
 // 2. Instanciate the Communication object
 Com* com;
@@ -44,6 +51,7 @@ void set_pid(byte* msg, byte size) {
     msg_set_pid* pid_msg = (msg_set_pid*)msg;
     PID* pid = nullptr;
     bool is_valid_pid = true;
+    // pid pointe vers la copie gardée par Rolling_Basis, celle qui tourne
     switch (pid_msg->pid_type) {
         case LINEAR_POSITION_PID_ID:
             pid = &rolling_basis_ptr->linear_distance_pid;
@@ -51,12 +59,21 @@ void set_pid(byte* msg, byte size) {
         case ANGULAR_POSITION_PID_ID:
             pid = &rolling_basis_ptr->angular_distance_pid;
             break;
+        case LEFT_SPEED_PID_ID:
+            pid = &rolling_basis_ptr->left_speed_pid;
+            break;
+        case RIGHT_SPEED_PID_ID:
+            pid = &rolling_basis_ptr->right_speed_pid;
+            break;
         default:
             is_valid_pid = false;
             break;
     }
     if (is_valid_pid) {
+        // le timer ne doit pas utiliser le PID pendant le changement de gains
+        noInterrupts();
         pid->updateParameters(pid_msg->kp, pid_msg->ki, pid_msg->kd);
+        interrupts();
     }
 }
 

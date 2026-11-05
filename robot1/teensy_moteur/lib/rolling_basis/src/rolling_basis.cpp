@@ -45,12 +45,16 @@ Rolling_Basis::Rolling_Basis(unsigned short encoder_resolution,
                              double center_distance,
                              double wheel_diameter,
                              const PID& linear_distance_pid,
-                             const PID& angular_distance_pid)
+                             const PID& angular_distance_pid,
+                             const PID& left_speed_pid,
+                             const PID& right_speed_pid)
     : encoder_resolution(encoder_resolution),
       center_distance(center_distance),
       wheel_diameter(wheel_diameter),
       linear_distance_pid(linear_distance_pid),
-      angular_distance_pid(angular_distance_pid) {}
+      angular_distance_pid(angular_distance_pid),
+      left_speed_pid(left_speed_pid),
+      right_speed_pid(right_speed_pid) {}
 
 // Methods
 // Inits function
@@ -152,7 +156,8 @@ void Rolling_Basis::odometrie_handle() {
  * Appelée par le timer à chaque période, après odometrie_handle().
  * Selon le mode :
  * - OPEN_LOOP : applique directement u_left_target et u_right_target.
- * - SPEED et POSITION : pas encore implémentés, les moteurs restent à 0 V.
+ * - SPEED : chaque PI calcule la tension de sa roue.
+ * - POSITION : pas encore implémenté, les moteurs restent à 0 V.
  *
  * @param target_position Position cible du robot
  * @param com Objet de communication avec la Raspberry
@@ -167,8 +172,21 @@ void Rolling_Basis::handle(Point target_position, Com* com) {
             this->right_motor->set_voltage(this->u_right_target, this->vbat);
             break;
 
-        // correcteurs pas encore implémentés
-        case Mode::SPEED:
+        // chaque roue a son PI, qui transforme l'erreur de vitesse en tension
+        case Mode::SPEED: {
+            // erreur = vitesse cible - vitesse mesurée, en cm/s
+            double u_left = this->left_speed_pid.compute(
+                this->v_left_target - this->left_motor->speed);
+            double u_right = this->right_speed_pid.compute(
+                this->v_right_target - this->right_motor->speed);
+
+            // set_voltage() convertit ces tensions en PWM + DIR
+            this->left_motor->set_voltage(u_left, this->vbat);
+            this->right_motor->set_voltage(u_right, this->vbat);
+            break;
+        }
+
+        // cascade complète pas encore implémentée
         case Mode::POSITION:
             // 0 V explicite, sinon les moteurs gardent leur dernière PWM
             this->left_motor->set_voltage(0.0, this->vbat);
@@ -194,5 +212,30 @@ void Rolling_Basis::set_open_loop(double u_left, double u_right) {
         this->u_right_target = u_right;
         // handle() utilise ces tensions uniquement dans ce mode
         this->mode = Mode::OPEN_LOOP;
+    }
+}
+
+/**
+ * @brief Passe en mode SPEED avec une vitesse par roue
+ *
+ * Les intégrales sont effacées seulement en entrant dans le mode SPEED.
+ * Changer de vitesse quand on y est déjà ne les efface pas.
+ *
+ * @param v_left Vitesse de la roue gauche, en cm/s
+ * @param v_right Vitesse de la roue droite, en cm/s
+ */
+void Rolling_Basis::set_speed_targets(double v_left, double v_right) {
+    // le timer attend la fin du bloc : il voit toutes les valeurs d'un coup
+    ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
+        // une ancienne intégrale provoquerait un à-coup au démarrage
+        if (this->mode != Mode::SPEED) {
+            this->left_speed_pid.reset();
+            this->right_speed_pid.reset();
+        }
+        // vitesses que handle() suivra à partir de la prochaine période
+        this->v_left_target = v_left;
+        this->v_right_target = v_right;
+        // handle() utilise ces vitesses uniquement dans ce mode
+        this->mode = Mode::SPEED;
     }
 }
