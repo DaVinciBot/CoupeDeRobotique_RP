@@ -67,6 +67,8 @@ class RollingBasis(BaseComTeensy):
 
         # Robot state
         self.odometrie: OrientedPoint = OrientedPoint((0.0, 0.0), 0.0)
+        # Test measures: (time_ms, v_left, v_right, u_left, u_right)
+        self.speed_logs: list[tuple[int, float, float, float, float]] = []
 
         # PID controllers
         self.linear_position_pid: PID = PID(0.0, 0.0, 0.0)
@@ -82,6 +84,7 @@ class RollingBasis(BaseComTeensy):
             self.rcv_rolling_basis_state,
             Messages.UPDATE_ROLLING_BASIS.value,
         )
+        self.add_callback(self.rcv_speeds, Messages.UPDATE_SPEEDS.value)
 
         # Initialize PID controllers from configuration
         # self.initialize_pids()
@@ -117,6 +120,19 @@ class RollingBasis(BaseComTeensy):
             (struct.unpack("<d", msg[0:8])[0], struct.unpack("<d", msg[8:16])[0]),
             struct.unpack("<d", msg[16:24])[0],
         )
+
+    def rcv_speeds(self, msg: bytes) -> None:
+        """Stores a test measure sent by the Teensy.
+
+        The message contains:
+        - uint32 time_ms: Teensy time (4 bytes).
+        - double v_left, v_right: Wheel speeds, in cm/s (8 bytes each).
+        - double u_left, u_right: Motor voltages, in V (8 bytes each).
+
+        Args:
+            msg (bytes): The received message bytes.
+        """
+        self.speed_logs.append(struct.unpack_from("<Idddd", msg))
 
     def rcv_unknown_msg(self, msg: bytes) -> None:
         """Handles unknown messages from the Teensy.
@@ -187,6 +203,52 @@ class RollingBasis(BaseComTeensy):
             + struct.pack("<d", odometrie.theta)
         )
 
+        self.send_bytes(msg)
+
+    def set_motors_voltage(
+        self,
+        u_left: float,
+        u_right: float,
+        duration: float,
+    ) -> None:
+        """Applies a voltage to each motor for a limited duration.
+
+        The Teensy stops the motors by itself at the end of the duration.
+
+        Args:
+            u_left (float): Left motor voltage, in V.
+            u_right (float): Right motor voltage, in V.
+            duration (float): Test duration, in s.
+        """
+        msg = Messages.SET_MOTORS_VOLTAGE.to_bytes() + struct.pack(
+            "<ddd",
+            u_left,
+            u_right,
+            duration,
+        )
+        self.send_bytes(msg)
+
+    def set_wheels_speed(
+        self,
+        v_left: float,
+        v_right: float,
+        duration: float,
+    ) -> None:
+        """Sets a speed for each wheel for a limited duration.
+
+        The Teensy stops the motors by itself at the end of the duration.
+
+        Args:
+            v_left (float): Left wheel speed, in cm/s.
+            v_right (float): Right wheel speed, in cm/s.
+            duration (float): Test duration, in s.
+        """
+        msg = Messages.SET_WHEELS_SPEED.to_bytes() + struct.pack(
+            "<ddd",
+            v_left,
+            v_right,
+            duration,
+        )
         self.send_bytes(msg)
 
     @log(

@@ -19,6 +19,8 @@ class Messages(Enum):
         SET_TARGET_POSITION: Command to set the rolling basis target position.
         SET_PID: Update PID coefficients for the rolling basis.
         SET_ODOMETRIE: Reset the odometry.
+        SET_MOTORS_VOLTAGE: Apply a voltage to each motor for a limited duration.
+        SET_WHEELS_SPEED: Set a speed for each wheel for a limited duration.
         SET_SERVO_ANGLE_I2C: Set a servo angle over I\ :sub:``2``\ C.
         STEPPER_STEP: Move a stepper motor.
         SET_SERVO_ANGLE_DETACH: Move a servo then detach it.
@@ -28,6 +30,7 @@ class Messages(Enum):
         RESET_TEENSY: Reset the Teensy board.
         NACK: Notification of an invalid command.
         UPDATE_ROLLING_BASIS: Send odometry data from the Teensy.
+        UPDATE_SPEEDS: Send a test measure from the Teensy.
         SWITCH_STATE_RETURN: Report the state of a switch.
         PRINT: Print a message from the Teensy.
         UNKNOWN_MSG_TYPE: Unknown command identifier.
@@ -42,6 +45,10 @@ class Messages(Enum):
     """Update PID coefficients for the rolling basis."""
     SET_ODOMETRIE = 2
     """Reset the odometry."""
+    SET_MOTORS_VOLTAGE = 9
+    """Apply a voltage to each motor for a limited duration."""
+    SET_WHEELS_SPEED = 10
+    """Set a speed for each wheel for a limited duration."""
 
     # Actuators
     SET_SERVO_ANGLE_I2C = 3
@@ -69,6 +76,8 @@ class Messages(Enum):
     # Rolling Basis
     UPDATE_ROLLING_BASIS = 128
     """Send odometry data from the Teensy."""
+    UPDATE_SPEEDS = 130
+    """Send a test measure from the Teensy."""
 
     # Actuators
     SWITCH_STATE_RETURN = 129
