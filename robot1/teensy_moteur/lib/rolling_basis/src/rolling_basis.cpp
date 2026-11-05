@@ -154,6 +154,7 @@ void Rolling_Basis::odometrie_handle() {
  * @brief Calcule et applique la commande des moteurs
  *
  * Appelée par le timer à chaque période, après odometrie_handle().
+ * Hors POSITION, les moteurs sont coupés quand test_periods_left arrive à 0.
  * Selon le mode :
  * - OPEN_LOOP : applique directement u_left_target et u_right_target.
  * - SPEED : chaque PI calcule la tension de sa roue.
@@ -163,6 +164,15 @@ void Rolling_Basis::odometrie_handle() {
  * @param com Objet de communication avec la Raspberry
  */
 void Rolling_Basis::handle(Point target_position, Com* com) {
+    // fin du test : on coupe les moteurs, même sans message de la Raspberry
+    if (this->mode != Mode::POSITION) {
+        if (this->test_periods_left == 0) {
+            this->set_open_loop(0.0, 0.0);
+        } else {
+            this->test_periods_left--;
+        }
+    }
+
     // le mode décide quels étages de l'asservissement tournent
     switch (this->mode) {
         // aucun correcteur : les tensions vont directement aux moteurs
@@ -200,6 +210,7 @@ void Rolling_Basis::handle(Point target_position, Com* com) {
  *
  * Le bloc atomique empêche le timer de s'exécuter pendant l'écriture : il
  * ne peut pas lire une consigne à moitié écrite, ni une seule des deux.
+ * test_periods_left doit être réglé avant, sinon handle() coupe les moteurs.
  *
  * @param u_left Tension du moteur gauche, en V
  * @param u_right Tension du moteur droit, en V
@@ -220,6 +231,7 @@ void Rolling_Basis::set_open_loop(double u_left, double u_right) {
  *
  * Les intégrales sont effacées seulement en entrant dans le mode SPEED.
  * Changer de vitesse quand on y est déjà ne les efface pas.
+ * test_periods_left doit être réglé avant, sinon handle() coupe les moteurs.
  *
  * @param v_left Vitesse de la roue gauche, en cm/s
  * @param v_right Vitesse de la roue droite, en cm/s

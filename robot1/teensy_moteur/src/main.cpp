@@ -36,6 +36,10 @@ Com* com;
 // a. define globals variables to keep in memory callback functions updated
 Point target_position(START_X, START_Y, START_THETA);
 
+// dernière mesure de test, écrite par le timer et envoyée par loop()
+msg_update_speeds speeds_msg;
+volatile bool speeds_ready = false;
+
 // b. define the callback functions
 void set_target_position(byte* msg, byte size) {
     msg_set_target_position* target_position_msg =
@@ -77,6 +81,24 @@ void set_pid(byte* msg, byte size) {
     }
 }
 
+// Test en boucle ouverte : une tension par moteur, pendant une durée limitée
+void set_motors_voltage(byte* msg, byte size) {
+    msg_set_motors_voltage* voltage_msg = (msg_set_motors_voltage*)msg;
+
+    // la durée d'abord, sinon le timer verrait 0 et couperait l'essai
+    rolling_basis_ptr->test_periods_left = voltage_msg->duration / TS;
+    rolling_basis_ptr->set_open_loop(voltage_msg->u_left, voltage_msg->u_right);
+}
+
+// Test des PI : une vitesse par roue, pendant une durée limitée
+void set_wheels_speed(byte* msg, byte size) {
+    msg_set_wheels_speed* speed_msg = (msg_set_wheels_speed*)msg;
+
+    // la durée d'abord, sinon le timer verrait 0 et couperait l'essai
+    rolling_basis_ptr->test_periods_left = speed_msg->duration / TS;
+    rolling_basis_ptr->set_speed_targets(speed_msg->v_left, speed_msg->v_right);
+}
+
 void set_odometrie(byte* msg, byte size) {
     msg_set_odometrie* odometrie = (msg_set_odometrie*)msg;
 
@@ -103,6 +125,8 @@ void initialize_callback_functions() {
     callback_functions[SET_TARGET_POSITION] = &set_target_position;
     callback_functions[SET_PID] = &set_pid;
     callback_functions[SET_ODOMETRIE] = &set_odometrie;
+    callback_functions[SET_MOTORS_VOLTAGE] = &set_motors_voltage;
+    callback_functions[SET_WHEELS_SPEED] = &set_wheels_speed;
     callback_functions[RESET_TEENSY] = &reset_teensy;
 }
 
@@ -111,6 +135,16 @@ void initialize_callback_functions() {
 void handle() {
     rolling_basis_ptr->odometrie_handle();
     rolling_basis_ptr->handle(target_position, com);
+
+    // pendant un test, on prépare la mesure que loop() enverra
+    if (rolling_basis_ptr->test_periods_left > 0) {
+        speeds_msg.time_ms = millis();
+        speeds_msg.v_left = rolling_basis_ptr->left_motor->speed;
+        speeds_msg.v_right = rolling_basis_ptr->right_motor->speed;
+        speeds_msg.u_left = rolling_basis_ptr->left_motor->voltage;
+        speeds_msg.u_right = rolling_basis_ptr->right_motor->voltage;
+        speeds_ready = true;
+    }
 }
 
 void setup() {
@@ -146,6 +180,16 @@ uint_fast32_t counter = 0;
 void loop() {
     // Handle the communication
     com->handle_callback(callback_functions);
+
+    // Send the last test measure: the copy keeps the timer from changing it
+    if (speeds_ready) {
+        msg_update_speeds speeds_copy;
+        ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
+            speeds_copy = speeds_msg;
+            speeds_ready = false;
+        }
+        com->send_msg((byte*)&speeds_copy, sizeof(msg_update_speeds));
+    }
 
     // Send rolling basis state
     if (counter++ > 4096)  // 4096 = 2^12

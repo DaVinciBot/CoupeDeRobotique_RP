@@ -67,6 +67,8 @@ class Rolling_Basis {
     volatile double v_left_target = 0.0;
     // vitesse demandée à la roue droite, en cm/s
     volatile double v_right_target = 0.0;
+    // périodes restantes avant de couper les moteurs en fin de test
+    volatile unsigned long test_periods_left = 0;
 
     // Constructor
     /**
@@ -146,7 +148,8 @@ class Rolling_Basis {
      * @brief Calcule et applique la commande des moteurs
      *
      * Appelée par le timer à chaque période, après odometrie_handle().
-     * Selon le mode :
+     * Hors POSITION, les moteurs sont coupés quand test_periods_left arrive à
+     * 0. Selon le mode :
      * - OPEN_LOOP : applique directement u_left_target et u_right_target.
      * - SPEED : chaque PI calcule la tension de sa roue.
      * - POSITION : pas encore implémenté, les moteurs restent à 0 V.
@@ -161,6 +164,8 @@ class Rolling_Basis {
      *
      * Le bloc atomique empêche le timer de s'exécuter pendant l'écriture : il
      * ne peut pas lire une consigne à moitié écrite, ni une seule des deux.
+     * test_periods_left doit être réglé avant, sinon handle() coupe les
+     * moteurs.
      *
      * @param u_left Tension du moteur gauche, en V
      * @param u_right Tension du moteur droit, en V
@@ -172,6 +177,8 @@ class Rolling_Basis {
      *
      * Les intégrales sont effacées seulement en entrant dans le mode SPEED.
      * Changer de vitesse quand on y est déjà ne les efface pas.
+     * test_periods_left doit être réglé avant, sinon handle() coupe les
+     * moteurs.
      *
      * @param v_left Vitesse de la roue gauche, en cm/s
      * @param v_right Vitesse de la roue droite, en cm/s

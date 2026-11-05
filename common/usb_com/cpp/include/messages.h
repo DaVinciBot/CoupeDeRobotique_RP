@@ -18,6 +18,8 @@ const byte END_BYTES_SIGNATURE[4] = {0xBA, 0xDD, 0x1C, 0xC5};
 #define SET_TARGET_POSITION 0
 #define SET_PID 1
 #define SET_ODOMETRIE 2
+#define SET_MOTORS_VOLTAGE 9
+#define SET_WHEELS_SPEED 10
 
 // Actuators
 #define SET_SERVO_ANGLE_I2C 3
@@ -36,6 +38,7 @@ const byte END_BYTES_SIGNATURE[4] = {0xBA, 0xDD, 0x1C, 0xC5};
 // teensy -> rasp : 128-255 (Convention)
 // Rolling Basis
 #define UPDATE_ROLLING_BASIS 128
+#define UPDATE_SPEEDS 130
 
 // Actuators
 #define SWITCH_STATE_RETURN 129
@@ -71,6 +74,23 @@ struct msg_set_odometrie
     double x;
     double y;
     double theta;
+};
+
+// Messages de test : les moteurs sont coupés à la fin de la durée
+struct msg_set_motors_voltage
+{
+    byte command = SET_MOTORS_VOLTAGE;
+    double u_left;   // en V
+    double u_right;  // en V
+    double duration; // en s
+};
+
+struct msg_set_wheels_speed
+{
+    byte command = SET_WHEELS_SPEED;
+    double v_left;   // en cm/s
+    double v_right;  // en cm/s
+    double duration; // en s
 };
 
 // Actuators
@@ -138,6 +158,17 @@ struct msg_update_rolling_basis
     double x;
     double y;
     double theta;
+};
+
+// Mesure envoyée à chaque période pendant un test
+struct msg_update_speeds
+{
+    byte command = UPDATE_SPEEDS;
+    uint32_t time_ms;
+    double v_left;  // en cm/s
+    double v_right; // en cm/s
+    double u_left;  // en V
+    double u_right; // en V
 };
 
 // Actuators
