@@ -8,6 +8,7 @@ Code du robot principal de l'équipe DaVinciBot, pour la Coupe de France de Robo
 - [Installation et configuration](#installation-et-configuration)
 - [Lancer le code](#lancer-le-code)
 - [Structure du dépôt](#structure-du-dépôt)
+- [Documentation](#documentation)
 - [Organisation des branches](#organisation-des-branches)
 
 ## Prérequis
@@ -25,6 +26,10 @@ Code du robot principal de l'équipe DaVinciBot, pour la Coupe de France de Robo
 ## Structure du dépôt
 
 <!-- À compléter -->
+
+## Documentation
+
+- [Architecture logicielle du robot principal (CDR 2027)](docs/ARCHITECTURE%20RP%202027.md) : organisation du code, choix techniques et raisons de ces choix. Sert aussi de base pour les prochaines coupes.
 
 ## Organisation des branches
 
