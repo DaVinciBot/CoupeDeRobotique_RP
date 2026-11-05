@@ -21,7 +21,7 @@ const double K_POSITION = 0.5 / TAU_V;
 
 // Mouvement demandé
 const double TARGET_X = 50.0;      // en cm
-const double TARGET_Y = 30.0;      // en cm
+const double TARGET_Y = 50.0;      // en cm
 const double TARGET_THETA = 1.57;  // en rad
 const double DURATION = 12.0;      // durée de la simulation, en s
 
