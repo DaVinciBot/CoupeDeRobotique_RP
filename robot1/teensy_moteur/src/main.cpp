@@ -20,6 +20,10 @@ PID angular_position_pid(KP_ANGULAR_POSITION, 0, 0, -W_MAX, W_MAX, TS);
 PID left_speed_pid(KP_SPEED_LEFT, KI_SPEED_LEFT, 0, -U_MAX, U_MAX, TS);
 PID right_speed_pid(KP_SPEED_RIGHT, KI_SPEED_RIGHT, 0, -U_MAX, U_MAX, TS);
 
+// générateurs de consigne : distance en cm, angle en rad
+Trapezoid delta_profile(V_MAX, ACC_MAX);
+Trapezoid psi_profile(W_MAX, W_ACC_MAX);
+
 // b. Instanciate the Rolling Basis object
 Rolling_Basis* rolling_basis_ptr = new Rolling_Basis(ENCODER_RESOLUTION,
                                                      ENTRAXE,
@@ -27,15 +31,21 @@ Rolling_Basis* rolling_basis_ptr = new Rolling_Basis(ENCODER_RESOLUTION,
                                                      linear_position_pid,
                                                      angular_position_pid,
                                                      left_speed_pid,
-                                                     right_speed_pid);
+                                                     right_speed_pid,
+                                                     delta_profile,
+                                                     psi_profile,
+                                                     TS,
+                                                     POSITION_TOLERANCE,
+                                                     ANGLE_TOLERANCE,
+                                                     BLOCK_VOLTAGE,
+                                                     BLOCK_SPEED,
+                                                     BLOCK_PERIODS);
 
 // 2. Instanciate the Communication object
 Com* com;
 
 // 3. Define all com callback functions
 // a. define globals variables to keep in memory callback functions updated
-Point target_position(START_X, START_Y, START_THETA);
-
 // dernière mesure de test, écrite par le timer et envoyée par loop()
 msg_update_speeds speeds_msg;
 volatile bool speeds_ready = false;
@@ -45,10 +55,10 @@ void set_target_position(byte* msg, byte size) {
     msg_set_target_position* target_position_msg =
         (msg_set_target_position*)msg;
 
-    // Update position
-    target_position.x = target_position_msg->target_position_x;
-    target_position.y = target_position_msg->target_position_y;
-    target_position.theta = target_position_msg->target_position_theta;
+    rolling_basis_ptr->set_target(
+        Point(target_position_msg->target_position_x,
+              target_position_msg->target_position_y,
+              target_position_msg->target_position_theta));
 }
 
 void set_pid(byte* msg, byte size) {
@@ -102,14 +112,12 @@ void set_wheels_speed(byte* msg, byte size) {
 void set_odometrie(byte* msg, byte size) {
     msg_set_odometrie* odometrie = (msg_set_odometrie*)msg;
 
-    rolling_basis_ptr->X = odometrie->x;
-    rolling_basis_ptr->Y = odometrie->y;
-    rolling_basis_ptr->THETA = odometrie->theta;
-
-    // Update target position: avoid the usage of old stored target point
-    target_position.x = odometrie->x;
-    target_position.y = odometrie->y;
-    target_position.theta = odometrie->theta;
+    // seule la pose change : delta_mes et psi_mes ne sont jamais recalés
+    ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
+        rolling_basis_ptr->X = odometrie->x;
+        rolling_basis_ptr->Y = odometrie->y;
+        rolling_basis_ptr->THETA = odometrie->theta;
+    }
 }
 
 void reset_teensy(byte* msg, byte size) {
@@ -134,7 +142,7 @@ void initialize_callback_functions() {
 // every 5ms, and which manage the robot position and speed: asservissement)
 void handle() {
     rolling_basis_ptr->odometrie_handle();
-    rolling_basis_ptr->handle(target_position, com);
+    rolling_basis_ptr->handle();
 
     // pendant un test, on prépare la mesure que loop() enverra
     if (rolling_basis_ptr->test_periods_left > 0) {
@@ -199,6 +207,7 @@ void loop() {
         rolling_basis_msg.x = rolling_basis_ptr->X;
         rolling_basis_msg.y = rolling_basis_ptr->Y;
         rolling_basis_msg.theta = rolling_basis_ptr->THETA;
+        rolling_basis_msg.status = (byte)rolling_basis_ptr->get_status();
 
         com->send_msg((byte*)&rolling_basis_msg,
                       sizeof(msg_update_rolling_basis));

@@ -61,7 +61,16 @@
 #define VBAT_DEFAULT 14.8  // la tension de la batterie par default
 
 // SPEED AND TURN LIMIT
-#define V_MAX 1.0      // en cm/s
-#define ACC_MAX 1.0    // en cm/s²
+#define V_MAX 20.0     // en cm/s
+#define ACC_MAX 15.0   // en cm/s²
 #define W_MAX 1.0      // en rad/s
 #define W_ACC_MAX 1.0  // en rad/s²
+
+// Arrivée d'un mouvement
+#define POSITION_TOLERANCE 0.2  // en cm
+#define ANGLE_TOLERANCE 0.01    // en rad
+
+// Détection de blocage
+#define BLOCK_VOLTAGE 8.0  // en V
+#define BLOCK_SPEED 1.0    // en cm/s
+#define BLOCK_PERIODS 100  // 0,5 s à 200 Hz

@@ -8,6 +8,7 @@
 #include <Arduino.h>
 #include <motors_driver.h>
 #include <pid.h>
+#include <trapezoid.h>
 #include "structures.h"
 
 #include <com.h>  // Communication object to manage the communication between the teensy and the Raspberry Pi
@@ -19,6 +20,10 @@ class Rolling_Basis {
     PID angular_distance_pid;  // sortie : vitesse, en rad/s
     PID left_speed_pid;        // sortie : tension, en V
     PID right_speed_pid;       // sortie : tension, en V
+
+    // Générateurs de consigne
+    Trapezoid delta_profile;  // distance, en cm
+    Trapezoid psi_profile;    // angle, en rad
 
     // Rolling basis's params
     inline double radius() { return this->center_distance / 2.0; };
@@ -70,6 +75,25 @@ class Rolling_Basis {
     // périodes restantes avant de couper les moteurs en fin de test
     volatile unsigned long test_periods_left = 0;
 
+    // étapes d'un déplacement vers une cible, IDLE quand il n'y en a pas
+    enum class MoveStep { IDLE, ROTATE_TO_TARGET, FORWARD, ROTATE_FINAL };
+    volatile MoveStep move_step = MoveStep::IDLE;
+    Point target;  // cible du mouvement en cours
+
+    // état envoyé à la Raspberry, mêmes valeurs que côté Python
+    enum class Status : byte { STOPPED = 0, MOVING = 1, BLOCKED = 2 };
+
+    double ts;                  // période de la boucle, en s
+    double position_tolerance;  // écart accepté à l'arrivée, en cm
+    double angle_tolerance;     // écart accepté à l'arrivée, en rad
+
+    // Détection de blocage
+    double block_voltage;         // tension au-dessus de laquelle on force
+    double block_speed;           // vitesse sous laquelle la roue est arrêtée
+    unsigned long block_periods;  // périodes avant de couper les moteurs
+    unsigned long blocked_count = 0;  // périodes de blocage à la suite
+    volatile bool blocked = false;    // reste vrai jusqu'à la prochaine cible
+
     // Constructor
     /**
      * @brief constructor of the Rolling Basis class
@@ -82,7 +106,15 @@ class Rolling_Basis {
                   const PID& linear_distance_pid,
                   const PID& angular_distance_pid,
                   const PID& left_speed_pid,
-                  const PID& right_speed_pid);
+                  const PID& right_speed_pid,
+                  const Trapezoid& delta_profile,
+                  const Trapezoid& psi_profile,
+                  double ts,
+                  double position_tolerance,
+                  double angle_tolerance,
+                  double block_voltage,
+                  double block_speed,
+                  unsigned long block_periods);
 
     /**
      * @brief Destructor of Rolling Basis class
@@ -152,12 +184,9 @@ class Rolling_Basis {
      * 0. Selon le mode :
      * - OPEN_LOOP : applique directement u_left_target et u_right_target.
      * - SPEED : chaque PI calcule la tension de sa roue.
-     * - POSITION : pas encore implémenté, les moteurs restent à 0 V.
-     *
-     * @param target_position Position cible du robot
-     * @param com Objet de communication avec la Raspberry
+     * - POSITION : suit les trapèzes avec la cascade complète.
      */
-    void handle(Point target_position, Com* com);
+    void handle();
 
     /**
      * @brief Passe en mode OPEN_LOOP avec une tension par moteur
@@ -184,6 +213,70 @@ class Rolling_Basis {
      * @param v_right Vitesse de la roue droite, en cm/s
      */
     void set_speed_targets(double v_left, double v_right);
+
+    /**
+     * @brief Lance un déplacement vers une cible de la table
+     *
+     * Le mouvement est découpé en trois étapes : se tourner vers la cible,
+     * avancer, puis prendre l'angle final. Les consignes repartent de la mesure
+     * actuelle, pour que le robot ne saute pas vers une ancienne consigne. A
+     * envoyer quand le mouvement précédent est fini : une nouvelle cible remet
+     * tout de suite les vitesses prévues à zéro.
+     *
+     * @param target Cible : x et y en cm, theta en rad
+     */
+    void set_target(Point target);
+
+    /**
+     * @brief Passe à l'étape suivante quand l'étape en cours est finie
+     *
+     * Une étape est finie quand le trapèze est terminé et que la mesure est
+     * arrivée à la consigne, à la tolérance près.
+     */
+    void update_move();
+
+    /**
+     * @brief Démarre la rotation vers la cible
+     *
+     * Si le robot est déjà sur la cible, il passe directement à l'angle final.
+     */
+    void start_rotate_to_target();
+
+    /**
+     * @brief Démarre la ligne droite vers la cible
+     *
+     * La distance est recalculée avec la pose atteinte après la rotation.
+     */
+    void start_forward();
+
+    /**
+     * @brief Démarre la rotation vers l'angle final de la cible
+     */
+    void start_rotate_final();
+
+    /**
+     * @brief Applique les vitesses de consigne aux deux roues
+     *
+     * Chaque PI transforme l'erreur de vitesse de sa roue en tension. Cette
+     * étape est commune aux modes SPEED et POSITION.
+     */
+    void apply_speed_targets();
+
+    /**
+     * @brief Coupe les moteurs si une roue force sans avancer
+     *
+     * Une roue est bloquée si sa tension dépasse block_voltage alors que sa
+     * vitesse reste sous block_speed. Après block_periods périodes de suite, le
+     * robot s'arrête et blocked passe à true jusqu'à la prochaine cible.
+     */
+    void check_blocked();
+
+    /**
+     * @brief Donne l'état du robot, envoyé à la Raspberry
+     *
+     * @return Bloqué, en mouvement ou à l'arrêt
+     */
+    Status get_status();
 
     void pi_mod_signed(double theta);
 

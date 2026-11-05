@@ -158,6 +158,7 @@ struct msg_update_rolling_basis
     double x;
     double y;
     double theta;
+    byte status; // 0 : à l'arrêt, 1 : en mouvement, 2 : bloqué
 };
 
 // Mesure envoyée à chaque période pendant un test
