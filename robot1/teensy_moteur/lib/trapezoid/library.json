@@ -1,0 +1,8 @@
+{
+    "name": "trapezoid",
+    "version": "1.0.0",
+    "description": "Library dedicated to trapezoidal speed profiles",
+    "keywords": "trapezoid",
+    "frameworks": "*",
+    "platforms": "*"
+  }
