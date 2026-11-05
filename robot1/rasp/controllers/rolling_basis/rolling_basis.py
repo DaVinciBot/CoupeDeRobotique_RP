@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import struct
 import time
+from enum import Enum
 from typing import TYPE_CHECKING, overload, override
 
 from loggerplusplus import LogLevels, log
@@ -16,6 +17,17 @@ from usb_com.python import Messages
 
 if TYPE_CHECKING:
     from loggerplusplus import Logger
+
+
+class RollingBasisStatus(Enum):
+    """State of the rolling basis, with the same values as on the Teensy."""
+
+    STOPPED = 0
+    """No move in progress."""
+    MOVING = 1
+    """A move to a target is in progress."""
+    BLOCKED = 2
+    """A wheel was blocked and the motors have been stopped."""
 
 
 class RollingBasis(BaseComTeensy):
@@ -67,6 +79,7 @@ class RollingBasis(BaseComTeensy):
 
         # Robot state
         self.odometrie: OrientedPoint = OrientedPoint((0.0, 0.0), 0.0)
+        self.status: RollingBasisStatus = RollingBasisStatus.STOPPED
         # Test measures: (time_ms, v_left, v_right, u_left, u_right)
         self.speed_logs: list[tuple[int, float, float, float, float]] = []
 
@@ -106,11 +119,10 @@ class RollingBasis(BaseComTeensy):
         """Handles rolling basis state update messages from the Teensy.
 
         The message contains:
-        - float x: X-coordinate of the position (4 bytes).
-        - float y: Y-coordinate of the position (4 bytes).
-        - float theta: Orientation (4 bytes).
-        - float current_linear_speed: Current linear speed (4 bytes).
-        - float current_angular_speed: Current angular speed (4 bytes).
+        - double x: X-coordinate of the position (8 bytes).
+        - double y: Y-coordinate of the position (8 bytes).
+        - double theta: Orientation (8 bytes).
+        - byte status: State of the rolling basis (1 byte).
 
         Args:
             msg (bytes): The received message bytes.
@@ -120,6 +132,7 @@ class RollingBasis(BaseComTeensy):
             (struct.unpack("<d", msg[0:8])[0], struct.unpack("<d", msg[8:16])[0]),
             struct.unpack("<d", msg[16:24])[0],
         )
+        self.status = RollingBasisStatus(msg[24])
 
     def rcv_speeds(self, msg: bytes) -> None:
         """Stores a test measure sent by the Teensy.
