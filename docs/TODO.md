@@ -35,14 +35,14 @@ Checklist de tout ce qu'il faut faire pour le robot principal, dans l'ordre où 
 
 ### 1.2 Workspace uv
 
-- [ ] `pyproject.toml` racine : `[tool.uv.workspace] members = ["packages/*"]`, `requires-python = ">=3.14,<3.15"`.
-- [ ] `.python-version` = `3.14`.
-- [ ] `packages/brain/` : `pyproject.toml` (paquet `dvb-brain`, module `dvb_brain`), `src/dvb_brain/{domain,services,ports,adapters,app}/__init__.py`, `tests/`.
-- [ ] Squelettes vides avec la même structure : `packages/usb_com`, `packages/lidar`, `packages/net`, `packages/supervisor`, `packages/sim`, `packages/common_msgs` (messages entre processus, 5.2).
-- [ ] Dépendances runtime du brain limitées à `msgspec`, `numpy`, `shapely>=2`. Les autres (`pyzmq`, `pyserial-asyncio-fast`, `gpiozero`, `lgpio`) arrivent avec l'adaptateur qui en a besoin.
-- [ ] Groupe dev : `pytest`, `pytest-asyncio`, `pytest-benchmark`, `hypothesis`, `ruff`, `pyright`, `pre-commit`, `import-linter`.
-- [ ] Vérifier qu'il existe une roue aarch64 pour Python 3.14 de chaque dépendance : `uv pip compile --python-version 3.14 --python-platform aarch64-unknown-linux-gnu --only-binary :all:`. Noter les exceptions dans un ADR.
-- [ ] `uv.lock` commité ; `uv sync --frozen` partout.
+- [x] `pyproject.toml` racine : `[tool.uv.workspace] members = ["packages/*"]`, `requires-python = ">=3.14,<3.15"`.
+- [x] `.python-version` = `3.14`.
+- [x] `packages/brain/` : `pyproject.toml` (paquet `dvb-brain`, module `dvb_brain`), `src/dvb_brain/{domain,services,ports,adapters,app}/__init__.py`, `tests/`.
+- [x] Squelettes vides avec la même structure : `packages/usb_com`, `packages/lidar`, `packages/net`, `packages/supervisor`, `packages/sim`, `packages/common_msgs` (messages entre processus, 5.2).
+- [x] Dépendances runtime du brain limitées à `msgspec`, `numpy`, `shapely>=2`. Les autres (`pyzmq`, `pyserial-asyncio-fast`, `gpiozero`, `lgpio`) arrivent avec l'adaptateur qui en a besoin.
+- [x] Groupe dev : `pytest`, `pytest-asyncio`, `pytest-benchmark`, `hypothesis`, `ruff`, `pyright`, `pre-commit`, `import-linter`.
+- [x] Vérifier qu'il existe une roue aarch64 pour Python 3.14 de chaque dépendance : `uv pip compile --python-version 3.14 --python-platform aarch64-unknown-linux-gnu --only-binary :all:`. Noter les exceptions dans un ADR.
+- [x] `uv.lock` commité ; `uv sync --frozen` partout.
 
 ### 1.3 Qualité
 
