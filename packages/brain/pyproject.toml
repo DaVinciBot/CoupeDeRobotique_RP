@@ -3,7 +3,11 @@ name = "dvb-brain"
 version = "0.0.0"
 description = "Main robot brain: strategy, navigation, avoidance, match and safety"
 requires-python = ">=3.14,<3.15"
-dependencies = []
+dependencies = [
+    "msgspec>=0.22.0",
+    "numpy>=2.5.4",
+    "shapely>=2",
+]
 
 [build-system]
 requires = ["uv_build>=0.9.2,<0.10"]
