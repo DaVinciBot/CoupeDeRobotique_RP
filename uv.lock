@@ -1,0 +1,75 @@
+version = 1
+revision = 3
+requires-python = "==3.14.*"
+
+[manifest]
+members = [
+    "davincibot-robot",
+    "dvb-brain",
+    "dvb-common-msgs",
+    "dvb-lidar",
+    "dvb-net",
+    "dvb-sim",
+    "dvb-supervisor",
+    "dvb-usb-com",
+]
+
+[[package]]
+name = "davincibot-robot"
+version = "0.0.0"
+source = { virtual = "." }
+dependencies = [
+    { name = "dvb-brain" },
+    { name = "dvb-common-msgs" },
+    { name = "dvb-lidar" },
+    { name = "dvb-net" },
+    { name = "dvb-sim" },
+    { name = "dvb-supervisor" },
+    { name = "dvb-usb-com" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "dvb-brain", editable = "packages/brain" },
+    { name = "dvb-common-msgs", editable = "packages/common_msgs" },
+    { name = "dvb-lidar", editable = "packages/lidar" },
+    { name = "dvb-net", editable = "packages/net" },
+    { name = "dvb-sim", editable = "packages/sim" },
+    { name = "dvb-supervisor", editable = "packages/supervisor" },
+    { name = "dvb-usb-com", editable = "packages/usb_com" },
+]
+
+[[package]]
+name = "dvb-brain"
+version = "0.0.0"
+source = { editable = "packages/brain" }
+
+[[package]]
+name = "dvb-common-msgs"
+version = "0.0.0"
+source = { editable = "packages/common_msgs" }
+
+[[package]]
+name = "dvb-lidar"
+version = "0.0.0"
+source = { editable = "packages/lidar" }
+
+[[package]]
+name = "dvb-net"
+version = "0.0.0"
+source = { editable = "packages/net" }
+
+[[package]]
+name = "dvb-sim"
+version = "0.0.0"
+source = { editable = "packages/sim" }
+
+[[package]]
+name = "dvb-supervisor"
+version = "0.0.0"
+source = { editable = "packages/supervisor" }
+
+[[package]]
+name = "dvb-usb-com"
+version = "0.0.0"
+source = { editable = "packages/usb_com" }

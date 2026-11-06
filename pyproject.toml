@@ -1,0 +1,30 @@
+[project]
+name = "davincibot-robot"
+version = "0.0.0"
+description = "DaVinciBot main robot workspace (Coupe de France de Robotique)"
+requires-python = ">=3.14,<3.15"
+dependencies = [
+    "dvb-brain",
+    "dvb-common-msgs",
+    "dvb-lidar",
+    "dvb-net",
+    "dvb-sim",
+    "dvb-supervisor",
+    "dvb-usb-com",
+]
+
+[tool.uv.workspace]
+members = ["packages/*"]
+
+[tool.uv.sources]
+dvb-brain = { workspace = true }
+dvb-common-msgs = { workspace = true }
+dvb-lidar = { workspace = true }
+dvb-net = { workspace = true }
+dvb-sim = { workspace = true }
+dvb-supervisor = { workspace = true }
+dvb-usb-com = { workspace = true }
+
+[tool.pytest.ini_options]
+testpaths = ["packages"]
+addopts = ["--import-mode=importlib"]
