@@ -27,11 +27,11 @@ Checklist de tout ce qu'il faut faire pour le robot principal, dans l'ordre où 
 
 ### 1.1 Arborescence
 
-- [ ] Créer l'arborescence de la section 14.1 : `packages/`, `dashboard/`, `firmware/`, `lidar_driver/`, `editions/`, `config/`, `deploy/`, `tools/`, `docs/adr/`.
+- [x] Créer l'arborescence de la section 14.1 : `packages/`, `dashboard/`, `firmware/`, `lidar_driver/`, `editions/`, `config/`, `deploy/`, `tools/`, `docs/adr/`.
 - [ ] Ranger le firmware moteur dans `firmware/teensy_motor/` et le firmware actionneurs dans `firmware/teensy_actuators/`.
 - [ ] Ranger le container lidar dans `lidar_driver/`.
-- [ ] Ne pas reprendre le code Python de 2026 (config exécutée à l'import, `sys.path.append`, `loggerplusplus`, taskbrain) : s'en servir comme référence seulement.
-- [ ] ADR 0001 « Organisation du dépôt 2027 ».
+- [x] Ne pas reprendre le code Python de 2026 (config exécutée à l'import, `sys.path.append`, `loggerplusplus`, taskbrain) : s'en servir comme référence seulement.
+- [x] ADR 0001 « Organisation du dépôt 2027 ».
 
 ### 1.2 Workspace uv
 
