@@ -52,7 +52,6 @@ pip-wheel-metadata/
 venv/
 env/
 ENV/
-.python-version
 # Tests, couverture, typage, lint
 .pytest_cache/
 .tox/

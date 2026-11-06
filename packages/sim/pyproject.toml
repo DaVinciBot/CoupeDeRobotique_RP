@@ -1,0 +1,10 @@
+[project]
+name = "dvb-sim"
+version = "0.0.0"
+description = "2D match simulator and virtual Teensy"
+requires-python = ">=3.14,<3.15"
+dependencies = []
+
+[build-system]
+requires = ["uv_build>=0.9.2,<0.10"]
+build-backend = "uv_build"
