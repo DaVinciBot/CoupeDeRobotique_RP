@@ -27,6 +27,26 @@
 2. Ouvrir une PR vers `main`.
 3. Reporter ensuite le correctif dans `dev` : PR `hotfix/nom → dev`, ou merge de `main` vers `dev`.
 
+## Messages de commit
+
+Format [Conventional Commits](https://www.conventionalcommits.org/fr/), en anglais :
+
+```
+type(scope): description
+```
+
+- `type` : `feat`, `fix`, `perf`, `test`, `refactor` ou `docs`, comme les préfixes de branche. S'y ajoutent `build` (dépendances, outillage), `ci` (intégration continue) et `chore` (maintenance diverse).
+- `scope` (facultatif) : la partie du code concernée, par ex. `nav`, `lidar`, `safety`.
+- `description` : courte, à l'impératif, en minuscules, sans point final.
+
+Exemples :
+
+```
+feat(nav): add visibility graph planner
+fix(safety): stop motors when lidar goes silent
+docs: add commit message format
+```
+
 ## Règles automatiques
 
 - Pas de push direct sur `dev` ni sur `main` : tout passe par une PR.
