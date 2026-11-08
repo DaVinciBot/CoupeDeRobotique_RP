@@ -38,6 +38,38 @@ include = ["packages"]
 typeCheckingMode = "basic"
 strict = ["packages/*/src"]
 
+[tool.importlinter]
+root_packages = [
+    "dvb_brain",
+    "dvb_common_msgs",
+    "dvb_lidar",
+    "dvb_net",
+    "dvb_sim",
+    "dvb_supervisor",
+    "dvb_usb_com",
+]
+include_external_packages = true  # needed to forbid editions and asyncio
+
+[[tool.importlinter.contracts]]
+name = "The core never imports an edition"
+type = "forbidden"
+source_modules = [
+    "dvb_brain",
+    "dvb_common_msgs",
+    "dvb_lidar",
+    "dvb_net",
+    "dvb_sim",
+    "dvb_supervisor",
+    "dvb_usb_com",
+]
+forbidden_modules = ["editions"]
+
+[[tool.importlinter.contracts]]
+name = "The brain domain stays pure"
+type = "forbidden"
+source_modules = ["dvb_brain.domain"]
+forbidden_modules = ["dvb_brain.services", "dvb_brain.adapters", "dvb_brain.app", "asyncio"]
+
 [tool.pytest.ini_options]
 testpaths = ["packages"]
 addopts = ["--import-mode=importlib"]
