@@ -749,7 +749,7 @@ davincibot-robot/
 │   └── robot.json            # robot configuration (validated at load)
 ├── deploy/                   # systemd units, nginx.conf, udev rules, NetworkManager profiles
 ├── tools/
-│   └── core_check/           # CI: import rules and theme-word scan of the core
+│   └── core_check/           # CI: theme-word scan of the core (import rules: pyproject.toml)
 └── docs/
     └── adr/                  # one short file per architecture decision
 ```

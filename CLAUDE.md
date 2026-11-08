@@ -27,6 +27,7 @@ uv run pytest                 # tests
 uv run ruff format && uv run ruff check
 uv run pyright
 uv run lint-imports           # import rules of the core
+uv run python tools/core_check/theme_words.py   # theme words in the core
 pio run -e teensy41           # firmware build (in firmware/<board>/)
 pio test -e native            # firmware tests on PC
 ```

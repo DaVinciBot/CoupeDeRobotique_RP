@@ -25,7 +25,7 @@ Un seul dépôt pour le robot principal, toutes éditions confondues. Les PAMI e
 | `editions/` | `_template/` et un module par édition (`cdr_2027/`) | TODO 1.5, 2.4 |
 | `config/` | `robot.json` | TODO 9.1 |
 | `deploy/` | Unités systemd, nginx, règles udev, profils NetworkManager | TODO 20 |
-| `tools/` | `core_check/` : règles d'import et recherche des mots du thème dans le socle | TODO 1.3 |
+| `tools/` | `core_check/` : recherche des mots du thème dans le socle (règles d'import dans `pyproject.toml`) | TODO 1.3 |
 | `docs/adr/` | Une décision d'architecture par fichier | — |
 
 Un dossier encore vide contient un `.gitkeep`, supprimé quand son contenu arrive. Ses sous-dossiers sont créés en même temps que ce contenu.
