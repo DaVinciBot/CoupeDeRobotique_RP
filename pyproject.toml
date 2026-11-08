@@ -25,6 +25,14 @@ dvb-sim = { workspace = true }
 dvb-supervisor = { workspace = true }
 dvb-usb-com = { workspace = true }
 
+[tool.ruff]
+line-length = 100
+src = ["packages/*/src"]
+extend-exclude = ["*.md"]  # docs snippets are illustrative, aligned by hand
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF", "ASYNC", "PTH", "N"]
+
 [tool.pytest.ini_options]
 testpaths = ["packages"]
 addopts = ["--import-mode=importlib"]
