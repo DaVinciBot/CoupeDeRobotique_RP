@@ -33,6 +33,11 @@ extend-exclude = ["*.md"]  # docs snippets are illustrative, aligned by hand
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM", "RUF", "ASYNC", "PTH", "N"]
 
+[tool.pyright]
+include = ["packages"]
+typeCheckingMode = "basic"
+strict = ["packages/*/src"]
+
 [tool.pytest.ini_options]
 testpaths = ["packages"]
 addopts = ["--import-mode=importlib"]
