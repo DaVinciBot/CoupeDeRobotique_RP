@@ -34,9 +34,9 @@ extend-exclude = ["*.md"]  # docs snippets are illustrative, aligned by hand
 select = ["E", "F", "I", "UP", "B", "SIM", "RUF", "ASYNC", "PTH", "N"]
 
 [tool.pyright]
-include = ["packages"]
+include = ["packages", "tools"]
 typeCheckingMode = "basic"
-strict = ["packages/*/src"]
+strict = ["packages/*/src", "tools/core_check/*.py"]
 
 [tool.importlinter]
 root_packages = [
@@ -71,7 +71,7 @@ source_modules = ["dvb_brain.domain"]
 forbidden_modules = ["dvb_brain.services", "dvb_brain.adapters", "dvb_brain.app", "asyncio"]
 
 [tool.pytest.ini_options]
-testpaths = ["packages"]
+testpaths = ["packages", "tools"]
 addopts = ["--import-mode=importlib"]
 asyncio_default_fixture_loop_scope = "function"
 
