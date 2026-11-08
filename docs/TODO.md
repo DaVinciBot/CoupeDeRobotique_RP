@@ -46,13 +46,14 @@ Checklist de tout ce qu'il faut faire pour le robot principal, dans l'ordre où 
 
 ### 1.3 Qualité
 
-- [ ] `ruff` : `line-length = 100`, règles `E,F,I,UP,B,SIM,RUF,ASYNC,PTH,N`, formatage activé.
-- [ ] `pyright` en mode `strict` sur `packages/*/src`, `basic` sur les tests.
-- [ ] `.pre-commit-config.yaml` : ruff format, ruff check, pyright (hook local).
+- [x] `ruff` : `line-length = 100`, règles `E,F,I,UP,B,SIM,RUF,ASYNC,PTH,N`, formatage activé.
+- [x] `pyright` en mode `strict` sur `packages/*/src`, `basic` sur les tests.
+- [x] `.pre-commit-config.yaml` : ruff format, ruff check, pyright (hook local).
 - [ ] `clang-format` pour le firmware, vérifié en CI.
-- [ ] `tools/core_check/` :
-  - [ ] règles import-linter : le socle n'importe jamais `editions.*` ; `domain` n'importe ni `services`, ni `adapters`, ni `app`, ni asyncio ;
-  - [ ] script qui cherche les mots et coordonnées du thème dans le socle (`pierre`, `stone`, `graal`, `grail`, `catapulte`, `château`, `castle`…) et échoue s'il en trouve (0).
+- [ ] Contrôles du socle :
+  - [x] règles import-linter (`[tool.importlinter]` du `pyproject.toml` racine) : le socle n'importe jamais `editions.*` ; `domain` n'importe ni `services`, ni `adapters`, ni `app`, ni asyncio ;
+  - [x] `tools/core_check/theme_words.py` : cherche les mots du thème dans le socle (`pierre`, `stone`, `graal`, `grail`, `catapulte`, `château`, `castle`…) et échoue s'il en trouve (0) ;
+  - [ ] recherche des coordonnées du thème dans le socle, à faire avec 2.4 quand `arena.json` existe.
 
 ### 1.4 CI — `.github/workflows/ci.yml`
 
