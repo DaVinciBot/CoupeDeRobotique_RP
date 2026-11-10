@@ -60,7 +60,7 @@ Checklist de tout ce qu'il faut faire pour le robot principal, dans l'ordre où 
 - [x] Job `python` : `astral-sh/setup-uv`, `uv sync --frozen`, ruff, pyright, import-linter, core_check, pytest.
 - [x] Job `firmware` : `pio run -e teensy41` et `pio test -e native` pour chaque firmware.
 - [x] Job `dashboard` (quand il existe) : `pnpm install --frozen-lockfile`, lint, typecheck, Vitest, build.
-- [ ] Rendre les jobs obligatoires dans le ruleset de `dev`.
+- [x] Rendre les jobs obligatoires dans le ruleset de `dev`.
 
 ### 1.5 Documentation de base
 
