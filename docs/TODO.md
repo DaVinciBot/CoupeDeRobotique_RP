@@ -64,9 +64,9 @@ Checklist de tout ce qu'il faut faire pour le robot principal, dans l'ordre où 
 
 ### 1.5 Documentation de base
 
-- [ ] README : prérequis (uv, PlatformIO, pnpm), installation, lancer les tests, structure du dépôt.
-- [ ] CONTRIBUTING : Conventional Commits, une relecture par PR, ADR pour les décisions.
-- [ ] `editions/_template/` vide mais complet (table, zones, éléments, actions, règles, simulation, stratégie d'homologation), rempli au fil des sections 2 et 7.
+- [x] README : prérequis (uv, PlatformIO, pnpm), installation, lancer les tests, structure du dépôt.
+- [x] CONTRIBUTING : Conventional Commits, une relecture par PR, ADR pour les décisions.
+- [x] `editions/_template/` vide mais complet (table, zones, éléments, actions, règles, simulation, stratégie d'homologation), rempli au fil des sections 2 et 7.
 
 ---
 

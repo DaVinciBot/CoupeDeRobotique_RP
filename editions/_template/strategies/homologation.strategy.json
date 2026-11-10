@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "kind": "cdr.strategy",
+  "name": "homologation",
+  "arena_id": "_template",
+  "side": "blue",
+  "units": { "length": "mm", "angle": "deg", "time": "s", "speed": "m/s" },
+  "end_reserve_s": 8,
+  "steps": [],
+  "metadata": { "estimated_time_s": 0, "estimated_score": 0, "saved_at": "" }
+}

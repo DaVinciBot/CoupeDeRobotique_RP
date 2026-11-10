@@ -18,7 +18,7 @@
 
 1. Créer la branche depuis `dev`, avec un préfixe (`feat/`, `fix/`, `perf/`, `test/`, `refactor/`, `docs/`).
 2. Pousser la branche et ouvrir une PR vers `dev`.
-3. Le merge se fait via PR.
+3. Le merge se fait via PR, après une relecture (voir [Pull requests](#pull-requests)).
 4. Quand `dev` est testé et prêt pour la compétition, ouvrir une PR `dev → main`.
 
 ## Hotfix
@@ -46,6 +46,23 @@ feat(nav): add visibility graph planner
 fix(safety): stop motors when lidar goes silent
 docs: add commit message format
 ```
+
+## Pull requests
+
+- **Petites PR.** Une PR par case de [docs/TODO.md](docs/TODO.md), ou par petit groupe de cases d'une même sous-section.
+- **Une relecture par PR.** Une autre personne que l'auteur relit et approuve avant le merge. Pour les coordonnées d'une table ou un contrat entre deux équipes (protocole Teensy, format UDP), le relecteur est quelqu'un qui peut vérifier le fond.
+- **Avant de demander la relecture**, les contrôles de la CI passent en local (commandes dans le [README](README.md#lancer-les-tests)).
+- **Dans la description** : les cases de `docs/TODO.md` concernées, comment c'est testé, ce qui reste à valider côté matériel.
+- **Les cases se cochent dans la même PR** que le travail qui les termine.
+
+## Décisions d'architecture (ADR)
+
+Le document de référence est [docs/ARCHITECTURE RP 2027.md](docs/ARCHITECTURE%20RP%202027.md). Une décision qui n'y figure pas, ou qui s'en écarte, s'écrit dans un ADR :
+
+- un fichier court `docs/adr/NNNN-sujet.md`, avec le numéro libre suivant ;
+- même plan que [l'ADR 0001](docs/adr/0001-repository-layout.md) : statut, date, cases de la TODO, contexte, décision, alternatives écartées, conséquences ;
+- rédigé en français, ajouté dans la PR qui applique la décision et cité dans sa description ;
+- un ADR mergé ne se réécrit pas : une nouvelle décision fait un nouvel ADR, qui indique celui qu'il remplace.
 
 ## Règles automatiques
 
