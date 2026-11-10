@@ -74,11 +74,11 @@ Checklist de tout ce qu'il faut faire pour le robot principal, dans l'ordre où 
 
 ### 2.1 Géométrie — `domain/geometry.py`
 
-- [ ] `Vec2` (m) : `+`, `-`, `*`, norme, `dot`, `cross`, `rotate`, `angle`. `@dataclass(frozen=True, slots=True)`.
-- [ ] `Pose` (m, rad) : `position`, `heading_vector`, `compose`, `inverse`, `to_local(p)`, `to_world(p)`.
-- [ ] `normalize_angle(a)` dans (−π, π], `angle_diff(a, b)`, `shortest_rotation(a, b)`.
-- [ ] `domain/units.py` : `mm_to_m`, `deg_to_rad` et inverses, utilisés seulement aux bords (3.1).
-- [ ] Tests Hypothesis : `compose(p, inverse(p))` = identité, `normalize_angle` idempotent, `to_world(to_local(x)) == x`.
+- [x] `Vec2` (m) : `+`, `-`, `*`, norme, `dot`, `cross`, `rotate`, `angle`. `@dataclass(frozen=True, slots=True)`.
+- [x] `Pose` (m, rad) : `position`, `heading_vector`, `compose`, `inverse`, `to_local(p)`, `to_world(p)`.
+- [x] `normalize_angle(a)` dans (−π, π], `angle_diff(a, b)`, `shortest_rotation(a, b)`.
+- [x] `domain/units.py` : `mm_to_m`, `deg_to_rad` et inverses, utilisés seulement aux bords (3.1).
+- [x] Tests Hypothesis : `compose(p, inverse(p))` = identité, `normalize_angle` idempotent, `to_world(to_local(x)) == x`.
 
 ### 2.2 Modèle générique de la table — `domain/arena.py`
 
