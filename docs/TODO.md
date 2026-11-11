@@ -155,7 +155,7 @@ Checklist de tout ce qu'il faut faire pour le robot principal, dans l'ordre où 
 - [ ] Types : `MoveKind` (`ROTATE_BY`, `ROTATE_TO`, `STRAIGHT`, `GOTO`, `PUSH_UNTIL_BLOCKED`), `MoveCommand` (`move_id`, `kind`, paramètres SI, `max_speed`, `max_accel`), `MotionState` (`MOVING`, `ARRIVED`, `BLOCKED`, `STOPPED`), `MotionStatus` (`move_id`, `state`, `pose`, `v`, `omega`, `emergency_stop`, `teensy_time`, `boot_id`), `StopMode` (`SMOOTH`, `URGENT`).
 - [ ] `MotionPort` : `async move(cmd) -> MotionResult`, `async stop(mode)`, `async reset_pose(pose)`, `status() -> Watch[MotionStatus]`, `link_ok()`.
 
-### 3.4 Contrat brain ↔ Teensy moteur — `docs/adr/0002-motion-protocol.md`
+### 3.4 Contrat brain ↔ Teensy moteur — `docs/adr/0003-motion-protocol.md`
 
 - [ ] Contenu exact de `HEARTBEAT`, `MOVE`, `STOP`, `RESET_POSE`, `MOTION_STATUS`, `SET_CONTROL_PARAMS`, `START_TRACE`, `TRACE_SAMPLE`, `TRACE_END` (6.2) : champs, types, unités, IDs.
 - [ ] Fréquences : heartbeat 20 Hz, statut ≥ 10 Hz à cadence fixe, arrêt de la Teensy après 200 ms sans heartbeat.
