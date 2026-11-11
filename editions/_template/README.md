@@ -21,7 +21,8 @@ Tout ce qui dépend du thème de l'année va dans le module d'édition, et seule
 Le modèle se remplit en même temps que le socle (sections 2 et 7 de [docs/TODO.md](../../docs/TODO.md)). Tant que les types du socle n'existent pas :
 
 - les modules Python ne contiennent qu'une docstring ;
-- `arena.json` et `scoring.json` sont des objets vides : leur schéma arrive avec les cases 2.2 et 2.5 ;
+- `arena.json` suit le schéma de la case 2.2 ([ADR 0002](../../docs/adr/0002-arena-format.md)). Il ne décrit que la table habituelle (3000 × 2000 mm, bordures de 22 mm sur 70 mm, tags ArUco 1–5 et 6–10 de RG G.6), sans zone ni élément ;
+- `scoring.json` est un objet vide : son schéma arrive avec la case 2.5 ;
 - `homologation.strategy.json` suit déjà le format `cdr.strategy` ([architecture, section 9.1](../../docs/ARCHITECTURE%20RP%202027.md#91-format)), sans étape.
 
 La PR qui ajoute un type ou un schéma au socle met à jour le fichier correspondant ici, pour que le modèle reste chargeable.
@@ -30,7 +31,7 @@ La PR qui ajoute un type ou un schéma au socle met à jour le fichier correspon
 
 1. Copier le dossier : `cp -r editions/_template editions/cdr_<année>`.
 2. Remplacer `_template` par l'identifiant de l'édition (`arena_id` de la stratégie, `id` de l'édition).
-3. Remplir `arena.json` avec le plan de l'annexe du règlement, côté bleu puis symétriques. Faire relire les coordonnées par une deuxième personne.
+3. Remplir `arena.json` (en mm et en degrés) avec le plan de l'annexe du règlement, côté bleu puis symétriques. Vérifier les dimensions de la table. Faire relire les coordonnées par une deuxième personne.
 4. Remplir `scoring.json` avec le barème.
 5. Écrire les actions, puis les garde-fous dans `rules.py`, en citant l'article du règlement pour chacun.
 6. Décrire les éléments de jeu en simulation dans `sim.py`.
