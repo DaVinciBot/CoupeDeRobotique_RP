@@ -1,0 +1,89 @@
+name: ci
+
+on:
+  pull_request:
+    branches: [dev, main]
+  push:
+    branches: [dev, main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # The firmware and dashboard jobs are required checks of dev: they must always
+  # report, so they are skipped (which counts as a success) while there is
+  # nothing to build yet.
+  detect:
+    runs-on: ubuntu-latest
+    outputs:
+      firmware: ${{ steps.detect.outputs.firmware }}
+      dashboard: ${{ steps.detect.outputs.dashboard }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: detect
+        run: |
+          if compgen -G 'firmware/*/platformio.ini' > /dev/null; then
+            echo "firmware=true" >> "$GITHUB_OUTPUT"
+          fi
+          if [ -f dashboard/package.json ]; then
+            echo "dashboard=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.3.3
+        with:
+          enable-cache: true
+      - run: uv sync --frozen
+      - run: uv run --frozen ruff format --check
+      - run: uv run --frozen ruff check
+      - run: uv run --frozen pyright
+      - run: uv run --frozen lint-imports
+      - run: uv run --frozen python tools/core_check/theme_words.py
+      - run: uv run --frozen pytest
+
+  firmware:
+    needs: detect
+    if: needs.detect.outputs.firmware == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: pipx install platformio
+      - name: Build and test each firmware
+        run: |
+          for ini in firmware/*/platformio.ini; do
+            dir=$(dirname "$ini")
+            echo "::group::$dir"
+            pio run -d "$dir" -e teensy41
+            pio test -d "$dir" -e native
+            echo "::endgroup::"
+          done
+
+  dashboard:
+    needs: detect
+    if: needs.detect.outputs.dashboard == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: dashboard
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+        with:
+          package_json_file: dashboard/package.json
+      - uses: actions/setup-node@v7
+        with:
+          node-version: lts/*
+          cache: pnpm
+          cache-dependency-path: dashboard/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build
