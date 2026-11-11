@@ -1,1 +1,9 @@
-{}
+{
+  "width_mm": 3000,
+  "depth_mm": 2000,
+  "border_thickness_mm": 22,
+  "border_height_mm": 70,
+  "aruco_tags": { "blue": [1, 2, 3, 4, 5], "yellow": [6, 7, 8, 9, 10] },
+  "zones": [],
+  "elements": []
+}
