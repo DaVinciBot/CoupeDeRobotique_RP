@@ -82,12 +82,12 @@ Checklist de tout ce qu'il faut faire pour le robot principal, dans l'ordre où 
 
 ### 2.2 Modèle générique de la table — `domain/arena.py`
 
-- [ ] `Side(Enum)` : `BLUE`, `YELLOW`.
-- [ ] `ZoneKind(StrEnum)` générique : `START`, `END`, `FORBIDDEN`, `EXCLUSIVE_OPPONENT`, `CONSTRUCTION`, `STORAGE`, `OBSTACLE`, `OTHER`.
-- [ ] `Zone` : `id`, `kind`, `owner: Side | None`, `polygon` (m), `height_m`, `tags: frozenset[str]`, `mirror_id`.
-- [ ] `ElementSpec` : `id`, `kind: str` (défini par l'édition), `pose`, `size`, `mirror_id`.
-- [ ] `Arena` : dimensions, épaisseur des bordures, zones, éléments, tags ArUco par côté ; `zones_of(kind, side)`, `zone(id)`, `contains(zone_id, point)`, `polygon_inside(zone_id, footprint)`.
-- [ ] Schéma msgspec de `arena.json` et chargeur ; une erreur nomme le champ et la valeur.
+- [x] `Side(Enum)` : `BLUE`, `YELLOW`.
+- [x] `ZoneKind(StrEnum)` générique : `START`, `END`, `FORBIDDEN`, `EXCLUSIVE_OPPONENT`, `CONSTRUCTION`, `STORAGE`, `OBSTACLE`, `OTHER`.
+- [x] `Zone` : `id`, `kinds: frozenset[ZoneKind]` (ADR 0002), `owner: Side | None`, `polygon` (m), `height` (m), `tags: frozenset[str]`, `mirror_id`.
+- [x] `ElementSpec` : `id`, `kind: str` (défini par l'édition), `pose`, `size`, `mirror_id`.
+- [x] `Arena` : dimensions, épaisseur des bordures, zones, éléments, tags ArUco par côté ; `zones_of(kind, side)`, `zone(id)`, `contains(zone_id, point)`, `polygon_inside(zone_id, footprint)`.
+- [x] Schéma msgspec de `arena.json` (mm et degrés, ADR 0002) et chargeur ; une erreur nomme le champ et la valeur.
 
 ### 2.3 Symétrie — `domain/symmetry.py`
 
