@@ -1,6 +1,6 @@
 # Compile la simulation, lance les scenarios et trace les courbes.
 # A lancer depuis n'importe quel dossier :
-#   powershell -ExecutionPolicy Bypass -File robot1/teensy_moteur/simulation/run.ps1
+#   powershell -ExecutionPolicy Bypass -File firmware/teensy_motor/simulation/run.ps1
 # Il faut g++ et matplotlib (pip install matplotlib).
 
 $ErrorActionPreference = "Stop"
