@@ -39,7 +39,8 @@ Rolling_Basis* rolling_basis_ptr = new Rolling_Basis(ENCODER_RESOLUTION,
                                                      ANGLE_TOLERANCE,
                                                      BLOCK_VOLTAGE,
                                                      BLOCK_SPEED,
-                                                     BLOCK_PERIODS);
+                                                     BLOCK_PERIODS,
+                                                     PUSH_VOLTAGE);
 
 // 2. Instanciate the Communication object
 Com* com;
@@ -109,15 +110,19 @@ void set_wheels_speed(byte* msg, byte size) {
     rolling_basis_ptr->set_speed_targets(speed_msg->v_left, speed_msg->v_right);
 }
 
-void set_odometrie(byte* msg, byte size) {
-    msg_set_odometrie* odometrie = (msg_set_odometrie*)msg;
+void reset_pose(byte* msg, byte size) {
+    msg_reset_pose* pose_msg = (msg_reset_pose*)msg;
 
-    // seule la pose change : delta_mes et psi_mes ne sont jamais recalés
-    ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
-        rolling_basis_ptr->X = odometrie->x;
-        rolling_basis_ptr->Y = odometrie->y;
-        rolling_basis_ptr->THETA = odometrie->theta;
-    }
+    // refusé si le robot bouge : la Raspberry le voit dans le statut suivant
+    rolling_basis_ptr->reset_pose(
+        Point(pose_msg->x, pose_msg->y, pose_msg->theta));
+}
+
+void push_until_blocked(byte* msg, byte size) {
+    msg_push_until_blocked* push_msg = (msg_push_until_blocked*)msg;
+
+    rolling_basis_ptr->push_until_blocked(push_msg->speed,
+                                          push_msg->max_distance);
 }
 
 void reset_teensy(byte* msg, byte size) {
@@ -132,9 +137,10 @@ void (*callback_functions[256])(byte* msg, byte size);
 void initialize_callback_functions() {
     callback_functions[SET_TARGET_POSITION] = &set_target_position;
     callback_functions[SET_PID] = &set_pid;
-    callback_functions[SET_ODOMETRIE] = &set_odometrie;
+    callback_functions[RESET_POSE] = &reset_pose;
     callback_functions[SET_MOTORS_VOLTAGE] = &set_motors_voltage;
     callback_functions[SET_WHEELS_SPEED] = &set_wheels_speed;
+    callback_functions[PUSH_UNTIL_BLOCKED] = &push_until_blocked;
     callback_functions[RESET_TEENSY] = &reset_teensy;
 }
 

@@ -17,9 +17,10 @@ const byte END_BYTES_SIGNATURE[4] = {0xBA, 0xDD, 0x1C, 0xC5};
 // Rolling Basis
 #define SET_TARGET_POSITION 0
 #define SET_PID 1
-#define SET_ODOMETRIE 2
+#define RESET_POSE 2
 #define SET_MOTORS_VOLTAGE 9
 #define SET_WHEELS_SPEED 10
+#define PUSH_UNTIL_BLOCKED 11
 
 // Actuators
 #define SET_SERVO_ANGLE_I2C 3
@@ -68,12 +69,23 @@ struct msg_set_pid
     float kd;
 };
 
-struct msg_set_odometrie
+// Ignoré si le robot est en mouvement : la Raspberry vérifie dans le statut
+// que la nouvelle pose est appliquée
+struct msg_reset_pose
 {
-    byte command = SET_ODOMETRIE;
-    double x;
-    double y;
-    double theta;
+    byte command = RESET_POSE;
+    double x;     // en cm
+    double y;     // en cm
+    double theta; // en rad
+};
+
+// Recul ou avance à vitesse lente jusqu'à toucher une bordure. Statut BLOCKED
+// quand les deux roues sont bloquées, STOPPED si rien n'a été touché
+struct msg_push_until_blocked
+{
+    byte command = PUSH_UNTIL_BLOCKED;
+    double speed;        // en cm/s, négatif = recul
+    double max_distance; // en cm
 };
 
 // Messages de test : les moteurs sont coupés à la fin de la durée

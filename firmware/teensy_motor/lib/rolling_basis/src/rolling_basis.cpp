@@ -55,7 +55,8 @@ Rolling_Basis::Rolling_Basis(unsigned short encoder_resolution,
                              double angle_tolerance,
                              double block_voltage,
                              double block_speed,
-                             unsigned long block_periods)
+                             unsigned long block_periods,
+                             double push_voltage)
     : encoder_resolution(encoder_resolution),
       center_distance(center_distance),
       wheel_diameter(wheel_diameter),
@@ -70,7 +71,8 @@ Rolling_Basis::Rolling_Basis(unsigned short encoder_resolution,
       angle_tolerance(angle_tolerance),
       block_voltage(block_voltage),
       block_speed(block_speed),
-      block_periods(block_periods) {}
+      block_periods(block_periods),
+      push_voltage(push_voltage) {}
 
 // Methods
 // Inits function
@@ -170,15 +172,16 @@ void Rolling_Basis::odometrie_handle() {
  * @brief Calcule et applique la commande des moteurs
  *
  * Appelée par le timer à chaque période, après odometrie_handle().
- * Hors POSITION, les moteurs sont coupés quand test_periods_left arrive à 0.
- * Selon le mode :
+ * En OPEN_LOOP et SPEED, les moteurs sont coupés quand test_periods_left
+ * arrive à 0. Selon le mode :
  * - OPEN_LOOP : applique directement u_left_target et u_right_target.
  * - SPEED : chaque PI calcule la tension de sa roue.
  * - POSITION : suit les trapèzes avec la cascade complète.
+ * - PUSH : vitesse imposée, tension bornée, jusqu'au blocage.
  */
 void Rolling_Basis::handle() {
     // fin du test : on coupe les moteurs, même sans message de la Raspberry
-    if (this->mode != Mode::POSITION) {
+    if (this->mode == Mode::OPEN_LOOP || this->mode == Mode::SPEED) {
         if (this->test_periods_left == 0) {
             this->set_open_loop(0.0, 0.0);
         } else {
@@ -223,6 +226,18 @@ void Rolling_Basis::handle() {
             this->check_blocked();
             break;
         }
+
+        // vitesse imposée jusqu'à la bordure, abandon après max_distance
+        case Mode::PUSH:
+            // rien touché : la Raspberry verra STOPPED au lieu de BLOCKED
+            if (fabs(this->delta_mes - this->push_start) >=
+                this->push_max_distance) {
+                this->set_open_loop(0.0, 0.0);
+                break;
+            }
+            this->apply_speed_targets(this->push_voltage);
+            this->check_blocked();
+            break;
     }
 }
 
@@ -281,14 +296,19 @@ void Rolling_Basis::set_speed_targets(double v_left, double v_right) {
  * @brief Applique les vitesses de consigne aux deux roues
  *
  * Chaque PI transforme l'erreur de vitesse de sa roue en tension. Cette étape
- * est commune aux modes SPEED et POSITION.
+ * est commune aux modes SPEED, POSITION et PUSH.
+ *
+ * @param u_limit Tension max appliquée, en V (bornée ensuite à u_max)
  */
-void Rolling_Basis::apply_speed_targets() {
+void Rolling_Basis::apply_speed_targets(double u_limit) {
     // erreur = vitesse cible - vitesse mesurée, en cm/s
     double u_left = this->left_speed_pid.compute(this->v_left_target -
                                                  this->left_motor->speed);
     double u_right = this->right_speed_pid.compute(this->v_right_target -
                                                    this->right_motor->speed);
+
+    u_left = fmax(fmin(u_left, u_limit), -u_limit);
+    u_right = fmax(fmin(u_right, u_limit), -u_limit);
 
     // set_voltage() convertit ces tensions en PWM + DIR
     this->left_motor->set_voltage(u_left, this->vbat);
@@ -331,6 +351,60 @@ void Rolling_Basis::set_target(Point target) {
 
         this->mode = Mode::POSITION;
     }
+}
+
+/**
+ * @brief Recule ou avance tout droit jusqu'à toucher une bordure
+ *
+ * Les deux roues suivent la même vitesse, avec une tension bornée à
+ * push_voltage pour limiter la force contre la bordure. Quand une seule roue
+ * est bloquée, l'autre continue et le robot pivote jusqu'à se plaquer.
+ *
+ * @param speed Vitesse des roues, en cm/s, négative pour reculer
+ * @param max_distance Distance avant abandon, en cm
+ */
+void Rolling_Basis::push_until_blocked(double speed, double max_distance) {
+    ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
+        // une ancienne intégrale provoquerait un à-coup au démarrage
+        if (this->mode != Mode::PUSH) {
+            this->left_speed_pid.reset();
+            this->right_speed_pid.reset();
+        }
+
+        this->v_left_target = speed;
+        this->v_right_target = speed;
+        this->push_start = this->delta_mes;
+        this->push_max_distance = fabs(max_distance);
+        this->test_periods_left = 0;
+        this->blocked = false;
+        this->blocked_count = 0;
+        this->move_step = MoveStep::IDLE;
+
+        this->mode = Mode::PUSH;
+    }
+}
+
+/**
+ * @brief Impose la position absolue du robot (recalage)
+ *
+ * Seule la pose X, Y, THETA change : delta_mes et psi_mes, suivis par les
+ * correcteurs, ne bougent pas, donc le robot ne saute pas.
+ *
+ * @param pose Nouvelle pose : x et y en cm, theta en rad
+ * @return true si la pose est appliquée, false si le robot bouge
+ */
+bool Rolling_Basis::reset_pose(Point pose) {
+    bool applied = false;
+    ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
+        // la cible du mouvement en cours a été calculée avec l'ancienne pose
+        if (this->get_status() != Status::MOVING) {
+            this->X = pose.x;
+            this->Y = pose.y;
+            this->THETA = normalizeAngle(pose.theta);
+            applied = true;
+        }
+    }
+    return applied;
 }
 
 /**
@@ -420,16 +494,28 @@ void Rolling_Basis::update_move() {
  * Une roue est bloquée si sa tension dépasse block_voltage alors que sa vitesse
  * reste sous block_speed. Après block_periods périodes de suite, le robot
  * s'arrête et blocked passe à true jusqu'à la prochaine cible.
+ * En PUSH, il faut les deux roues, et la tension est comparée à push_voltage.
  */
 void Rolling_Basis::check_blocked() {
-    bool left_blocked = fabs(this->left_motor->voltage) > this->block_voltage &&
-                        fabs(this->left_motor->speed) < this->block_speed;
+    bool pushing = this->mode == Mode::PUSH;
+    // en poussée, une roue qui force reste à la borne push_voltage
+    double voltage_threshold =
+        pushing ? 0.9 * this->push_voltage : this->block_voltage;
+
+    bool left_blocked =
+        fabs(this->left_motor->voltage) > voltage_threshold &&
+        fabs(this->left_motor->speed) < this->block_speed;
     bool right_blocked =
-        fabs(this->right_motor->voltage) > this->block_voltage &&
+        fabs(this->right_motor->voltage) > voltage_threshold &&
         fabs(this->right_motor->speed) < this->block_speed;
 
+    // en poussée, une seule roue bloquée veut dire que le robot pivote pour se
+    // plaquer contre la bordure : on continue
+    bool is_blocked = pushing ? left_blocked && right_blocked
+                              : left_blocked || right_blocked;
+
     // il faut un blocage continu : un démarrage difficile ne compte pas
-    if (!left_blocked && !right_blocked) {
+    if (!is_blocked) {
         this->blocked_count = 0;
         return;
     }
@@ -454,7 +540,7 @@ Rolling_Basis::Status Rolling_Basis::get_status() {
     if (this->blocked) {
         return Status::BLOCKED;
     }
-    if (this->move_step != MoveStep::IDLE) {
+    if (this->mode == Mode::PUSH || this->move_step != MoveStep::IDLE) {
         return Status::MOVING;
     }
     return Status::STOPPED;

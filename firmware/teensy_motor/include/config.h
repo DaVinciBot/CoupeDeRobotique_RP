@@ -74,3 +74,6 @@
 #define BLOCK_VOLTAGE 8.0  // en V
 #define BLOCK_SPEED 1.0    // en cm/s
 #define BLOCK_PERIODS 100  // 0,5 s à 200 Hz
+
+// Poussée contre une bordure (recalage)
+#define PUSH_VOLTAGE 4.0  // en V, à valider avec l'élec : limite la force

@@ -60,8 +60,9 @@ class Rolling_Basis {
     // V de la batterie
     double vbat = 0.0;  // en V
 
-    // OPEN_LOOP : tension imposée, SPEED : vitesse imposée, POSITION : cascade
-    enum class Mode { OPEN_LOOP, SPEED, POSITION };
+    // OPEN_LOOP : tension imposée, SPEED : vitesse imposée, POSITION : cascade,
+    // PUSH : vitesse imposée jusqu'au blocage contre une bordure
+    enum class Mode { OPEN_LOOP, SPEED, POSITION, PUSH };
     volatile Mode mode = Mode::OPEN_LOOP;
 
     // tension demandée au moteur gauche, en V
@@ -94,6 +95,11 @@ class Rolling_Basis {
     unsigned long blocked_count = 0;  // périodes de blocage à la suite
     volatile bool blocked = false;    // reste vrai jusqu'à la prochaine cible
 
+    // Poussée contre une bordure
+    double push_voltage;              // tension max des roues, en V
+    double push_start = 0.0;          // delta_mes au début de la poussée
+    double push_max_distance = 0.0;   // distance avant abandon, en cm
+
     // Constructor
     /**
      * @brief constructor of the Rolling Basis class
@@ -114,7 +120,8 @@ class Rolling_Basis {
                   double angle_tolerance,
                   double block_voltage,
                   double block_speed,
-                  unsigned long block_periods);
+                  unsigned long block_periods,
+                  double push_voltage);
 
     /**
      * @brief Destructor of Rolling Basis class
@@ -228,6 +235,32 @@ class Rolling_Basis {
     void set_target(Point target);
 
     /**
+     * @brief Recule ou avance tout droit jusqu'à toucher une bordure
+     *
+     * Les deux roues suivent la même vitesse, avec une tension bornée à
+     * push_voltage pour limiter la force contre la bordure. Quand une seule
+     * roue est bloquée, l'autre continue et le robot pivote jusqu'à se plaquer.
+     * Le statut passe à BLOCKED quand les deux roues sont bloquées, ou à
+     * STOPPED si le robot a parcouru max_distance sans rien toucher.
+     *
+     * @param speed Vitesse des roues, en cm/s, négative pour reculer
+     * @param max_distance Distance avant abandon, en cm
+     */
+    void push_until_blocked(double speed, double max_distance);
+
+    /**
+     * @brief Impose la position absolue du robot (recalage)
+     *
+     * Seule la pose X, Y, THETA change : delta_mes et psi_mes, suivis par les
+     * correcteurs, ne bougent pas, donc le robot ne saute pas. Refusé pendant
+     * un mouvement, dont la cible a été calculée avec l'ancienne pose.
+     *
+     * @param pose Nouvelle pose : x et y en cm, theta en rad
+     * @return true si la pose est appliquée, false si le robot bouge
+     */
+    bool reset_pose(Point pose);
+
+    /**
      * @brief Passe à l'étape suivante quand l'étape en cours est finie
      *
      * Une étape est finie quand le trapèze est terminé et que la mesure est
@@ -258,9 +291,11 @@ class Rolling_Basis {
      * @brief Applique les vitesses de consigne aux deux roues
      *
      * Chaque PI transforme l'erreur de vitesse de sa roue en tension. Cette
-     * étape est commune aux modes SPEED et POSITION.
+     * étape est commune aux modes SPEED, POSITION et PUSH.
+     *
+     * @param u_limit Tension max appliquée, en V (bornée ensuite à u_max)
      */
-    void apply_speed_targets();
+    void apply_speed_targets(double u_limit = INFINITY);
 
     /**
      * @brief Coupe les moteurs si une roue force sans avancer
@@ -268,6 +303,8 @@ class Rolling_Basis {
      * Une roue est bloquée si sa tension dépasse block_voltage alors que sa
      * vitesse reste sous block_speed. Après block_periods périodes de suite, le
      * robot s'arrête et blocked passe à true jusqu'à la prochaine cible.
+     * En PUSH, il faut les deux roues, et la tension est comparée à
+     * push_voltage.
      */
     void check_blocked();
 

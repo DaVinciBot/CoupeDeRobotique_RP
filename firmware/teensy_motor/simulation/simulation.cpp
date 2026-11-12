@@ -82,7 +82,8 @@ int main(int argc, char** argv) {
     Rolling_Basis robot(ENCODER_RESOLUTION, ENTRAXE, WHEEL_DIAMETER, linear_pid,
                         angular_pid, left_pid, right_pid, delta_profile,
                         psi_profile, TS, POSITION_TOLERANCE, ANGLE_TOLERANCE,
-                        BLOCK_VOLTAGE, BLOCK_SPEED, BLOCK_PERIODS);
+                        BLOCK_VOLTAGE, BLOCK_SPEED, BLOCK_PERIODS,
+                        PUSH_VOLTAGE);
     robot.define_right_motor(R_ENCA, R_ENCB, R_PWM, R_DIR, PWM_MAX, U_MAX, TS);
     robot.define_left_motor(L_ENCA, L_ENCB, L_PWM, L_DIR, PWM_MAX, U_MAX, TS);
     robot.init_motors();
