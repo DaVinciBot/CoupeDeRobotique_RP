@@ -194,16 +194,8 @@ int main(int argc, char** argv) {
         robot.odometrie_handle();
         robot.handle();
 
-        bool blocked = block_left && t >= BLOCK_START;
-        bool wall_left = recalage && rear_corner_on_wall(true_pose, 1.0);
-        bool wall_right = recalage && rear_corner_on_wall(true_pose, -1.0);
-        double left_before = left.distance;
-        double right_before = right.distance;
-        update_wheel(left, robot.wheel_unit_tick_cm(), blocked, wall_left);
-        update_wheel(right, robot.wheel_unit_tick_cm(), false, wall_right);
-        update_true_pose(true_pose, left.distance - left_before,
-                         right.distance - right_before);
-
+        // écrit avant de bouger les roues : l'odométrie vient d'être lue, la
+        // pose réelle doit être celle du même instant
         fprintf(csv,
                 "%.3f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%d,%f,%f,%f\n", t,
                 robot.delta_profile.position, robot.delta_mes,
@@ -213,6 +205,16 @@ int main(int argc, char** argv) {
                 robot.right_motor->voltage, robot.X, robot.Y, robot.THETA,
                 (int)robot.move_step, true_pose.x, true_pose.y,
                 true_pose.theta);
+
+        bool blocked = block_left && t >= BLOCK_START;
+        bool wall_left = recalage && rear_corner_on_wall(true_pose, 1.0);
+        bool wall_right = recalage && rear_corner_on_wall(true_pose, -1.0);
+        double left_before = left.distance;
+        double right_before = right.distance;
+        update_wheel(left, robot.wheel_unit_tick_cm(), blocked, wall_left);
+        update_wheel(right, robot.wheel_unit_tick_cm(), false, wall_right);
+        update_true_pose(true_pose, left.distance - left_before,
+                         right.distance - right_before);
 
         if (!recalage) {
             if (end_time < 0.0 &&
