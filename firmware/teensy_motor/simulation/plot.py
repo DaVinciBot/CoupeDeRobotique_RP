@@ -2,12 +2,13 @@
 
 import csv
 import sys
+from pathlib import Path
 
 import matplotlib.pyplot as plt
 
 scenario = sys.argv[1] if len(sys.argv) > 1 else "normal"
 
-with open(f"tmp/{scenario}.csv", encoding="utf-8") as file:
+with Path(f"tmp/{scenario}.csv").open(encoding="utf-8") as file:
     rows = list(csv.DictReader(file))
 
 
