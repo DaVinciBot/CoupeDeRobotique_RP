@@ -16,7 +16,7 @@ g++ -std=gnu++17 -Ifake -I../include `
     -o tmp/simulation.exe
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-foreach ($scenario in "normal", "blocage") {
+foreach ($scenario in "normal", "blocage", "recalage") {
     & ./tmp/simulation.exe $scenario
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     python plot.py $scenario

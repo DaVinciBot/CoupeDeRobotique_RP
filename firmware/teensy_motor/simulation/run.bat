@@ -8,3 +8,4 @@ if errorlevel 1 (
 )
 start "" "%~dp0tmp\normal.png"
 start "" "%~dp0tmp\blocage.png"
+start "" "%~dp0tmp\recalage.png"
