@@ -30,7 +30,7 @@ La PR qui ajoute un type ou un schéma au socle met à jour le fichier correspon
 ## Démarrer une édition
 
 1. Copier le dossier : `cp -r editions/_template editions/cdr_<année>`.
-2. Remplacer `_template` par l'identifiant de l'édition (`arena_id` de la stratégie, `id` renvoyé par `load()`).
+2. Remplacer `_template` par l'identifiant de l'édition dans `arena_id` de la stratégie. L'`id` de l'édition est le nom du dossier.
 3. Remplir `arena.json` (en mm et en degrés) avec le plan de l'annexe du règlement, côté bleu puis symétriques. Vérifier les dimensions de la table. Faire relire les coordonnées par une deuxième personne.
 4. Remplir `scoring.json` avec le barème et les phases du match, en citant l'article du règlement pour chaque entrée.
 5. Écrire les actions, puis les garde-fous dans `rules.py`, en citant l'article du règlement pour chacun.

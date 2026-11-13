@@ -46,7 +46,7 @@ select = ["E", "F", "I", "UP", "B", "SIM", "RUF", "ASYNC", "PTH", "N"]
 [tool.pyright]
 include = ["packages", "tools", "editions"]
 typeCheckingMode = "basic"
-strict = ["packages/*/src", "tools/core_check/*.py"]
+strict = ["packages/*/src", "tools/core_check/*.py", "editions/*.py", "editions/*/*.py"]
 
 [tool.importlinter]
 root_packages = [

@@ -29,7 +29,7 @@ class _Edition:
 def load() -> Edition:
     """Read the files of the edition. At startup only: this blocks on the disk."""
     return _Edition(
-        id="cdr_2027",  # name of this folder
+        id=_FOLDER.name,
         arena=load_arena(_FOLDER / "arena.json"),
         scoring=load_scoring(_FOLDER / "scoring.json"),
     )
