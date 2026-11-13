@@ -110,16 +110,16 @@ Checklist de tout ce qu'il faut faire pour le robot principal, dans l'ordre où 
 
 ### 2.5 Barème et constantes de match
 
-- [ ] `editions/cdr_2027/scoring.json` : points de chaque action (RJ F, E.2.c, E.3.c). Aucun point dans le code.
-- [ ] Constantes génériques dans la config du socle : durée 100 s (RG H.2), phase d'attaque à 85 s (RJ E.4), hauteur max 350 mm (RG F.3).
+- [x] `editions/cdr_2027/scoring.json` : points de chaque action (RJ F, E.2.c, E.3.c). Aucun point dans le code.
+- [x] Constantes génériques dans la config du socle (`config/match.json`) : durée 100 s (RG H.2), hauteur max 350 mm (RG F.3). La phase d'attaque à 85 s (RJ E.4) est une règle de l'année : dans `scoring.json` de l'édition (ADR 0005).
 
 ### 2.6 Format `cdr.strategy` — `domain/strategy_model.py`
 
-- [ ] Classes msgspec de la section 9.1 : `Strategy`, `Step`, `Move`, `Tolerance`, `Action`, `MoveMode(StrEnum)`, `OnTimeout` (`skip`, `abort`, `goto:<id>` parsé en type somme).
-- [ ] Conversion mm / deg → SI au chargement.
-- [ ] `mirror_strategy(strategy, arena)` : symétrie de chaque `move` et `element_id`, changement de `side`.
-- [ ] Validations statiques : `schema_version`, `kind`, ids d'étape uniques, cibles de `goto:` existantes, `element_id` connus, `actions[].type` enregistrés par l'édition, `not_before_s` ≤ 100.
-- [ ] `editions/cdr_2027/strategies/homologation.strategy.json` écrite à la main : sortir de la salle du trône, une action, revenir (RG I.3.b).
+- [x] Classes msgspec de la section 9.1 : `Strategy`, `Step`, `Move`, `Tolerance`, `Action`, `MoveMode(StrEnum)`, `OnTimeout` (`skip`, `abort`, `goto:<id>` parsé en type somme).
+- [x] Conversion mm / deg → SI au chargement.
+- [x] `mirror_strategy(strategy, arena)` : symétrie de chaque `move` et `element_id`, changement de `side`.
+- [x] Validations statiques : `schema_version`, `kind`, ids d'étape uniques, cibles de `goto:` existantes, `element_id` connus, `actions[].type` enregistrés par l'édition, `not_before_s` ≤ 100. Les types d'action sont passés en paramètre jusqu'au registre (7.1) et à l'`Edition` (2.7) (ADR 0005).
+- [x] `editions/cdr_2027/strategies/homologation.strategy.json` écrite à la main : sortir de la salle du trône, une action, revenir (RG I.3.b). Prise des pierres de `quarry_front_4` puis une tour ; poses d'approche provisoires.
 
 ### 2.7 Interface `Edition`
 
@@ -621,6 +621,7 @@ Chaque point bloque les cases indiquées.
 | Empreinte réelle du robot (rayon, polygone, actionneurs rentrés) | 2.4, 5.1, 6.1, 7.4 |
 | Position, orientation et hauteur du lidar sur le robot | 9.1, 16.2 |
 | Séquences des mécanismes (prise de pierres, construction, Graal, lanceur) | 7.1, 14 |
+| Poses d'approche de la stratégie `homologation` (carrière `quarry_front_4`, tour `blue_tower_front_outer`), selon l'empreinte du robot et les mécanismes ; sens de `element_id` pour `pick_stones` (une pierre ou toute la carrière) | 7.1, 21.2 |
 | GPIO, pull-up et niveau logique de la tirette | 15.3 |
 | Câblage du BAU conforme à R1, R2 et R8 du document d'asservissement | 13.3, 8.2 |
 | Variante ROS 2 et pilote du TiM561, résolution angulaire réelle | 11.3, 16.1 |
