@@ -8,7 +8,7 @@ Tout ce qui dépend du thème de l'année va dans le module d'édition, et seule
 
 | Fichier | Rôle | Défini par |
 | --- | --- | --- |
-| `__init__.py` | Point d'entrée : l'objet `Edition` du module | TODO 2.7 |
+| `__init__.py` | Point d'entrée : `load()` lit les fichiers et renvoie l'objet `Edition` du module ([ADR 0006](../../docs/adr/0006-edition-interface.md)) | TODO 2.7 |
 | `arena.json` | Table : dimensions, bordures, zones, éléments de jeu, symétries, tags ArUco | TODO 2.2, 2.4 |
 | `scoring.json` | Barème : points de chaque action, et phases du match propres à l'édition. Aucun point dans le code | TODO 2.5 |
 | `actions.py` | Actions de jeu, enregistrées par nom dans le registre du socle | TODO 7.1 |
@@ -20,7 +20,7 @@ Tout ce qui dépend du thème de l'année va dans le module d'édition, et seule
 
 Le modèle se remplit en même temps que le socle (sections 2 et 7 de [docs/TODO.md](../../docs/TODO.md)). Tant que les types du socle n'existent pas :
 
-- les modules Python ne contiennent qu'une docstring ;
+- `__init__.py` charge l'édition, et `rules.py` ne donne que les zones d'arrivée ; `actions.py` et `sim.py` ne contiennent qu'une docstring ;
 - `arena.json` suit le schéma de la case 2.2 ([ADR 0002](../../docs/adr/0002-arena-format.md)). Il ne décrit que la table habituelle (3000 × 2000 mm, bordures de 22 mm sur 70 mm, tags ArUco 1–5 et 6–10 de RG G.6), sans zone ni élément ;
 - `scoring.json` suit le schéma de la case 2.5 ([ADR 0005](../../docs/adr/0005-scoring-and-strategy-format.md)), sans barème ni phase ;
 - `homologation.strategy.json` suit déjà le format `cdr.strategy` ([architecture, section 9.1](../../docs/ARCHITECTURE%20RP%202027.md#91-format)), sans étape.
@@ -30,7 +30,7 @@ La PR qui ajoute un type ou un schéma au socle met à jour le fichier correspon
 ## Démarrer une édition
 
 1. Copier le dossier : `cp -r editions/_template editions/cdr_<année>`.
-2. Remplacer `_template` par l'identifiant de l'édition (`arena_id` de la stratégie, `id` de l'édition).
+2. Remplacer `_template` par l'identifiant de l'édition (`arena_id` de la stratégie, `id` renvoyé par `load()`).
 3. Remplir `arena.json` (en mm et en degrés) avec le plan de l'annexe du règlement, côté bleu puis symétriques. Vérifier les dimensions de la table. Faire relire les coordonnées par une deuxième personne.
 4. Remplir `scoring.json` avec le barème et les phases du match, en citant l'article du règlement pour chaque entrée.
 5. Écrire les actions, puis les garde-fous dans `rules.py`, en citant l'article du règlement pour chacun.
