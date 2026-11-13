@@ -16,7 +16,6 @@ from dvb_brain.domain.arena import (
     Size,
     Zone,
     ZoneKind,
-    load_arena,
     parse_arena,
 )
 from dvb_brain.domain.decoding import SchemaError
@@ -182,7 +181,7 @@ def test_check_symmetry_accepts_symmetric_arena(arena: Arena) -> None:
 
 
 def test_check_symmetry_accepts_template_arena() -> None:
-    check_symmetry(load_arena(TEMPLATE_ARENA))
+    check_symmetry(parse_arena(TEMPLATE_ARENA.read_bytes()))
 
 
 def test_check_symmetry_accepts_mirrored_circles_and_rectangles() -> None:

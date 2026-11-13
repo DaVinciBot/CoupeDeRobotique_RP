@@ -7,13 +7,12 @@ additional points) is the business of the edition.
 
 from collections.abc import Mapping
 from dataclasses import dataclass
-from pathlib import Path
 from types import MappingProxyType
 from typing import Annotated, Literal
 
 import msgspec
 
-from dvb_brain.domain.decoding import Id, NonNegative, SchemaError, check_unique_ids, decode_json
+from dvb_brain.domain.decoding import Id, NonNegative, check_unique_ids, decode_json
 
 
 @dataclass(frozen=True, slots=True, eq=False)
@@ -36,14 +35,6 @@ def parse_scoring(data: bytes) -> Scoring:
         points=MappingProxyType({item.id: item.points for item in raw.items}),
         phase_starts=MappingProxyType({phase.id: phase.start_s for phase in raw.phases}),
     )
-
-
-def load_scoring(path: Path) -> Scoring:
-    """Read a scoring.json file. At startup only: this blocks on the disk."""
-    try:
-        return parse_scoring(path.read_bytes())
-    except SchemaError as error:
-        raise SchemaError(f"{path}: {error}") from error
 
 
 # Schema of scoring.json: times in s. Each entry cites its rule, for the review.

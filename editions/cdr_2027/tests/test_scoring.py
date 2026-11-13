@@ -2,15 +2,16 @@
 
 from pathlib import Path
 
-from dvb_brain.domain.match_constants import load_match_constants
-from dvb_brain.domain.scoring import load_scoring
+from dvb_brain.app.files import load_file
+from dvb_brain.domain.match_constants import parse_match_constants
+from dvb_brain.domain.scoring import parse_scoring
 
 SCORING = Path(__file__).parents[1] / "scoring.json"
 MATCH_CONFIG = Path(__file__).parents[3] / "config" / "match.json"
 
 
 def test_points_follow_the_rules() -> None:
-    assert load_scoring(SCORING).points == {
+    assert load_file(SCORING, parse_scoring).points == {
         # RJ E.1.c: per stone, then per construction.
         "stone_in_construction_zone": 1,
         "wall_built": 5,
@@ -32,7 +33,7 @@ def test_points_follow_the_rules() -> None:
 
 def test_attack_phase_starts_at_85_s() -> None:
     # RJ E.4.b: from the 85th second to the end of the match.
-    attack_start = load_scoring(SCORING).phase_starts["attack"]
+    attack_start = load_file(SCORING, parse_scoring).phase_starts["attack"]
 
     assert attack_start == 85.0
-    assert attack_start < load_match_constants(MATCH_CONFIG).duration
+    assert attack_start < load_file(MATCH_CONFIG, parse_match_constants).duration

@@ -6,7 +6,7 @@ import msgspec
 import pytest
 
 from dvb_brain.domain.decoding import SchemaError
-from dvb_brain.domain.scoring import load_scoring, parse_scoring
+from dvb_brain.domain.scoring import parse_scoring
 
 TEMPLATE_SCORING = Path(__file__).parents[4] / "editions" / "_template" / "scoring.json"
 
@@ -91,20 +91,8 @@ def test_parse_scoring_rejects_a_duplicate_phase() -> None:
         parse_scoring(encode(document))
 
 
-def test_load_scoring_error_names_the_file(tmp_path: Path) -> None:
-    path = tmp_path / "scoring.json"
-    document = valid_document()
-    document["items"][0]["points"] = -2
-    path.write_bytes(encode(document))
-
-    with pytest.raises(SchemaError) as error:
-        load_scoring(path)
-
-    assert str(error.value).startswith(f"{path}: $.items[0].points:")
-
-
 def test_template_scoring_loads() -> None:
-    scoring = load_scoring(TEMPLATE_SCORING)
+    scoring = parse_scoring(TEMPLATE_SCORING.read_bytes())
 
     assert scoring.points == {}
     assert scoring.phase_starts == {}

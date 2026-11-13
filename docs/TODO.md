@@ -52,7 +52,7 @@ Checklist de tout ce qu'il faut faire pour le robot principal, dans l'ordre où 
 - [x] `.pre-commit-config.yaml` : ruff format, ruff check, pyright (hook local).
 - [ ] `clang-format` pour le firmware, vérifié en CI.
 - [x] Contrôles du socle :
-  - [x] règles import-linter (`[tool.importlinter]` du `pyproject.toml` racine) : le socle n'importe jamais `editions.*` ; `domain` n'importe ni `services`, ni `adapters`, ni `app`, ni asyncio ; couches du brain dans l'ordre de la section 5.3, `services` et `adapters` indépendants (ADR 0008) ;
+  - [x] règles import-linter (`[tool.importlinter]` du `pyproject.toml` racine) : le socle n'importe jamais `editions.*` ; `domain` n'importe ni `services`, ni `adapters`, ni `app`, ni asyncio, ni les modules d'entrée-sortie et d'horloge (`pathlib`, `os`, `io`, `time`, `socket`, `subprocess`, `threading`) ; couches du brain dans l'ordre de la section 5.3, `services` et `adapters` indépendants (ADR 0008) ;
   - [x] `tools/core_check/theme_words.py` : cherche les mots du thème dans le socle (`pierre`, `stone`, `graal`, `grail`, `catapulte`, `château`, `castle`…) et échoue s'il en trouve (0) ;
   - [x] `tools/core_check/theme_coordinates.py` : recherche des coordonnées du thème dans le socle, d'après les `arena.json` des éditions.
 
@@ -88,7 +88,7 @@ Checklist de tout ce qu'il faut faire pour le robot principal, dans l'ordre où 
 - [x] `Zone` : `id`, `kinds: frozenset[ZoneKind]` (ADR 0002), `owner: Side | None`, `polygon` (m), `height` (m), `tags: frozenset[str]`, `mirror_id`.
 - [x] `ElementSpec` : `id`, `kind: str` (défini par l'édition), `pose`, `size`, `mirror_id`.
 - [x] `Arena` : dimensions, épaisseur des bordures, zones, éléments, tags ArUco par côté ; `zones_of(kind, side)`, `zone(id)`, `contains(zone_id, point)`, `polygon_inside(zone_id, footprint)`.
-- [x] Schéma msgspec de `arena.json` (mm et degrés, ADR 0002) et chargeur ; une erreur nomme le champ et la valeur.
+- [x] Schéma msgspec de `arena.json` (mm et degrés, ADR 0002) et décodage `parse_arena(data)` ; une erreur nomme le champ et la valeur, et `app/files.py` y ajoute le fichier (ADR 0008).
 
 ### 2.3 Symétrie — `domain/symmetry.py`
 

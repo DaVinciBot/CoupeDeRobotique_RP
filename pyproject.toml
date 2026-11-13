@@ -58,7 +58,7 @@ root_packages = [
     "dvb_supervisor",
     "dvb_usb_com",
 ]
-include_external_packages = true  # needed to forbid editions and asyncio
+include_external_packages = true  # needed to forbid editions and the standard library
 
 [[tool.importlinter.contracts]]
 name = "The core never imports an edition"
@@ -74,11 +74,25 @@ source_modules = [
 ]
 forbidden_modules = ["editions"]
 
+# ADR 0008: the domain reads no clock, no file and no device; the caller gives it the time and
+# the bytes.
 [[tool.importlinter.contracts]]
 name = "The brain domain stays pure"
 type = "forbidden"
 source_modules = ["dvb_brain.domain"]
-forbidden_modules = ["dvb_brain.services", "dvb_brain.adapters", "dvb_brain.app", "asyncio"]
+forbidden_modules = [
+    "dvb_brain.services",
+    "dvb_brain.adapters",
+    "dvb_brain.app",
+    "asyncio",
+    "io",
+    "os",
+    "pathlib",
+    "socket",
+    "subprocess",
+    "threading",
+    "time",
+]
 
 # Architecture, section 5.3: each layer imports only the layers below it. Services and adapters
 # ignore each other: only app knows which adapter is plugged in (ADR 0006).

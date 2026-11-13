@@ -7,7 +7,7 @@ import msgspec
 import pytest
 from shapely import Polygon
 
-from dvb_brain.domain.arena import Arena, Side, Zone, ZoneKind, load_arena, parse_arena
+from dvb_brain.domain.arena import Arena, Side, Zone, ZoneKind, parse_arena
 from dvb_brain.domain.decoding import SchemaError
 from dvb_brain.domain.geometry import Vec2
 
@@ -374,27 +374,8 @@ def test_parse_arena_rejects_invalid_json() -> None:
         parse_arena(encode(valid_document())[:-5])
 
 
-def test_load_arena_reads_a_file(tmp_path: Path) -> None:
-    path = tmp_path / "arena.json"
-    path.write_bytes(encode(valid_document()))
-
-    assert list(load_arena(path).zones) == ["blue_start", "yellow_start", "middle"]
-
-
-def test_load_arena_error_names_the_file(tmp_path: Path) -> None:
-    path = tmp_path / "arena.json"
-    document = valid_document()
-    document["width_mm"] = 0
-    path.write_bytes(encode(document))
-
-    with pytest.raises(SchemaError) as error:
-        load_arena(path)
-
-    assert str(error.value).startswith(f"{path}: $.width_mm:")
-
-
 def test_template_arena_loads() -> None:
-    arena = load_arena(TEMPLATE_ARENA)
+    arena = parse_arena(TEMPLATE_ARENA.read_bytes())
 
     assert (arena.width, arena.depth) == (3.0, 2.0)
     assert arena.zones == {}

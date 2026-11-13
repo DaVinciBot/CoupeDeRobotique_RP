@@ -8,7 +8,6 @@ check_strategy what needs the table, the actions of the edition and the match du
 from collections.abc import Collection
 from dataclasses import dataclass, replace
 from enum import StrEnum, auto
-from pathlib import Path
 from typing import Literal
 
 import msgspec
@@ -18,7 +17,6 @@ from dvb_brain.domain.decoding import (
     Id,
     NonNegative,
     Positive,
-    SchemaError,
     check_unique_ids,
     decode_json,
     field_error,
@@ -129,14 +127,6 @@ def parse_strategy(data: bytes) -> Strategy:
         end_reserve=raw.end_reserve_s,
         steps=steps,
     )
-
-
-def load_strategy(path: Path) -> Strategy:
-    """Read a cdr.strategy file. At startup only: this blocks on the disk."""
-    try:
-        return parse_strategy(path.read_bytes())
-    except SchemaError as error:
-        raise SchemaError(f"{path}: {error}") from error
 
 
 def check_strategy(

@@ -7,7 +7,6 @@ module knows nothing of the theme of the year (architecture, section 0).
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from enum import Enum, StrEnum, auto
-from pathlib import Path
 from types import MappingProxyType
 from typing import Annotated
 
@@ -19,7 +18,6 @@ from dvb_brain.domain.decoding import (
     Id,
     NonNegative,
     Positive,
-    SchemaError,
     check_unique_ids,
     decode_json,
     field_error,
@@ -169,14 +167,6 @@ def parse_arena(data: bytes) -> Arena:
         ),
         element_aruco_tags=MappingProxyType(raw.aruco_tags.elements),
     )
-
-
-def load_arena(path: Path) -> Arena:
-    """Read an arena.json file. At startup only: this blocks on the disk."""
-    try:
-        return parse_arena(path.read_bytes())
-    except SchemaError as error:
-        raise SchemaError(f"{path}: {error}") from error
 
 
 # Schema of arena.json: lengths in mm, angles in degrees.

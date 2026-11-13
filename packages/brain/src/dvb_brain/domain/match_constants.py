@@ -5,12 +5,11 @@ phases of a match, belong to the edition (domain/scoring.py).
 """
 
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Literal
 
 import msgspec
 
-from dvb_brain.domain.decoding import Positive, SchemaError, decode_json
+from dvb_brain.domain.decoding import Positive, decode_json
 from dvb_brain.domain.units import mm_to_m
 
 
@@ -27,14 +26,6 @@ def parse_match_constants(data: bytes) -> MatchConstants:
     """
     raw = decode_json(data, _MatchFile)
     return MatchConstants(duration=raw.duration_s, max_height=mm_to_m(raw.max_height_mm))
-
-
-def load_match_constants(path: Path) -> MatchConstants:
-    """Read a match.json file. At startup only: this blocks on the disk."""
-    try:
-        return parse_match_constants(path.read_bytes())
-    except SchemaError as error:
-        raise SchemaError(f"{path}: {error}") from error
 
 
 # Schema of match.json: lengths in mm, times in s.

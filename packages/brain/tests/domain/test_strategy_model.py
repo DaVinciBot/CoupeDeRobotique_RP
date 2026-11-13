@@ -8,7 +8,7 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from dvb_brain.domain.arena import Arena, ElementSpec, Side, Size, load_arena
+from dvb_brain.domain.arena import Arena, ElementSpec, Side, Size, parse_arena
 from dvb_brain.domain.decoding import SchemaError
 from dvb_brain.domain.geometry import Pose, Vec2, angle_diff
 from dvb_brain.domain.strategy_model import (
@@ -22,7 +22,6 @@ from dvb_brain.domain.strategy_model import (
     Strategy,
     Tolerance,
     check_strategy,
-    load_strategy,
     mirror_strategy,
     parse_strategy,
 )
@@ -268,18 +267,6 @@ def test_parse_strategy_error_names_field_and_value(
         assert text in str(error.value)
 
 
-def test_load_strategy_error_names_the_file(tmp_path: Path) -> None:
-    path = tmp_path / "delivery.strategy.json"
-    document = valid_document()
-    document["side"] = "red"
-    path.write_bytes(encode(document))
-
-    with pytest.raises(SchemaError) as error:
-        load_strategy(path)
-
-    assert str(error.value).startswith(f"{path}: $.side:")
-
-
 # Checks against the table, the actions and the match
 
 
@@ -421,11 +408,11 @@ def test_mirror_strategy_twice_is_identity(steps: list[tuple[Move, str | None]])
 
 def test_template_strategy_loads_and_passes_the_checks() -> None:
     template = EDITIONS / "_template"
-    strategy = load_strategy(template / "strategies" / "homologation.strategy.json")
+    strategy = parse_strategy((template / "strategies" / "homologation.strategy.json").read_bytes())
 
     check_strategy(
         strategy,
-        arena=load_arena(template / "arena.json"),
+        arena=parse_arena((template / "arena.json").read_bytes()),
         arena_id="_template",
         action_types=frozenset(),
         match_duration=DURATION,

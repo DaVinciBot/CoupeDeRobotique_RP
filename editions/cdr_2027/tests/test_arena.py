@@ -6,7 +6,8 @@ from pathlib import Path
 import pytest
 from shapely import Polygon, box
 
-from dvb_brain.domain.arena import Arena, ElementSpec, Side, Zone, ZoneKind, load_arena
+from dvb_brain.app.files import load_file
+from dvb_brain.domain.arena import Arena, ElementSpec, Side, Zone, ZoneKind, parse_arena
 from dvb_brain.domain.geometry import Vec2
 from dvb_brain.domain.symmetry import check_symmetry
 
@@ -16,7 +17,7 @@ TOLERANCE = 1e-9  # rounding of the mm to m conversion
 
 @pytest.fixture(scope="module")
 def arena() -> Arena:
-    return load_arena(ARENA)
+    return load_file(ARENA, parse_arena)
 
 
 def tagged(arena: Arena, tag: str, side: Side | None) -> list[Zone]:
