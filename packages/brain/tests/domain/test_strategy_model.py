@@ -68,7 +68,7 @@ def valid_document() -> dict[str, Any]:
             {
                 "id": "start",
                 "label": "Start",
-                "move": {"x_mm": 200, "y_mm": 300, "theta_deg": 0, "speed_mps": 0.5},
+                "move": {"x_mm": 230, "y_mm": 340, "theta_deg": 0, "speed_mps": 0.5},
                 "actions": [],
                 "timeout_s": 0,
                 "on_timeout": "skip",
@@ -100,7 +100,7 @@ def valid_document() -> dict[str, Any]:
             {
                 "id": "home",
                 "label": "Back home",
-                "move": {"x_mm": 200, "y_mm": 300, "speed_mps": 0.5, "mode": "auto"},
+                "move": {"x_mm": 230, "y_mm": 340, "speed_mps": 0.5, "mode": "auto"},
                 "actions": [],
                 "timeout_s": 0,
                 "on_timeout": "abort",
@@ -340,7 +340,7 @@ def test_mirror_strategy_changes_side_poses_and_elements(arena: Arena) -> None:
 
     assert mirrored.side is Side.YELLOW
     start, grab, home = mirrored.steps
-    assert (start.move.position.x, start.move.position.y) == pytest.approx((2.8, 0.3))
+    assert (start.move.position.x, start.move.position.y) == pytest.approx((2.77, 0.34))
     assert start.move.theta == pytest.approx(math.pi)
     assert (grab.move.position.x, grab.move.position.y) == pytest.approx((2.4, 1.3))
     assert grab.move.theta == pytest.approx(math.pi / 2)
