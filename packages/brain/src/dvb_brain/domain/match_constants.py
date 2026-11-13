@@ -16,7 +16,10 @@ from dvb_brain.domain.units import mm_to_m
 @dataclass(frozen=True, slots=True)
 class MatchConstants:
     duration: float  # s, from the start cord to the end of the match (RG H.2)
-    max_height: float  # m, robot and handled objects, at any time (RG F.3)
+    # m, robot and handled objects, at any time (RG F.3). The rule tolerates the emergency stop
+    # button up to 375 mm and does not count the beacon mast; the rules of the year may let a
+    # released game element go higher in some zones, never an actuator.
+    max_height: float
 
 
 def parse_match_constants(data: bytes) -> MatchConstants:

@@ -632,4 +632,5 @@ Chaque point bloque les cases indiquées.
 | Horloge commune container lidar / brain pour l'horodatage des balayages | 16.1, 16.2 |
 | Format UDP des échanges avec le calcul déporté | 17 |
 | Liste exacte des « aires adverses à accès exclusif » (RG H.4) : le règlement 2027 ne la donne pas explicitement, à faire confirmer (FAQ). Le vol de pierres dans le château adverse (RJ E.1) suppose d'approcher ses remparts, que l'on interdit pour l'instant | 2.4, 5.1, 7.2 |
+| Début exact de la phase d'attaque : « entre la 85e seconde et la fin du match » (RJ E.4.b) peut se lire t ≥ 84 s (la 85e seconde commence à 84 s) ou t ≥ 85 s. `scoring.json` dit 85 s pour l'instant ; une action faite avant la phase n'est pas comptée. À faire confirmer (FAQ) | 3.1, 7.2 |
 | Dates de la pré-coupe et de la CDR 2027 | 21.4 |
