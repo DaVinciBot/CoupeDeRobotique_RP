@@ -51,10 +51,10 @@ Checklist de tout ce qu'il faut faire pour le robot principal, dans l'ordre où 
 - [x] `pyright` en mode `strict` sur `packages/*/src`, `basic` sur les tests.
 - [x] `.pre-commit-config.yaml` : ruff format, ruff check, pyright (hook local).
 - [ ] `clang-format` pour le firmware, vérifié en CI.
-- [ ] Contrôles du socle :
+- [x] Contrôles du socle :
   - [x] règles import-linter (`[tool.importlinter]` du `pyproject.toml` racine) : le socle n'importe jamais `editions.*` ; `domain` n'importe ni `services`, ni `adapters`, ni `app`, ni asyncio ;
   - [x] `tools/core_check/theme_words.py` : cherche les mots du thème dans le socle (`pierre`, `stone`, `graal`, `grail`, `catapulte`, `château`, `castle`…) et échoue s'il en trouve (0) ;
-  - [ ] recherche des coordonnées du thème dans le socle, à faire avec 2.4 quand `arena.json` existe.
+  - [x] `tools/core_check/theme_coordinates.py` : recherche des coordonnées du thème dans le socle, d'après les `arena.json` des éditions.
 
 ### 1.4 CI — `.github/workflows/ci.yml`
 
@@ -98,14 +98,14 @@ Checklist de tout ce qu'il faut faire pour le robot principal, dans l'ordre où 
 
 ### 2.4 Table 2027 — `editions/cdr_2027/arena.json`
 
-- [ ] Plateau 3000 × 2000 mm, bordures 22 mm d'épaisseur et 70 mm de haut (RJ D.2).
-- [ ] Salles du trône 500 × 500 mm, aires de départ et d'arrivée (RJ D.3) : `START` + `END`.
-- [ ] Cours du château, remparts (murs 200 × 400 mm, tours Ø 200 mm), douves, écuries 200 × 300 mm, carrières (RJ D.4), plateforme du calcul déporté (RG G), relevés sur l'annexe du règlement.
-- [ ] Remparts, cour et salle du trône adverses en `EXCLUSIVE_OPPONENT` : entrer dans une aire adverse à accès exclusif = forfait (RG H.4).
-- [ ] 30 pierres 320 × 110 × 110 mm, 3 par carrière (RJ D.4), avec leur `mirror_id`.
-- [ ] Tags ArUco : 1–5 bleu, 6–10 jaune (RG G.6), 13 sur les pierres (RJ D.4).
-- [ ] Poses de fin candidates dans chaque salle du trône, robot entièrement dans la zone (RJ E.3).
-- [ ] Test de chargement : symétrie de chaque zone, rien hors table, ids uniques.
+- [x] Plateau 3000 × 2000 mm, bordures 22 mm d'épaisseur et 70 mm de haut (RJ D.2).
+- [x] Salles du trône 500 × 500 mm, aires de départ et d'arrivée (RJ D.3) : `START` + `END`.
+- [x] Cours du château, remparts (murs 200 × 400 mm, tours Ø 200 mm), douves, écuries 200 × 300 mm, carrières (RJ D.4), relevés sur l'annexe du règlement (ADR 0004). La plateforme du calcul déporté (RG G) est hors de l'aire de jeu : non décrite (ADR 0002).
+- [x] Remparts, cour et salle du trône adverses en `EXCLUSIVE_OPPONENT` : entrer dans une aire adverse à accès exclusif = forfait (RG H.4).
+- [x] 30 pierres 320 × 110 × 110 mm, 3 par carrière (RJ D.4), avec leur `mirror_id`.
+- [x] Tags ArUco : 1–5 bleu, 6–10 jaune (RG G.6), 13 sur les pierres (RJ D.4).
+- [ ] Poses de fin candidates dans chaque salle du trône, robot entièrement dans la zone (RJ E.3). Une pose provisoire au centre de chaque salle ; reste à vérifier que l'empreinte réelle du robot y tient.
+- [x] Test de chargement : symétrie de chaque zone, rien hors table, ids uniques.
 - [ ] Relecture des coordonnées par une deuxième personne, plan de l'annexe à côté.
 
 ### 2.5 Barème et constantes de match
@@ -618,7 +618,7 @@ Chaque point bloque les cases indiquées.
 | Types des champs des messages : `float` ou `double` | 3.4, 12 |
 | Variante exacte du CRC-16 | 12 |
 | Comportement d'un `MOVE` reçu pendant un autre, et vitesse max modifiable ou non en cours de mouvement | 3.4, 6.2 |
-| Empreinte réelle du robot (rayon, polygone, actionneurs rentrés) | 5.1, 6.1, 7.4 |
+| Empreinte réelle du robot (rayon, polygone, actionneurs rentrés) | 2.4, 5.1, 6.1, 7.4 |
 | Position, orientation et hauteur du lidar sur le robot | 9.1, 16.2 |
 | Séquences des mécanismes (prise de pierres, construction, Graal, lanceur) | 7.1, 14 |
 | GPIO, pull-up et niveau logique de la tirette | 15.3 |
@@ -626,5 +626,5 @@ Chaque point bloque les cases indiquées.
 | Variante ROS 2 et pilote du TiM561, résolution angulaire réelle | 11.3, 16.1 |
 | Horloge commune container lidar / brain pour l'horodatage des balayages | 16.1, 16.2 |
 | Format UDP des échanges avec le calcul déporté | 17 |
-| Liste exacte des « aires adverses à accès exclusif » (RG H.4) : le règlement 2027 ne la donne pas explicitement, à faire confirmer (FAQ) | 2.4, 5.1 |
+| Liste exacte des « aires adverses à accès exclusif » (RG H.4) : le règlement 2027 ne la donne pas explicitement, à faire confirmer (FAQ). Le vol de pierres dans le château adverse (RJ E.1) suppose d'approcher ses remparts, que l'on interdit pour l'instant | 2.4, 5.1, 7.2 |
 | Dates de la pré-coupe et de la CDR 2027 | 21.4 |
