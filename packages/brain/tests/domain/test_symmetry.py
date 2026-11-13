@@ -245,6 +245,33 @@ def test_check_symmetry_rejects_bad_zone_mirror(
         check_symmetry(with_zone(arena, bad))
 
 
+def with_robot_poses(arena: Arena, blue: tuple[Pose, ...], yellow: tuple[Pose, ...]) -> Arena:
+    arena = with_zone(arena, replace(arena.zone("blue_start"), robot_poses=blue))
+    return with_zone(arena, replace(arena.zone("yellow_start"), robot_poses=yellow))
+
+
+def test_check_symmetry_accepts_symmetric_robot_poses(arena: Arena) -> None:
+    blue = (Pose(0.2, 0.2, 0.0), Pose(0.3, 0.1, math.pi / 2))
+    yellow = (Pose(2.8, 0.2, math.pi), Pose(2.7, 0.1, math.pi / 2))
+    check_symmetry(with_robot_poses(arena, blue, yellow))
+
+
+@pytest.mark.parametrize(
+    "yellow",
+    [
+        (),
+        (Pose(2.8, 0.2, 0.0),),  # a robot turned by a half turn is another pose
+        (Pose(2.7, 0.2, math.pi),),
+    ],
+)
+def test_check_symmetry_rejects_asymmetric_robot_poses(
+    arena: Arena, yellow: tuple[Pose, ...]
+) -> None:
+    bad = with_robot_poses(arena, (Pose(0.2, 0.2, 0.0),), yellow)
+    with pytest.raises(SchemaError, match="robot poses are not symmetric"):
+        check_symmetry(bad)
+
+
 def test_check_symmetry_rejects_asymmetric_zone_on_the_axis(arena: Arena) -> None:
     bad = replace(arena.zone("middle"), polygon=square(1.0, 0.9, 0.2))
     with pytest.raises(SchemaError, match=r"zone 'middle'.*polygons are not symmetric"):

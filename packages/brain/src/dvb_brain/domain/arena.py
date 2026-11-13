@@ -5,7 +5,7 @@ module knows nothing of the theme of the year (architecture, section 0).
 """
 
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum, StrEnum, auto
 from pathlib import Path
 from typing import Annotated
@@ -52,6 +52,7 @@ class Zone:
     height: float
     tags: frozenset[str]
     mirror_id: str  # id of the symmetric zone; its own id when on the axis
+    robot_poses: tuple[Pose, ...] = ()  # candidate poses of our robot, e.g. to end the match
 
 
 @dataclass(frozen=True, slots=True)
@@ -85,6 +86,9 @@ class Arena:
     zones: Mapping[str, Zone]  # by id, in file order
     elements: Mapping[str, ElementSpec]  # by id, in file order
     aruco_tags: Mapping[Side, frozenset[int]]
+    element_aruco_tags: Mapping[str, frozenset[int]] = field(
+        default_factory=dict[str, frozenset[int]]
+    )  # by element kind
 
     def zones_of(self, kind: ZoneKind, side: Side) -> tuple[Zone, ...]:
         """Return the zones with this role that belong to side or to nobody."""
@@ -128,6 +132,10 @@ def parse_arena(data: bytes) -> Arena:
             raise field_error(f"$.zones[{i}].owner", "exclusive_opponent needs an owner", None)
     _check_ids("zones", [(zone.id, zone.mirror_id) for zone in raw.zones])
     _check_ids("elements", [(element.id, element.mirror_id) for element in raw.elements])
+    element_kinds = {element.kind for element in raw.elements}
+    for kind in raw.aruco_tags.elements:
+        if kind not in element_kinds:
+            raise field_error("$.aruco_tags.elements", "no element of this kind", kind)
     return Arena(
         width=mm_to_m(raw.width_mm),
         depth=mm_to_m(raw.depth_mm),
@@ -136,6 +144,7 @@ def parse_arena(data: bytes) -> Arena:
         zones={zone.id: _to_zone(zone) for zone in raw.zones},
         elements={element.id: _to_element(element) for element in raw.elements},
         aruco_tags={Side.BLUE: raw.aruco_tags.blue, Side.YELLOW: raw.aruco_tags.yellow},
+        element_aruco_tags=raw.aruco_tags.elements,
     )
 
 
@@ -194,6 +203,7 @@ class _ZoneFile(msgspec.Struct, forbid_unknown_fields=True):
     rect_mm: _RectFile | None = None
     height_mm: _NonNegativeMm = 0.0
     tags: frozenset[str] = frozenset()
+    robot_poses: list[_PoseFile] = []
 
 
 class _ElementFile(msgspec.Struct, forbid_unknown_fields=True):
@@ -207,6 +217,7 @@ class _ElementFile(msgspec.Struct, forbid_unknown_fields=True):
 class _ArucoTagsFile(msgspec.Struct, forbid_unknown_fields=True):
     blue: _Tags
     yellow: _Tags
+    elements: dict[_Id, _Tags] = {}  # by element kind
 
 
 class _ArenaFile(msgspec.Struct, forbid_unknown_fields=True):
@@ -264,16 +275,16 @@ def _to_zone(raw: _ZoneFile) -> Zone:
         height=mm_to_m(raw.height_mm),
         tags=raw.tags,
         mirror_id=raw.mirror_id,
+        robot_poses=tuple(_to_pose(pose) for pose in raw.robot_poses),
     )
+
+
+def _to_pose(raw: _PoseFile) -> Pose:
+    return Pose(mm_to_m(raw.x_mm), mm_to_m(raw.y_mm), normalize_angle(deg_to_rad(raw.theta_deg)))
 
 
 def _to_element(raw: _ElementFile) -> ElementSpec:
-    pose = Pose(
-        mm_to_m(raw.pose.x_mm),
-        mm_to_m(raw.pose.y_mm),
-        normalize_angle(deg_to_rad(raw.pose.theta_deg)),
-    )
     size = Size(
         mm_to_m(raw.size.length_mm), mm_to_m(raw.size.width_mm), mm_to_m(raw.size.height_mm)
     )
-    return ElementSpec(raw.id, raw.kind, pose, size, raw.mirror_id)
+    return ElementSpec(raw.id, raw.kind, _to_pose(raw.pose), size, raw.mirror_id)

@@ -112,7 +112,7 @@ def valid_document() -> dict[str, Any]:
         "depth_mm": 2000,
         "border_thickness_mm": 22,
         "border_height_mm": 70,
-        "aruco_tags": {"blue": [1, 2], "yellow": [6, 7]},
+        "aruco_tags": {"blue": [1, 2], "yellow": [6, 7], "elements": {"crate": [20]}},
         "zones": [
             {
                 "id": "blue_start",
@@ -121,6 +121,7 @@ def valid_document() -> dict[str, Any]:
                 "polygon_mm": [[0, 0], [400, 0], [400, 400], [0, 400]],
                 "tags": ["dock"],
                 "mirror_id": "yellow_start",
+                "robot_poses": [{"x_mm": 200, "y_mm": 200, "theta_deg": 0}],
             },
             {
                 "id": "yellow_start",
@@ -129,6 +130,7 @@ def valid_document() -> dict[str, Any]:
                 "polygon_mm": [[2600, 0], [3000, 0], [3000, 400], [2600, 400]],
                 "tags": ["dock"],
                 "mirror_id": "blue_start",
+                "robot_poses": [{"x_mm": 2800, "y_mm": 200, "theta_deg": 180}],
             },
             {
                 "id": "middle",
@@ -169,6 +171,7 @@ def test_parse_arena_converts_to_si() -> None:
     assert arena.border_thickness == pytest.approx(0.022)
     assert arena.border_height == pytest.approx(0.07)
     assert arena.aruco_tags == {Side.BLUE: frozenset({1, 2}), Side.YELLOW: frozenset({6, 7})}
+    assert arena.element_aruco_tags == {"crate": frozenset({20})}
     assert list(arena.zones) == ["blue_start", "yellow_start", "middle"]
     assert list(arena.elements) == ["crate_blue", "crate_yellow"]
 
@@ -187,6 +190,14 @@ def test_parse_arena_reads_zones() -> None:
     assert middle.height == pytest.approx(0.12)
     assert middle.tags == frozenset()
     assert start.height == 0.0
+
+
+def test_parse_arena_reads_robot_poses() -> None:
+    arena = parse_arena(encode(valid_document()))
+
+    (pose,) = arena.zone("yellow_start").robot_poses
+    assert (pose.x, pose.y, pose.theta) == pytest.approx((2.8, 0.2, math.pi))
+    assert arena.zone("middle").robot_poses == ()
 
 
 def test_parse_arena_reads_a_circle() -> None:
@@ -304,6 +315,21 @@ DELETE = object()
         (("elements", 0, "size", "length_mm"), 0, ["$.elements[0].size.length_mm:", "got 0"]),
         (("elements", 0, "pose", "theta_deg"), DELETE, ["$.elements[0].pose:", "theta_deg"]),
         (("aruco_tags", "yellow"), DELETE, ["$.aruco_tags:", "yellow"]),
+        (
+            ("aruco_tags", "elements"),
+            {"barrel": [20]},
+            ["$.aruco_tags.elements: no element of this kind", "got 'barrel'"],
+        ),
+        (
+            ("aruco_tags", "elements"),
+            {"crate": [-1]},
+            ["$.aruco_tags.elements[...][0]: Expected `int` >= 0"],  # msgspec hides dict keys
+        ),
+        (
+            ("zones", 0, "robot_poses"),
+            [{"x_mm": 200, "y_mm": 200}],
+            ["$.zones[0].robot_poses[0]:", "theta_deg"],
+        ),
         (("aruco_tags", "blue"), [1, -2], ["$.aruco_tags.blue", "-2"]),
     ],
 )
@@ -356,3 +382,4 @@ def test_template_arena_loads() -> None:
 
     assert (arena.width, arena.depth) == (3.0, 2.0)
     assert arena.zones == {}
+    assert arena.element_aruco_tags == {}
