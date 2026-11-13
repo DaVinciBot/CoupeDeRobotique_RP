@@ -60,6 +60,13 @@ def test_module_missing_inside_the_edition_is_not_hidden(monkeypatch: pytest.Mon
         load_edition("_template")
 
 
+def test_edition_needs_a_load_function(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setitem(sys.modules, "editions.empty", ModuleType("editions.empty"))
+
+    with pytest.raises(EditionError, match=r"editions\.empty: expected a load\(\) function"):
+        load_edition("empty")
+
+
 def test_load_must_give_an_edition(monkeypatch: pytest.MonkeyPatch) -> None:
     install_edition(monkeypatch, "broken", lambda: "not an edition")
 

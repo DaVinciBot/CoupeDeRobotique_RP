@@ -80,6 +80,18 @@ type = "forbidden"
 source_modules = ["dvb_brain.domain"]
 forbidden_modules = ["dvb_brain.services", "dvb_brain.adapters", "dvb_brain.app", "asyncio"]
 
+# Architecture, section 5.3: each layer imports only the layers below it. Services and adapters
+# ignore each other: only app knows which adapter is plugged in (ADR 0006).
+[[tool.importlinter.contracts]]
+name = "The brain layers follow the architecture"
+type = "layers"
+layers = [
+    "dvb_brain.app",
+    "dvb_brain.adapters | dvb_brain.services",
+    "dvb_brain.ports",
+    "dvb_brain.domain",
+]
+
 [tool.pytest.ini_options]
 testpaths = ["packages", "tools", "editions"]
 addopts = ["--import-mode=importlib"]

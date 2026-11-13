@@ -43,7 +43,8 @@ def load_edition(name: str) -> Edition:
     """Import editions.<name> and return what its load() gives.
 
     At startup only: this reads the files of the edition. Raise an EditionError when there is no
-    such edition, or when it does not give an Edition with this id.
+    such edition, when it has no load() function, or when load() does not give an Edition with
+    this id.
     """
     module_name = f"editions.{name}"
     try:
@@ -52,7 +53,10 @@ def load_edition(name: str) -> Edition:
         if error.name not in ("editions", module_name):
             raise  # a module missing inside the edition: its own error says more
         raise EditionError(f"edition: no module {module_name}, got {name!r}") from error
-    edition = module.load()
+    load = getattr(module, "load", None)
+    if not callable(load):
+        raise EditionError(f"{module_name}: expected a load() function, got {load!r}")
+    edition = load()
     if not isinstance(edition, Edition):
         raise EditionError(f"{module_name}.load(): expected an Edition, got {edition!r}")
     if edition.id != name:
