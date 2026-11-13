@@ -32,7 +32,7 @@ Le diagramme de l'[architecture, section 11.1](../ARCHITECTURE%20RP%202027.md#11
 - **Tout le reste est refusé**, l'état ne change pas : `Refused("<EVENT> in <STATE>")`. Le `MatchManager` (8.1) décide de journaliser ou non.
 - **La tirette ne compte qu'en `ARMED`** (RG F.6). Hors de cet état, `CORD_PULLED` est refusé, ce qui évite un faux départ (RG H.4). Depuis `ARMED`, seuls `DISARM` et `CORD_PULLED` sont acceptés, plus `Fault`.
 - **`RUNNING + T_END → FINISHED`**, absent du diagramme. Le minuteur de fin ne dépend pas de la stratégie (RG H.3, invariant de sûreté) : à 100 s, le match se termine même si `END_BUDGET` n'a jamais été envoyé.
-- **`FAULT` et `FINISHED` sont terminaux.** Ils refusent tout `MatchEvent`. Un nouveau match, ou une reprise après un `FAULT`, passe par une nouvelle exécution du brain, lancée par le superviseur. C'est cohérent avec `dvb-brain --side --strategy` (TODO 9.2) et avec un dossier de logs par lancement (TODO 9.3). systemd ne relance pas un match (section 11.2).
+- **`FAULT` et `FINISHED` sont terminaux pour tout `MatchEvent`** : ils les refusent tous. Seul `Fault` fait encore passer `FINISHED` en `FAULT` (voir plus bas). Un nouveau match, ou une reprise après un `FAULT`, passe par une nouvelle exécution du brain, lancée par le superviseur. C'est cohérent avec `dvb-brain --side --strategy` (TODO 9.2) et avec un dossier de logs par lancement (TODO 9.3). systemd ne relance pas un match (section 11.2).
 - **`Fault` est accepté dans tous les états**, `FAULT` et `FINISHED` compris. Le `MatchManager` garde la première raison.
 - **`Fault` est une dataclass avec sa raison**, à côté de l'`Enum` `MatchEvent` des événements sans donnée. Un événement est donc de type `MatchEvent | Fault`.
 - Les conditions d'un événement (checks verts, tirette en place, pose recalée) ne sont pas vérifiées ici, mais par le `MatchManager` (8.1, 8.3), avant d'appeler `transition`.
@@ -46,4 +46,5 @@ Le diagramme de l'[architecture, section 11.1](../ARCHITECTURE%20RP%202027.md#11
 ## Conséquences
 
 - Le test parcourt les 81 paires (9 états × 8 `MatchEvent` + `Fault`) contre une table réécrite dans le test.
+- Un BAU après la fin du match (RG F.4.c) fait passer `FINISHED` en `FAULT`. Le `MatchManager` (8.1) doit garder dans les logs que le match s'est terminé normalement avant.
 - Point ouvert pour le `MatchManager` (8.1) : un recalage raté laisse le robot en `CALIBRATING`, où ni `DISARM` ni un nouveau `CALIBRATE` ne sont possibles. Seule une relance du brain permet de recommencer. À revoir avec la mesure du temps de recalage (TODO 21.1).

@@ -1,6 +1,6 @@
 """Edition chosen by the config, loaded by name (architecture, section 0; ADR 0006).
 
-The core never imports an edition: the config names it ("edition": "cdr_2027") and
+The core never imports an edition: the config names it ("edition": "cdr_<year>") and
 load_edition imports editions.<name> at startup. Each edition module exposes a load() function
 that reads its files and returns its Edition; nothing is read at import.
 """
@@ -23,7 +23,7 @@ class Edition(Protocol):
 
     @property
     def id(self) -> str:
-        """Name of the module of the edition, e.g. "cdr_2027"; the arena_id of its strategies."""
+        """Name of the module of the edition, e.g. "cdr_<year>"; the arena_id of its strategies."""
         ...
 
     @property

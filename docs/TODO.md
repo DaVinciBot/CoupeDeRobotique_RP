@@ -130,7 +130,7 @@ Checklist de tout ce qu'il faut faire pour le robot principal, dans l'ordre où 
 ### 2.8 Machine à états du match — `domain/match_fsm.py`
 
 - [x] `MatchState(Enum)` : `IDLE`, `INIT`, `READY`, `CALIBRATING`, `ARMED`, `RUNNING`, `ENDING`, `FINISHED`, `FAULT` (11.1).
-- [x] `MatchEvent` : `LAUNCH`, `CHECKS_OK`, `CALIBRATE`, `ARM`, `DISARM`, `CORD_PULLED`, `END_BUDGET`, `T_END`, `FAULT(reason)`.
+- [x] `MatchEvent` : `LAUNCH`, `CHECKS_OK`, `CALIBRATE`, `ARM`, `DISARM`, `CORD_PULLED`, `END_BUDGET`, `T_END` ; `Fault(reason)` à part, avec sa raison (ADR 0007).
 - [x] `transition(state, event) -> MatchState | Refused(reason)` avec une table explicite et `match` (ADR 0007). `T_END` termine aussi `RUNNING` (RG H.3).
 - [x] Depuis `ARMED`, seuls `DISARM` et `CORD_PULLED` ; `CORD_PULLED` ignoré dans tout autre état (RG F.6, faux départ RG H.4).
 - [x] `FAULT` atteignable depuis tous les états, sortie seulement par relance manuelle : `FAULT` et `FINISHED` sont terminaux, et la relance passe par une nouvelle exécution du brain (ADR 0007).
@@ -277,7 +277,7 @@ Checklist de tout ce qu'il faut faire pour le robot principal, dans l'ordre où 
 
 ### 7.2 Garde-fous du règlement — `editions/cdr_2027/rules.py`
 
-- [ ] `MatchRules.is_action_allowed(action, world, t)` et `MatchRules.forbidden_zones(world)` dans le socle, avec le `WorldSnapshot` de la section 4 (ADR 0006).
+- [ ] `MatchRules.is_action_allowed(action, world, t)` et `MatchRules.forbidden_zones(world)` dans le socle, avec le `WorldSnapshot` de la section 4, qui doit donc être dans `domain/` (ADR 0006).
 - [ ] Vol de pierres refusé tant qu'une carrière n'est pas vide, et jamais en détruisant le château adverse (RJ E.1).
 - [ ] Au plus 3 pierres stockées dans notre cour (RJ E.1).
 - [ ] Graal porté → interdit de sortir de la cour et des remparts ; Graal adverse jamais déplacé (RJ E.2.b).
@@ -311,6 +311,7 @@ Checklist de tout ce qu'il faut faire pour le robot principal, dans l'ordre où 
 - [ ] `CALIBRATING` : recalage contre deux bordures puis `RESET_POSE`, objectif < 30 s (préparation de 3 min, RG H.1) ; robot entièrement dans la salle du trône ensuite (RJ D.3.b).
 - [ ] `ARMED` : tirette en place exigée, anti-rebond 50 ms, seul le front « retirée » compte.
 - [ ] `RUNNING` : `MatchClock.start()` au front, envoi du départ au calcul déporté (× 3), lancement de l'exécuteur et de la fin de match.
+- [ ] Recalage raté : décider comment recommencer depuis `CALIBRATING`, où ni `DISARM` ni un nouveau `CALIBRATE` ne sont acceptés (ADR 0007).
 - [ ] Minuteur de fin indépendant de la stratégie : à 100 s moins `hard_stop_margin_s`, `stop(URGENT)`, `release_all`, plus aucune commande (RG H.3 ; −50 pts si le robot bouge encore, RG H.4).
 
 ### 8.2 `SafetyMonitor` — `services/safety.py`
@@ -343,6 +344,7 @@ Checklist de tout ce qu'il faut faire pour le robot principal, dans l'ordre où 
 
 - [ ] `build_ports(cfg) -> Ports` selon le profil (`match`, `test`, `sim`, `replay`) : seul endroit qui sait quel adaptateur est branché.
 - [ ] `run_brain(ports, cfg)` avec `asyncio.TaskGroup`.
+- [ ] Édition chargée au lancement par `load_edition(cfg.edition)`, ses actions enregistrées ; les services reçoivent ses morceaux, jamais l'`Edition` (ADR 0006).
 - [ ] Commande `dvb-brain --config --profile --strategy --side`.
 - [ ] Tirette virtuelle en profil `test` uniquement (4.5).
 
