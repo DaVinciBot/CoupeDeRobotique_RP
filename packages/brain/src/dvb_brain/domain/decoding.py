@@ -39,9 +39,13 @@ def decode_json[T](data: bytes, type_: type[T]) -> T:
     try:
         return msgspec.json.decode(data, type=type_)
     except msgspec.ValidationError as error:
-        reason, _, at = str(error).partition(" - at `")
+        message = str(error)
+        at = _AT.search(message)
+        reason = message[: at.start()] if at else message
+        path = at["path"] if at else "$"
+        if at and at["key"]:  # msgspec does not say which key
+            raise SchemaError(f"{path}: invalid key: {reason}") from error
         reason = _GOT_TYPE.sub("", reason)  # the value itself says more than its type
-        path = at.removesuffix("`") or "$"
         value = _value_at(data, path)
         # msgspec already names the missing or unknown field of an object, and the bad enum value.
         if value is _MISSING or isinstance(value, dict) or reason.startswith("Invalid enum"):
@@ -52,6 +56,8 @@ def decode_json[T](data: bytes, type_: type[T]) -> T:
 
 
 _MISSING = object()
+# Where msgspec locates the error: " - at `$.zones[0].id`", or " - at `key` in `$.tags`".
+_AT = re.compile(r" - at (?P<key>`key` in )?`(?P<path>[^`]*)`$")
 _GOT_TYPE = re.compile(r", got `\w+`$")
 _PATH = re.compile(r"\$(?:\.\w+|\[\d+\])*")
 _STEP = re.compile(r"\.(\w+)|\[(\d+)\]")
