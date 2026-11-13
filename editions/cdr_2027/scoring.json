@@ -1,1 +1,21 @@
-{}
+{
+  "schema_version": 1,
+  "kind": "cdr.scoring",
+  "items": [
+    { "id": "stone_in_construction_zone", "points": 1, "rule": "RJ E.1.c" },
+    { "id": "wall_built", "points": 5, "rule": "RJ E.1.c" },
+    { "id": "tower_built", "points": 5, "rule": "RJ E.1.c" },
+    { "id": "gate_built", "points": 20, "rule": "RJ E.1.c" },
+    { "id": "grail_in_castle", "points": 5, "rule": "RJ E.2.c" },
+    { "id": "grail_level", "points": 5, "rule": "RJ E.2.c" },
+    { "id": "robot_partly_in_end_zone", "points": 5, "rule": "RJ E.3.c" },
+    { "id": "robot_fully_in_end_zone", "points": 10, "rule": "RJ E.3.c" },
+    { "id": "moat_occupied", "points": 5, "rule": "RJ E.4.c" },
+    { "id": "pami_attacks_pami", "points": 5, "rule": "RJ E.4.c" },
+    { "id": "ball_in_opponent_castle", "points": 5, "rule": "RJ E.4.c" },
+    { "id": "three_balls_in_opponent_castle", "points": 15, "rule": "RJ E.4.c" }
+  ],
+  "phases": [
+    { "id": "attack", "start_s": 85, "rule": "RJ E.4.b" }
+  ]
+}
