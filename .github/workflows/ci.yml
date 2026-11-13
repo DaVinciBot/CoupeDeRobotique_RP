@@ -46,6 +46,7 @@ jobs:
       - run: uv run --frozen pyright
       - run: uv run --frozen lint-imports
       - run: uv run --frozen python tools/core_check/theme_words.py
+      - run: uv run --frozen python tools/core_check/theme_coordinates.py
       - run: uv run --frozen pytest
 
   firmware:
