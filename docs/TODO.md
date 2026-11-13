@@ -28,8 +28,9 @@ Checklist de tout ce qu'il faut faire pour le robot principal, dans l'ordre où 
 ### 1.1 Arborescence
 
 - [x] Créer l'arborescence de la section 14.1 : `packages/`, `dashboard/`, `firmware/`, `lidar_driver/`, `editions/`, `config/`, `deploy/`, `tools/`, `docs/adr/`.
-- [ ] Ranger le firmware moteur dans `firmware/teensy_motor/` et le firmware actionneurs dans `firmware/teensy_actuators/`.
-- [ ] Ranger le container lidar dans `lidar_driver/`.
+- [x] Ranger le firmware moteur dans `firmware/teensy_motor/`.
+- [ ] Ranger le firmware actionneurs dans `firmware/teensy_actuators/`.
+- [x] Ranger le container lidar dans `lidar_driver/`.
 - [x] Ne pas reprendre le code Python de 2026 (config exécutée à l'import, `sys.path.append`, `loggerplusplus`, taskbrain) : s'en servir comme référence seulement.
 - [x] ADR 0001 « Organisation du dépôt 2027 ».
 
@@ -91,9 +92,9 @@ Checklist de tout ce qu'il faut faire pour le robot principal, dans l'ordre où 
 
 ### 2.3 Symétrie — `domain/symmetry.py`
 
-- [ ] `mirror_pose(pose, table_width)` : x → L − x, θ → π − θ, normalisé (9.5).
-- [ ] `mirror_zone_id`, `mirror_element_id` via `mirror_id`.
-- [ ] Tests : `mirror(mirror(p)) == p` (Hypothesis) ; chaque zone a un symétrique de même aire.
+- [x] `mirror_pose(pose, table_width)` : x → L − x, θ → π − θ, normalisé (9.5).
+- [x] `mirror_zone_id`, `mirror_element_id` via `mirror_id`.
+- [x] Tests : `mirror(mirror(p)) == p` (Hypothesis) ; chaque zone a un symétrique de même aire.
 
 ### 2.4 Table 2027 — `editions/cdr_2027/arena.json`
 
