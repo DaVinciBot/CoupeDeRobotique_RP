@@ -123,18 +123,18 @@ Checklist de tout ce qu'il faut faire pour le robot principal, dans l'ordre où 
 
 ### 2.7 Interface `Edition`
 
-- [ ] `Protocol` `Edition` (section 0) : `id`, `arena`, `register_actions`, `rules`, `sim_elements`.
-- [ ] `MatchRules` générique : `is_action_allowed(action, world, t)`, `forbidden_zones(world)`, `end_zones(side)`.
-- [ ] Chargement par nom depuis la config (`"edition": "cdr_2027"`) via `importlib`.
+- [x] `Protocol` `Edition` (section 0) dans `app/edition.py` : `id`, `arena`, `scoring`, `rules` (ADR 0006). `register_actions` arrive avec le registre (7.1), `sim_elements` avec la simulation (11.1).
+- [x] `MatchRules` générique dans `domain/match_rules.py` : `end_zones(side)`. `is_action_allowed` et `forbidden_zones` arrivent avec le `WorldSnapshot` (7.2).
+- [x] Chargement par nom via `importlib` : `load_edition("cdr_2027")` appelle le `load()` du module et vérifie son `id`. `editions` est installé par le projet racine du workspace. Le nom sera lu dans la config en 9.1.
 
 ### 2.8 Machine à états du match — `domain/match_fsm.py`
 
-- [ ] `MatchState(Enum)` : `IDLE`, `INIT`, `READY`, `CALIBRATING`, `ARMED`, `RUNNING`, `ENDING`, `FINISHED`, `FAULT` (11.1).
-- [ ] `MatchEvent` : `LAUNCH`, `CHECKS_OK`, `CALIBRATE`, `ARM`, `DISARM`, `CORD_PULLED`, `END_BUDGET`, `T_END`, `FAULT(reason)`.
-- [ ] `transition(state, event) -> MatchState | Refused(reason)` avec une table explicite et `match`.
-- [ ] Depuis `ARMED`, seuls `DISARM` et `CORD_PULLED` ; `CORD_PULLED` ignoré dans tout autre état (RG F.6, faux départ RG H.4).
-- [ ] `FAULT` atteignable depuis tous les états, sortie seulement par relance manuelle.
-- [ ] Test exhaustif : chaque paire (état, événement) a un résultat attendu.
+- [x] `MatchState(Enum)` : `IDLE`, `INIT`, `READY`, `CALIBRATING`, `ARMED`, `RUNNING`, `ENDING`, `FINISHED`, `FAULT` (11.1).
+- [x] `MatchEvent` : `LAUNCH`, `CHECKS_OK`, `CALIBRATE`, `ARM`, `DISARM`, `CORD_PULLED`, `END_BUDGET`, `T_END`, `FAULT(reason)`.
+- [x] `transition(state, event) -> MatchState | Refused(reason)` avec une table explicite et `match` (ADR 0007). `T_END` termine aussi `RUNNING` (RG H.3).
+- [x] Depuis `ARMED`, seuls `DISARM` et `CORD_PULLED` ; `CORD_PULLED` ignoré dans tout autre état (RG F.6, faux départ RG H.4).
+- [x] `FAULT` atteignable depuis tous les états, sortie seulement par relance manuelle : `FAULT` et `FINISHED` sont terminaux, et la relance passe par une nouvelle exécution du brain (ADR 0007).
+- [x] Test exhaustif : chaque paire (état, événement) a un résultat attendu.
 
 ---
 
@@ -272,10 +272,12 @@ Checklist de tout ce qu'il faut faire pour le robot principal, dans l'ordre où 
 - [ ] Handler : `async (ctx: ActionContext, action: Action) -> ActionResult` ; contexte = actionneurs, monde, navigator, horloge.
 - [ ] `ActionResult` : `DONE`, `FAILED(reason)`, `SKIPPED(reason)`, plus les mises à jour du monde.
 - [ ] Actions génériques `wait` et `noop` dans le socle.
+- [ ] `Edition.register_actions(registry)` (ADR 0006) ; le test des stratégies 2027 lit les types d'action dans le registre.
 - [ ] Actions 2027 dans `editions/cdr_2027/actions.py` : `pick_stones`, `build_wall`, `build_tower`, `build_gate`, `raise_grail`, `shoot_balls`, d'abord avec des séquences plausibles, puis les séquences réelles quand les mécanismes sont figés.
 
 ### 7.2 Garde-fous du règlement — `editions/cdr_2027/rules.py`
 
+- [ ] `MatchRules.is_action_allowed(action, world, t)` et `MatchRules.forbidden_zones(world)` dans le socle, avec le `WorldSnapshot` de la section 4 (ADR 0006).
 - [ ] Vol de pierres refusé tant qu'une carrière n'est pas vide, et jamais en détruisant le château adverse (RJ E.1).
 - [ ] Au plus 3 pierres stockées dans notre cour (RJ E.1).
 - [ ] Graal porté → interdit de sortir de la cour et des remparts ; Graal adverse jamais déplacé (RJ E.2.b).
@@ -373,6 +375,7 @@ Checklist de tout ce qu'il faut faire pour le robot principal, dans l'ordre où 
 - [ ] Pas de temps fixe (5 ms), temps simulé ou réel, graine fixée.
 - [ ] État : notre robot, adversaires, éléments de jeu (`Edition.sim_elements()`), score estimé.
 - [ ] Collisions comptées.
+- [ ] `Edition.sim_elements()` : type `SimElements` du socle, implémenté par chaque édition (ADR 0006).
 
 ### 11.2 Base roulante simulée
 
