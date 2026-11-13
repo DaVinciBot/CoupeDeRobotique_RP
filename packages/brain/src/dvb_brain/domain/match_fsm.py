@@ -2,16 +2,19 @@
 
 Pure: transition() says where an event leads from a state. The MatchManager (TODO 8.1) checks
 the conditions of each event (TODO 8.3), applies the transition and acts. FAULT and FINISHED
-are final: a new match, or a restart after a fault, is a new launch of the brain.
+are final and refuse every event: a new match, or a restart after a fault, is a new launch of
+the brain.
 """
 
 from collections.abc import Mapping
 from dataclasses import dataclass
-from enum import Enum, auto
+from enum import StrEnum, auto
 from typing import Final
 
 
-class MatchState(Enum):
+class MatchState(StrEnum):
+    """States as strings, so that logs and the dashboard keep them readable and stable."""
+
     IDLE = auto()
     INIT = auto()
     READY = auto()
@@ -23,7 +26,7 @@ class MatchState(Enum):
     FAULT = auto()
 
 
-class MatchEvent(Enum):
+class MatchEvent(StrEnum):
     LAUNCH = auto()
     CHECKS_OK = auto()
     CALIBRATE = auto()
@@ -48,10 +51,13 @@ class Refused:
     reason: str
 
 
+_FINAL: Final = frozenset({MatchState.FINISHED, MatchState.FAULT})
+
 _TRANSITIONS: Final[Mapping[tuple[MatchState, MatchEvent], MatchState]] = {
     (MatchState.IDLE, MatchEvent.LAUNCH): MatchState.INIT,
     (MatchState.INIT, MatchEvent.CHECKS_OK): MatchState.READY,
     (MatchState.READY, MatchEvent.CALIBRATE): MatchState.CALIBRATING,
+    (MatchState.CALIBRATING, MatchEvent.CALIBRATE): MatchState.CALIBRATING,  # calibrate again
     (MatchState.CALIBRATING, MatchEvent.ARM): MatchState.ARMED,
     # From ARMED, only these two: the start cord is read only here (RG F.6, false start RG H.4).
     (MatchState.ARMED, MatchEvent.DISARM): MatchState.READY,
@@ -64,6 +70,8 @@ _TRANSITIONS: Final[Mapping[tuple[MatchState, MatchEvent], MatchState]] = {
 
 def transition(state: MatchState, event: MatchEvent | Fault) -> MatchState | Refused:
     """Return the next state, or Refused when the event does nothing in this state."""
+    if state in _FINAL:
+        return Refused(f"{state.name} is final")
     match event:
         case Fault():
             return MatchState.FAULT
