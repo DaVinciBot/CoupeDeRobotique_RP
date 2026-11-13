@@ -1,0 +1,563 @@
+{
+  "width_mm": 3000,
+  "depth_mm": 2000,
+  "border_thickness_mm": 22,
+  "border_height_mm": 70,
+  "aruco_tags": {
+    "blue": [1, 2, 3, 4, 5],
+    "yellow": [6, 7, 8, 9, 10],
+    "elements": { "stone": [13] }
+  },
+  "zones": [
+    {
+      "id": "blue_throne_room",
+      "kinds": ["start", "end", "exclusive_opponent"],
+      "owner": "blue",
+      "polygon_mm": [[2500, 750], [3000, 750], [3000, 1250], [2500, 1250]],
+      "tags": ["throne_room"],
+      "mirror_id": "yellow_throne_room",
+      "robot_poses": [{ "x_mm": 2750, "y_mm": 1000, "theta_deg": 180 }]
+    },
+    {
+      "id": "yellow_throne_room",
+      "kinds": ["start", "end", "exclusive_opponent"],
+      "owner": "yellow",
+      "polygon_mm": [[500, 750], [0, 750], [0, 1250], [500, 1250]],
+      "tags": ["throne_room"],
+      "mirror_id": "blue_throne_room",
+      "robot_poses": [{ "x_mm": 250, "y_mm": 1000, "theta_deg": 0 }]
+    },
+    {
+      "id": "blue_courtyard",
+      "kinds": ["storage", "exclusive_opponent"],
+      "owner": "blue",
+      "polygon_mm": [[3000, 400], [2500, 400], [2150, 750], [2150, 1250], [2500, 1600], [3000, 1600]],
+      "tags": ["courtyard"],
+      "mirror_id": "yellow_courtyard"
+    },
+    {
+      "id": "yellow_courtyard",
+      "kinds": ["storage", "exclusive_opponent"],
+      "owner": "yellow",
+      "polygon_mm": [[0, 400], [500, 400], [850, 750], [850, 1250], [500, 1600], [0, 1600]],
+      "tags": ["courtyard"],
+      "mirror_id": "blue_courtyard"
+    },
+    {
+      "id": "blue_wall_front",
+      "kinds": ["construction", "exclusive_opponent"],
+      "owner": "blue",
+      "polygon_mm": [[2550, 300], [2950, 300], [2950, 500], [2550, 500]],
+      "tags": ["wall"],
+      "mirror_id": "yellow_wall_front"
+    },
+    {
+      "id": "yellow_wall_front",
+      "kinds": ["construction", "exclusive_opponent"],
+      "owner": "yellow",
+      "polygon_mm": [[450, 300], [50, 300], [50, 500], [450, 500]],
+      "tags": ["wall"],
+      "mirror_id": "blue_wall_front"
+    },
+    {
+      "id": "blue_wall_front_diagonal",
+      "kinds": ["construction", "exclusive_opponent"],
+      "owner": "blue",
+      "rect_mm": { "x": 2320.7, "y": 570.7, "length": 400, "width": 200, "theta_deg": 135 },
+      "tags": ["wall"],
+      "mirror_id": "yellow_wall_front_diagonal"
+    },
+    {
+      "id": "yellow_wall_front_diagonal",
+      "kinds": ["construction", "exclusive_opponent"],
+      "owner": "yellow",
+      "rect_mm": { "x": 679.3, "y": 570.7, "length": 400, "width": 200, "theta_deg": 45 },
+      "tags": ["wall"],
+      "mirror_id": "blue_wall_front_diagonal"
+    },
+    {
+      "id": "blue_wall_middle",
+      "kinds": ["construction", "exclusive_opponent"],
+      "owner": "blue",
+      "polygon_mm": [[2050, 800], [2250, 800], [2250, 1200], [2050, 1200]],
+      "tags": ["wall"],
+      "mirror_id": "yellow_wall_middle"
+    },
+    {
+      "id": "yellow_wall_middle",
+      "kinds": ["construction", "exclusive_opponent"],
+      "owner": "yellow",
+      "polygon_mm": [[950, 800], [750, 800], [750, 1200], [950, 1200]],
+      "tags": ["wall"],
+      "mirror_id": "blue_wall_middle"
+    },
+    {
+      "id": "blue_wall_back_diagonal",
+      "kinds": ["construction", "exclusive_opponent"],
+      "owner": "blue",
+      "rect_mm": { "x": 2320.7, "y": 1429.3, "length": 400, "width": 200, "theta_deg": 45 },
+      "tags": ["wall"],
+      "mirror_id": "yellow_wall_back_diagonal"
+    },
+    {
+      "id": "yellow_wall_back_diagonal",
+      "kinds": ["construction", "exclusive_opponent"],
+      "owner": "yellow",
+      "rect_mm": { "x": 679.3, "y": 1429.3, "length": 400, "width": 200, "theta_deg": 135 },
+      "tags": ["wall"],
+      "mirror_id": "blue_wall_back_diagonal"
+    },
+    {
+      "id": "blue_wall_back",
+      "kinds": ["construction", "exclusive_opponent"],
+      "owner": "blue",
+      "polygon_mm": [[2550, 1500], [2950, 1500], [2950, 1700], [2550, 1700]],
+      "tags": ["wall"],
+      "mirror_id": "yellow_wall_back"
+    },
+    {
+      "id": "yellow_wall_back",
+      "kinds": ["construction", "exclusive_opponent"],
+      "owner": "yellow",
+      "polygon_mm": [[450, 1500], [50, 1500], [50, 1700], [450, 1700]],
+      "tags": ["wall"],
+      "mirror_id": "blue_wall_back"
+    },
+    {
+      "id": "blue_tower_front_outer",
+      "kinds": ["construction", "exclusive_opponent"],
+      "owner": "blue",
+      "circle_mm": { "x": 2500, "y": 400, "radius": 100 },
+      "tags": ["tower"],
+      "mirror_id": "yellow_tower_front_outer"
+    },
+    {
+      "id": "yellow_tower_front_outer",
+      "kinds": ["construction", "exclusive_opponent"],
+      "owner": "yellow",
+      "circle_mm": { "x": 500, "y": 400, "radius": 100 },
+      "tags": ["tower"],
+      "mirror_id": "blue_tower_front_outer"
+    },
+    {
+      "id": "blue_tower_front_inner",
+      "kinds": ["construction", "exclusive_opponent"],
+      "owner": "blue",
+      "circle_mm": { "x": 2150, "y": 750, "radius": 100 },
+      "tags": ["tower"],
+      "mirror_id": "yellow_tower_front_inner"
+    },
+    {
+      "id": "yellow_tower_front_inner",
+      "kinds": ["construction", "exclusive_opponent"],
+      "owner": "yellow",
+      "circle_mm": { "x": 850, "y": 750, "radius": 100 },
+      "tags": ["tower"],
+      "mirror_id": "blue_tower_front_inner"
+    },
+    {
+      "id": "blue_tower_back_inner",
+      "kinds": ["construction", "exclusive_opponent"],
+      "owner": "blue",
+      "circle_mm": { "x": 2150, "y": 1250, "radius": 100 },
+      "tags": ["tower"],
+      "mirror_id": "yellow_tower_back_inner"
+    },
+    {
+      "id": "yellow_tower_back_inner",
+      "kinds": ["construction", "exclusive_opponent"],
+      "owner": "yellow",
+      "circle_mm": { "x": 850, "y": 1250, "radius": 100 },
+      "tags": ["tower"],
+      "mirror_id": "blue_tower_back_inner"
+    },
+    {
+      "id": "blue_tower_back_outer",
+      "kinds": ["construction", "exclusive_opponent"],
+      "owner": "blue",
+      "circle_mm": { "x": 2500, "y": 1600, "radius": 100 },
+      "tags": ["tower"],
+      "mirror_id": "yellow_tower_back_outer"
+    },
+    {
+      "id": "yellow_tower_back_outer",
+      "kinds": ["construction", "exclusive_opponent"],
+      "owner": "yellow",
+      "circle_mm": { "x": 500, "y": 1600, "radius": 100 },
+      "tags": ["tower"],
+      "mirror_id": "blue_tower_back_outer"
+    },
+    {
+      "id": "blue_moat_front",
+      "kinds": ["other"],
+      "owner": "blue",
+      "rect_mm": { "x": 2179.3, "y": 429.3, "length": 400, "width": 200, "theta_deg": 135 },
+      "tags": ["moat"],
+      "mirror_id": "yellow_moat_front"
+    },
+    {
+      "id": "yellow_moat_front",
+      "kinds": ["other"],
+      "owner": "yellow",
+      "rect_mm": { "x": 820.7, "y": 429.3, "length": 400, "width": 200, "theta_deg": 45 },
+      "tags": ["moat"],
+      "mirror_id": "blue_moat_front"
+    },
+    {
+      "id": "blue_moat_middle",
+      "kinds": ["other"],
+      "owner": "blue",
+      "polygon_mm": [[1850, 800], [2050, 800], [2050, 1200], [1850, 1200]],
+      "tags": ["moat"],
+      "mirror_id": "yellow_moat_middle"
+    },
+    {
+      "id": "yellow_moat_middle",
+      "kinds": ["other"],
+      "owner": "yellow",
+      "polygon_mm": [[1150, 800], [950, 800], [950, 1200], [1150, 1200]],
+      "tags": ["moat"],
+      "mirror_id": "blue_moat_middle"
+    },
+    {
+      "id": "blue_moat_back",
+      "kinds": ["other"],
+      "owner": "blue",
+      "rect_mm": { "x": 2179.3, "y": 1570.7, "length": 400, "width": 200, "theta_deg": 45 },
+      "tags": ["moat"],
+      "mirror_id": "yellow_moat_back"
+    },
+    {
+      "id": "yellow_moat_back",
+      "kinds": ["other"],
+      "owner": "yellow",
+      "rect_mm": { "x": 820.7, "y": 1570.7, "length": 400, "width": 200, "theta_deg": 135 },
+      "tags": ["moat"],
+      "mirror_id": "blue_moat_back"
+    },
+    {
+      "id": "blue_stable_front",
+      "kinds": ["other"],
+      "owner": "blue",
+      "polygon_mm": [[2800, 0], [3000, 0], [3000, 300], [2800, 300]],
+      "tags": ["stable"],
+      "mirror_id": "yellow_stable_front"
+    },
+    {
+      "id": "yellow_stable_front",
+      "kinds": ["other"],
+      "owner": "yellow",
+      "polygon_mm": [[200, 0], [0, 0], [0, 300], [200, 300]],
+      "tags": ["stable"],
+      "mirror_id": "blue_stable_front"
+    },
+    {
+      "id": "blue_stable_back",
+      "kinds": ["other"],
+      "owner": "blue",
+      "polygon_mm": [[2800, 1700], [3000, 1700], [3000, 2000], [2800, 2000]],
+      "tags": ["stable"],
+      "mirror_id": "yellow_stable_back"
+    },
+    {
+      "id": "yellow_stable_back",
+      "kinds": ["other"],
+      "owner": "yellow",
+      "polygon_mm": [[200, 1700], [0, 1700], [0, 2000], [200, 2000]],
+      "tags": ["stable"],
+      "mirror_id": "blue_stable_back"
+    },
+    {
+      "id": "quarry_front_1",
+      "kinds": ["other"],
+      "owner": null,
+      "polygon_mm": [[590, 0], [910, 0], [910, 110], [590, 110]],
+      "tags": ["quarry"],
+      "mirror_id": "quarry_front_4"
+    },
+    {
+      "id": "quarry_front_2",
+      "kinds": ["other"],
+      "owner": null,
+      "polygon_mm": [[1090, 0], [1410, 0], [1410, 110], [1090, 110]],
+      "tags": ["quarry"],
+      "mirror_id": "quarry_front_3"
+    },
+    {
+      "id": "quarry_front_3",
+      "kinds": ["other"],
+      "owner": null,
+      "polygon_mm": [[1590, 0], [1910, 0], [1910, 110], [1590, 110]],
+      "tags": ["quarry"],
+      "mirror_id": "quarry_front_2"
+    },
+    {
+      "id": "quarry_front_4",
+      "kinds": ["other"],
+      "owner": null,
+      "polygon_mm": [[2090, 0], [2410, 0], [2410, 110], [2090, 110]],
+      "tags": ["quarry"],
+      "mirror_id": "quarry_front_1"
+    },
+    {
+      "id": "quarry_back_1",
+      "kinds": ["other"],
+      "owner": null,
+      "polygon_mm": [[590, 1890], [910, 1890], [910, 2000], [590, 2000]],
+      "tags": ["quarry"],
+      "mirror_id": "quarry_back_4"
+    },
+    {
+      "id": "quarry_back_2",
+      "kinds": ["other"],
+      "owner": null,
+      "polygon_mm": [[1090, 1890], [1410, 1890], [1410, 2000], [1090, 2000]],
+      "tags": ["quarry"],
+      "mirror_id": "quarry_back_3"
+    },
+    {
+      "id": "quarry_back_3",
+      "kinds": ["other"],
+      "owner": null,
+      "polygon_mm": [[1590, 1890], [1910, 1890], [1910, 2000], [1590, 2000]],
+      "tags": ["quarry"],
+      "mirror_id": "quarry_back_2"
+    },
+    {
+      "id": "quarry_back_4",
+      "kinds": ["other"],
+      "owner": null,
+      "polygon_mm": [[2090, 1890], [2410, 1890], [2410, 2000], [2090, 2000]],
+      "tags": ["quarry"],
+      "mirror_id": "quarry_back_1"
+    },
+    {
+      "id": "quarry_middle_front",
+      "kinds": ["other"],
+      "owner": null,
+      "polygon_mm": [[1445, 340], [1555, 340], [1555, 660], [1445, 660]],
+      "tags": ["quarry"],
+      "mirror_id": "quarry_middle_front"
+    },
+    {
+      "id": "quarry_middle_back",
+      "kinds": ["other"],
+      "owner": null,
+      "polygon_mm": [[1445, 1340], [1555, 1340], [1555, 1660], [1445, 1660]],
+      "tags": ["quarry"],
+      "mirror_id": "quarry_middle_back"
+    }
+  ],
+  "elements": [
+    {
+      "id": "stone_front_1_1",
+      "kind": "stone",
+      "pose": { "x_mm": 750, "y_mm": 55, "theta_deg": 0 },
+      "size": { "length_mm": 320, "width_mm": 110, "height_mm": 110 },
+      "mirror_id": "stone_front_4_1"
+    },
+    {
+      "id": "stone_front_1_2",
+      "kind": "stone",
+      "pose": { "x_mm": 750, "y_mm": 55, "theta_deg": 0 },
+      "size": { "length_mm": 320, "width_mm": 110, "height_mm": 110 },
+      "mirror_id": "stone_front_4_2"
+    },
+    {
+      "id": "stone_front_1_3",
+      "kind": "stone",
+      "pose": { "x_mm": 750, "y_mm": 55, "theta_deg": 0 },
+      "size": { "length_mm": 320, "width_mm": 110, "height_mm": 110 },
+      "mirror_id": "stone_front_4_3"
+    },
+    {
+      "id": "stone_front_2_1",
+      "kind": "stone",
+      "pose": { "x_mm": 1250, "y_mm": 55, "theta_deg": 0 },
+      "size": { "length_mm": 320, "width_mm": 110, "height_mm": 110 },
+      "mirror_id": "stone_front_3_1"
+    },
+    {
+      "id": "stone_front_2_2",
+      "kind": "stone",
+      "pose": { "x_mm": 1250, "y_mm": 55, "theta_deg": 0 },
+      "size": { "length_mm": 320, "width_mm": 110, "height_mm": 110 },
+      "mirror_id": "stone_front_3_2"
+    },
+    {
+      "id": "stone_front_2_3",
+      "kind": "stone",
+      "pose": { "x_mm": 1250, "y_mm": 55, "theta_deg": 0 },
+      "size": { "length_mm": 320, "width_mm": 110, "height_mm": 110 },
+      "mirror_id": "stone_front_3_3"
+    },
+    {
+      "id": "stone_front_3_1",
+      "kind": "stone",
+      "pose": { "x_mm": 1750, "y_mm": 55, "theta_deg": 0 },
+      "size": { "length_mm": 320, "width_mm": 110, "height_mm": 110 },
+      "mirror_id": "stone_front_2_1"
+    },
+    {
+      "id": "stone_front_3_2",
+      "kind": "stone",
+      "pose": { "x_mm": 1750, "y_mm": 55, "theta_deg": 0 },
+      "size": { "length_mm": 320, "width_mm": 110, "height_mm": 110 },
+      "mirror_id": "stone_front_2_2"
+    },
+    {
+      "id": "stone_front_3_3",
+      "kind": "stone",
+      "pose": { "x_mm": 1750, "y_mm": 55, "theta_deg": 0 },
+      "size": { "length_mm": 320, "width_mm": 110, "height_mm": 110 },
+      "mirror_id": "stone_front_2_3"
+    },
+    {
+      "id": "stone_front_4_1",
+      "kind": "stone",
+      "pose": { "x_mm": 2250, "y_mm": 55, "theta_deg": 0 },
+      "size": { "length_mm": 320, "width_mm": 110, "height_mm": 110 },
+      "mirror_id": "stone_front_1_1"
+    },
+    {
+      "id": "stone_front_4_2",
+      "kind": "stone",
+      "pose": { "x_mm": 2250, "y_mm": 55, "theta_deg": 0 },
+      "size": { "length_mm": 320, "width_mm": 110, "height_mm": 110 },
+      "mirror_id": "stone_front_1_2"
+    },
+    {
+      "id": "stone_front_4_3",
+      "kind": "stone",
+      "pose": { "x_mm": 2250, "y_mm": 55, "theta_deg": 0 },
+      "size": { "length_mm": 320, "width_mm": 110, "height_mm": 110 },
+      "mirror_id": "stone_front_1_3"
+    },
+    {
+      "id": "stone_back_1_1",
+      "kind": "stone",
+      "pose": { "x_mm": 750, "y_mm": 1945, "theta_deg": 0 },
+      "size": { "length_mm": 320, "width_mm": 110, "height_mm": 110 },
+      "mirror_id": "stone_back_4_1"
+    },
+    {
+      "id": "stone_back_1_2",
+      "kind": "stone",
+      "pose": { "x_mm": 750, "y_mm": 1945, "theta_deg": 0 },
+      "size": { "length_mm": 320, "width_mm": 110, "height_mm": 110 },
+      "mirror_id": "stone_back_4_2"
+    },
+    {
+      "id": "stone_back_1_3",
+      "kind": "stone",
+      "pose": { "x_mm": 750, "y_mm": 1945, "theta_deg": 0 },
+      "size": { "length_mm": 320, "width_mm": 110, "height_mm": 110 },
+      "mirror_id": "stone_back_4_3"
+    },
+    {
+      "id": "stone_back_2_1",
+      "kind": "stone",
+      "pose": { "x_mm": 1250, "y_mm": 1945, "theta_deg": 0 },
+      "size": { "length_mm": 320, "width_mm": 110, "height_mm": 110 },
+      "mirror_id": "stone_back_3_1"
+    },
+    {
+      "id": "stone_back_2_2",
+      "kind": "stone",
+      "pose": { "x_mm": 1250, "y_mm": 1945, "theta_deg": 0 },
+      "size": { "length_mm": 320, "width_mm": 110, "height_mm": 110 },
+      "mirror_id": "stone_back_3_2"
+    },
+    {
+      "id": "stone_back_2_3",
+      "kind": "stone",
+      "pose": { "x_mm": 1250, "y_mm": 1945, "theta_deg": 0 },
+      "size": { "length_mm": 320, "width_mm": 110, "height_mm": 110 },
+      "mirror_id": "stone_back_3_3"
+    },
+    {
+      "id": "stone_back_3_1",
+      "kind": "stone",
+      "pose": { "x_mm": 1750, "y_mm": 1945, "theta_deg": 0 },
+      "size": { "length_mm": 320, "width_mm": 110, "height_mm": 110 },
+      "mirror_id": "stone_back_2_1"
+    },
+    {
+      "id": "stone_back_3_2",
+      "kind": "stone",
+      "pose": { "x_mm": 1750, "y_mm": 1945, "theta_deg": 0 },
+      "size": { "length_mm": 320, "width_mm": 110, "height_mm": 110 },
+      "mirror_id": "stone_back_2_2"
+    },
+    {
+      "id": "stone_back_3_3",
+      "kind": "stone",
+      "pose": { "x_mm": 1750, "y_mm": 1945, "theta_deg": 0 },
+      "size": { "length_mm": 320, "width_mm": 110, "height_mm": 110 },
+      "mirror_id": "stone_back_2_3"
+    },
+    {
+      "id": "stone_back_4_1",
+      "kind": "stone",
+      "pose": { "x_mm": 2250, "y_mm": 1945, "theta_deg": 0 },
+      "size": { "length_mm": 320, "width_mm": 110, "height_mm": 110 },
+      "mirror_id": "stone_back_1_1"
+    },
+    {
+      "id": "stone_back_4_2",
+      "kind": "stone",
+      "pose": { "x_mm": 2250, "y_mm": 1945, "theta_deg": 0 },
+      "size": { "length_mm": 320, "width_mm": 110, "height_mm": 110 },
+      "mirror_id": "stone_back_1_2"
+    },
+    {
+      "id": "stone_back_4_3",
+      "kind": "stone",
+      "pose": { "x_mm": 2250, "y_mm": 1945, "theta_deg": 0 },
+      "size": { "length_mm": 320, "width_mm": 110, "height_mm": 110 },
+      "mirror_id": "stone_back_1_3"
+    },
+    {
+      "id": "stone_middle_front_1",
+      "kind": "stone",
+      "pose": { "x_mm": 1500, "y_mm": 500, "theta_deg": 90 },
+      "size": { "length_mm": 320, "width_mm": 110, "height_mm": 110 },
+      "mirror_id": "stone_middle_front_1"
+    },
+    {
+      "id": "stone_middle_front_2",
+      "kind": "stone",
+      "pose": { "x_mm": 1500, "y_mm": 500, "theta_deg": 90 },
+      "size": { "length_mm": 320, "width_mm": 110, "height_mm": 110 },
+      "mirror_id": "stone_middle_front_2"
+    },
+    {
+      "id": "stone_middle_front_3",
+      "kind": "stone",
+      "pose": { "x_mm": 1500, "y_mm": 500, "theta_deg": 90 },
+      "size": { "length_mm": 320, "width_mm": 110, "height_mm": 110 },
+      "mirror_id": "stone_middle_front_3"
+    },
+    {
+      "id": "stone_middle_back_1",
+      "kind": "stone",
+      "pose": { "x_mm": 1500, "y_mm": 1500, "theta_deg": 90 },
+      "size": { "length_mm": 320, "width_mm": 110, "height_mm": 110 },
+      "mirror_id": "stone_middle_back_1"
+    },
+    {
+      "id": "stone_middle_back_2",
+      "kind": "stone",
+      "pose": { "x_mm": 1500, "y_mm": 1500, "theta_deg": 90 },
+      "size": { "length_mm": 320, "width_mm": 110, "height_mm": 110 },
+      "mirror_id": "stone_middle_back_2"
+    },
+    {
+      "id": "stone_middle_back_3",
+      "kind": "stone",
+      "pose": { "x_mm": 1500, "y_mm": 1500, "theta_deg": 90 },
+      "size": { "length_mm": 320, "width_mm": 110, "height_mm": 110 },
+      "mirror_id": "stone_middle_back_3"
+    }
+  ]
+}

@@ -64,6 +64,12 @@ def check_symmetry(arena: Arena) -> None:
             raise SchemaError(f"{name}: owners {zone.owner} and {mirror.owner} are not swapped")
         if (mirror.kinds, mirror.height, mirror.tags) != (zone.kinds, zone.height, zone.tags):
             raise SchemaError(f"{name}: kinds, height or tags differ")
+        expected_poses = [mirror_pose(pose, arena.width) for pose in zone.robot_poses]
+        if len(expected_poses) != len(mirror.robot_poses) or not all(
+            _same_pose(expected, actual)
+            for expected, actual in zip(expected_poses, mirror.robot_poses, strict=True)
+        ):
+            raise SchemaError(f"{name}: robot poses are not symmetric")
     for element in arena.elements.values():
         mirror = arena.elements[element.mirror_id]
         name = f"element {element.id!r} and its mirror {mirror.id!r}"
@@ -75,3 +81,9 @@ def check_symmetry(arena: Arena) -> None:
             raise SchemaError(f"{name}: headings are not symmetric")
         if (mirror.kind, mirror.size) != (element.kind, element.size):
             raise SchemaError(f"{name}: kind or size differ")
+
+
+def _same_pose(a: Pose, b: Pose) -> bool:
+    """Compare robot poses: unlike a box, a robot turned by a half turn is not the same."""
+    distance = (a.position - b.position).norm()
+    return distance <= _TOLERANCE and abs(angle_diff(a.theta, b.theta)) <= _TOLERANCE

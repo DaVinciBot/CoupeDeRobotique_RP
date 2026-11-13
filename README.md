@@ -42,6 +42,7 @@ uv run ruff format && uv run ruff check         # formatage et lint
 uv run pyright                                  # types
 uv run lint-imports                             # règles d'import du socle
 uv run python tools/core_check/theme_words.py   # mots du thème dans le socle
+uv run python tools/core_check/theme_coordinates.py   # coordonnées du thème dans le socle
 ```
 
 Firmware, dans `firmware/<carte>/` :
