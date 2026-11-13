@@ -1,13 +1,18 @@
 import math
+from dataclasses import replace
+from pathlib import Path
+from typing import Any
 
 import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 from shapely import Polygon
 
-from dvb_brain.domain.arena import Arena, ElementSpec, Side, Size, Zone, ZoneKind
+from dvb_brain.domain.arena import Arena, ElementSpec, Side, Size, Zone, ZoneKind, load_arena
 from dvb_brain.domain.geometry import Pose, Vec2, angle_diff
+from dvb_brain.domain.json_schema import SchemaError
 from dvb_brain.domain.symmetry import (
+    check_symmetry,
     mirror_element_id,
     mirror_point,
     mirror_polygon,
@@ -17,6 +22,7 @@ from dvb_brain.domain.symmetry import (
 )
 
 WIDTH = 3.0
+TEMPLATE_ARENA = Path(__file__).parents[4] / "editions" / "_template" / "arena.json"
 
 angles = st.floats(min_value=-100.0, max_value=100.0)
 xs = st.floats(min_value=0.0, max_value=WIDTH)
@@ -159,3 +165,71 @@ def test_each_zone_has_a_mirror_of_same_area(arena: Arena) -> None:
     for zone in arena.zones.values():
         mirror = arena.zone(mirror_zone_id(arena, zone.id))
         assert mirror.polygon.area == pytest.approx(zone.polygon.area)
+
+
+def test_check_symmetry_accepts_symmetric_arena(arena: Arena) -> None:
+    check_symmetry(arena)
+
+
+def test_check_symmetry_accepts_template_arena() -> None:
+    check_symmetry(load_arena(TEMPLATE_ARENA))
+
+
+def test_check_symmetry_accepts_element_heading_written_modulo_pi(arena: Arena) -> None:
+    turned = replace(arena.elements["yellow_block"], pose=Pose(2.5, 1.0, 0.0))
+    check_symmetry(with_element(arena, turned))
+
+
+def with_zone(arena: Arena, zone: Zone) -> Arena:
+    return replace(arena, zones={**arena.zones, zone.id: zone})
+
+
+def with_element(arena: Arena, element: ElementSpec) -> Arena:
+    return replace(arena, elements={**arena.elements, element.id: element})
+
+
+@pytest.mark.parametrize(
+    ("change", "message"),
+    [
+        ({"polygon": square(2.5, 0.0, 0.4)}, "polygons are not symmetric"),
+        ({"owner": Side.BLUE}, "owners"),
+        ({"kinds": frozenset({ZoneKind.START})}, "kinds, height or tags differ"),
+        ({"height": 0.1}, "kinds, height or tags differ"),
+        ({"tags": frozenset({"extra"})}, "kinds, height or tags differ"),
+    ],
+)
+def test_check_symmetry_rejects_bad_zone_mirror(
+    arena: Arena, change: dict[str, Any], message: str
+) -> None:
+    bad = replace(arena.zone("yellow_start"), **change)
+    with pytest.raises(SchemaError, match=f"zone 'blue_start'.*'yellow_start'.*{message}"):
+        check_symmetry(with_zone(arena, bad))
+
+
+def test_check_symmetry_rejects_asymmetric_zone_on_the_axis(arena: Arena) -> None:
+    bad = replace(arena.zone("middle"), polygon=square(1.0, 0.9, 0.2))
+    with pytest.raises(SchemaError, match=r"zone 'middle'.*polygons are not symmetric"):
+        check_symmetry(with_zone(arena, bad))
+
+
+def test_check_symmetry_rejects_owned_zone_on_the_axis(arena: Arena) -> None:
+    bad = replace(arena.zone("middle"), owner=Side.BLUE)
+    with pytest.raises(SchemaError, match=r"zone 'middle'.*owners"):
+        check_symmetry(with_zone(arena, bad))
+
+
+@pytest.mark.parametrize(
+    ("change", "message"),
+    [
+        ({"pose": Pose(2.4, 1.0, math.pi)}, "positions are not symmetric"),
+        ({"pose": Pose(2.5, 1.0, math.pi / 2)}, "headings are not symmetric"),
+        ({"kind": "other"}, "kind or size differ"),
+        ({"size": Size(0.3, 0.1, 0.2)}, "kind or size differ"),
+    ],
+)
+def test_check_symmetry_rejects_bad_element_mirror(
+    arena: Arena, change: dict[str, Any], message: str
+) -> None:
+    bad = replace(arena.elements["yellow_block"], **change)
+    with pytest.raises(SchemaError, match=f"element 'blue_block'.*'yellow_block'.*{message}"):
+        check_symmetry(with_element(arena, bad))
