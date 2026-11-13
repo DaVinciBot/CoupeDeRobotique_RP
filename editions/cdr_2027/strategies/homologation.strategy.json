@@ -6,6 +6,33 @@
   "side": "blue",
   "units": { "length": "mm", "angle": "deg", "time": "s", "speed": "m/s" },
   "end_reserve_s": 8,
-  "steps": [],
+  "steps": [
+    {
+      "id": "start", "label": "Départ, salle du trône",
+      "move": { "x_mm": 2750, "y_mm": 1000, "theta_deg": 180, "speed_mps": 0.3 },
+      "actions": [], "timeout_s": 0, "on_timeout": "skip"
+    },
+    {
+      "id": "quarry", "label": "Carrière quarry_front_4",
+      "move": { "x_mm": 2250, "y_mm": 300, "theta_deg": -90, "speed_mps": 0.3 },
+      "actions": [
+        { "type": "pick_stones", "element_id": "stone_front_4_1", "duration_s": 3, "score_delta": 0 }
+      ],
+      "timeout_s": 25, "on_timeout": "goto:home"
+    },
+    {
+      "id": "tower", "label": "Tour blue_tower_front_outer",
+      "move": { "x_mm": 2500, "y_mm": 650, "theta_deg": -90, "speed_mps": 0.3 },
+      "actions": [
+        { "type": "build_tower", "element_id": "stone_front_4_1", "duration_s": 3, "score_delta": 6 }
+      ],
+      "timeout_s": 20, "on_timeout": "skip"
+    },
+    {
+      "id": "home", "label": "Retour en salle du trône",
+      "move": { "x_mm": 2750, "y_mm": 1000, "theta_deg": 180, "speed_mps": 0.3 },
+      "actions": [], "timeout_s": 0, "on_timeout": "skip"
+    }
+  ],
   "metadata": { "estimated_time_s": 0, "estimated_score": 0, "saved_at": "" }
 }
