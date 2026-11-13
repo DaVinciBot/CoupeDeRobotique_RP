@@ -53,7 +53,7 @@ Checklist de tout ce qu'il faut faire pour le robot principal, dans l'ordre où 
 - [ ] `clang-format` pour le firmware, vérifié en CI.
 - [x] Contrôles du socle :
   - [x] règles import-linter (`[tool.importlinter]` du `pyproject.toml` racine) : le socle n'importe jamais `editions.*` ; `domain` n'importe ni `services`, ni `adapters`, ni `app`, ni asyncio, ni les modules d'entrée-sortie et d'horloge (`pathlib`, `os`, `io`, `time`, `socket`, `subprocess`, `threading`) ; couches du brain dans l'ordre de la section 5.3, `services` et `adapters` indépendants (ADR 0008) ;
-  - [x] `tools/core_check/theme_words.py` : cherche les mots du thème dans le socle (`pierre`, `stone`, `graal`, `grail`, `catapulte`, `château`, `castle`…) et échoue s'il en trouve (0) ;
+  - [x] `tools/core_check/theme_words.py` : cherche les mots du thème dans le socle et dans `config/match.json` (`pierre`, `stone`, `graal`, `grail`, `catapulte`, `château`, `castle`, `écurie`, `chevalier`…) et échoue s'il en trouve (0) ;
   - [x] `tools/core_check/theme_coordinates.py` : recherche des coordonnées du thème dans le socle, d'après les `arena.json` des éditions.
 
 ### 1.4 CI — `.github/workflows/ci.yml`
