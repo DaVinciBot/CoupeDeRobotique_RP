@@ -189,6 +189,43 @@ def test_parse_arena_reads_zones() -> None:
     assert start.height == 0.0
 
 
+def test_parse_arena_reads_a_circle() -> None:
+    document = valid_document()
+    del document["zones"][2]["polygon_mm"]
+    document["zones"][2]["circle_mm"] = {"x": 1500, "y": 1000, "radius": 100}
+
+    polygon = parse_arena(encode(document)).zone("middle").polygon
+
+    assert polygon.bounds == pytest.approx((1.4, 0.9, 1.6, 1.1))
+    assert polygon.area == pytest.approx(math.pi * 0.1**2, rel=1e-2)
+
+
+def test_parse_arena_reads_a_rotated_rectangle() -> None:
+    document = valid_document()
+    del document["zones"][2]["polygon_mm"]
+    rect = {"x": 1500, "y": 1000, "length": 400, "width": 200, "theta_deg": 90}
+    document["zones"][2]["rect_mm"] = rect
+
+    polygon = parse_arena(encode(document)).zone("middle").polygon
+
+    assert polygon.bounds == pytest.approx((1.4, 0.8, 1.6, 1.2))
+    assert polygon.area == pytest.approx(0.08)
+
+
+def test_parse_arena_rectangle_at_45_degrees() -> None:
+    document = valid_document()
+    del document["zones"][2]["polygon_mm"]
+    rect = {"x": 1500, "y": 1000, "length": 400, "width": 200, "theta_deg": 45}
+    document["zones"][2]["rect_mm"] = rect
+
+    polygon = parse_arena(encode(document)).zone("middle").polygon
+
+    half_diagonal = 0.3 / math.sqrt(2)  # (length + width) / 2 projected on an axis
+    expected = (1.5 - half_diagonal, 1.0 - half_diagonal, 1.5 + half_diagonal, 1.0 + half_diagonal)
+    assert polygon.bounds == pytest.approx(expected)
+    assert polygon.area == pytest.approx(0.08)
+
+
 def test_parse_arena_reads_elements() -> None:
     element = parse_arena(encode(valid_document())).elements["crate_blue"]
 
@@ -241,6 +278,26 @@ DELETE = object()
             ("zones", 2, "kinds"),
             ["exclusive_opponent"],
             ["$.zones[2].owner: exclusive_opponent needs an owner", "got None"],
+        ),
+        (
+            ("zones", 2, "polygon_mm"),
+            DELETE,
+            ["$.zones[2]: needs exactly one of polygon_mm, circle_mm, rect_mm", "got []"],
+        ),
+        (
+            ("zones", 2, "circle_mm"),
+            {"x": 1500, "y": 1000, "radius": 100},
+            ["$.zones[2]: needs exactly one", "got ['polygon_mm', 'circle_mm']"],
+        ),
+        (
+            ("zones", 2, "circle_mm"),
+            {"x": 1500, "y": 1000, "radius": 0},
+            ["$.zones[2].circle_mm.radius:", "got 0"],
+        ),
+        (
+            ("zones", 2, "rect_mm"),
+            {"x": 1500, "y": 1000, "length": 400, "width": 200},
+            ["$.zones[2].rect_mm:", "theta_deg"],
         ),
         (("elements", 1, "id"), "crate_blue", ["$.elements[1].id: duplicate id"]),
         (("elements", 0, "mirror_id"), "middle", ["$.elements[0].mirror_id:", "got 'middle'"]),

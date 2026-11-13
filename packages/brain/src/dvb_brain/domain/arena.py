@@ -113,8 +113,15 @@ def parse_arena(data: bytes) -> Arena:
     """
     raw = decode_json(data, _ArenaFile)
     for i, zone in enumerate(raw.zones):
-        polygon = Polygon(zone.polygon_mm)
-        if not polygon.is_valid:
+        shapes = {
+            "polygon_mm": zone.polygon_mm,
+            "circle_mm": zone.circle_mm,
+            "rect_mm": zone.rect_mm,
+        }
+        given = [name for name, shape in shapes.items() if shape is not None]
+        if len(given) != 1:
+            raise field_error(f"$.zones[{i}]", f"needs exactly one of {', '.join(shapes)}", given)
+        if zone.polygon_mm is not None and not (polygon := Polygon(zone.polygon_mm)).is_valid:
             reason = f"invalid polygon ({explain_validity(polygon)})"
             raise field_error(f"$.zones[{i}].polygon_mm", reason, zone.polygon_mm)
         if ZoneKind.EXCLUSIVE_OPPONENT in zone.kinds and zone.owner is None:
@@ -160,12 +167,31 @@ class _SizeFile(msgspec.Struct, forbid_unknown_fields=True):
     height_mm: _PositiveMm
 
 
+class _CircleFile(msgspec.Struct, forbid_unknown_fields=True):
+    x: float
+    y: float
+    radius: _PositiveMm
+
+
+class _RectFile(msgspec.Struct, forbid_unknown_fields=True):
+    """Rectangle centred on (x, y); its length is along theta_deg."""
+
+    x: float
+    y: float
+    length: _PositiveMm
+    width: _PositiveMm
+    theta_deg: float
+
+
 class _ZoneFile(msgspec.Struct, forbid_unknown_fields=True):
     id: _Id
     kinds: Annotated[frozenset[ZoneKind], msgspec.Meta(min_length=1)]
     owner: Side | None  # required: null for a shared zone, never by omission
-    polygon_mm: Annotated[list[tuple[float, float]], msgspec.Meta(min_length=3)]
     mirror_id: _Id
+    # Exactly one shape.
+    polygon_mm: Annotated[list[tuple[float, float]], msgspec.Meta(min_length=3)] | None = None
+    circle_mm: _CircleFile | None = None
+    rect_mm: _RectFile | None = None
     height_mm: _NonNegativeMm = 0.0
     tags: frozenset[str] = frozenset()
 
@@ -209,12 +235,32 @@ def _check_ids(collection: str, entries: list[tuple[str, str]]) -> None:
             raise field_error(path, reason, mirror_id)
 
 
+def _zone_polygon(raw: _ZoneFile) -> Polygon:
+    """Convert the shape of a zone to a polygon in metres.
+
+    A circle becomes an inscribed 64-gon: 0.12 mm inside a circle of 100 mm radius.
+    """
+    if raw.circle_mm is not None:
+        circle = raw.circle_mm
+        center = Point(mm_to_m(circle.x), mm_to_m(circle.y))
+        return center.buffer(mm_to_m(circle.radius), quad_segs=16)
+    if raw.rect_mm is not None:
+        rect = raw.rect_mm
+        frame = Pose(mm_to_m(rect.x), mm_to_m(rect.y), deg_to_rad(rect.theta_deg))
+        half_length, half_width = mm_to_m(rect.length) / 2, mm_to_m(rect.width) / 2
+        corners = [(-1, -1), (1, -1), (1, 1), (-1, 1)]
+        points = [frame.to_world(Vec2(u * half_length, v * half_width)) for u, v in corners]
+        return Polygon([(p.x, p.y) for p in points])
+    assert raw.polygon_mm is not None  # checked by parse_arena
+    return Polygon([(mm_to_m(x), mm_to_m(y)) for x, y in raw.polygon_mm])
+
+
 def _to_zone(raw: _ZoneFile) -> Zone:
     return Zone(
         id=raw.id,
         kinds=raw.kinds,
         owner=raw.owner,
-        polygon=Polygon([(mm_to_m(x), mm_to_m(y)) for x, y in raw.polygon_mm]),
+        polygon=_zone_polygon(raw),
         height=mm_to_m(raw.height_mm),
         tags=raw.tags,
         mirror_id=raw.mirror_id,

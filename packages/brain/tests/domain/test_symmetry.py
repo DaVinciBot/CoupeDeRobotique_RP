@@ -3,12 +3,22 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
+import msgspec
 import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 from shapely import Polygon
 
-from dvb_brain.domain.arena import Arena, ElementSpec, Side, Size, Zone, ZoneKind, load_arena
+from dvb_brain.domain.arena import (
+    Arena,
+    ElementSpec,
+    Side,
+    Size,
+    Zone,
+    ZoneKind,
+    load_arena,
+    parse_arena,
+)
 from dvb_brain.domain.geometry import Pose, Vec2, angle_diff
 from dvb_brain.domain.json_schema import SchemaError
 from dvb_brain.domain.symmetry import (
@@ -173,6 +183,35 @@ def test_check_symmetry_accepts_symmetric_arena(arena: Arena) -> None:
 
 def test_check_symmetry_accepts_template_arena() -> None:
     check_symmetry(load_arena(TEMPLATE_ARENA))
+
+
+def test_check_symmetry_accepts_mirrored_circles_and_rectangles() -> None:
+    def zone(zone_id: str, owner: str, mirror_id: str, shape: dict[str, Any]) -> dict[str, Any]:
+        return {"id": zone_id, "kinds": ["other"], "owner": owner, "mirror_id": mirror_id, **shape}
+
+    def circle(x: float) -> dict[str, Any]:
+        return {"circle_mm": {"x": x, "y": 400, "radius": 100}}
+
+    def rect(x: float, theta_deg: float) -> dict[str, Any]:
+        rect = {"x": x, "y": 570.7, "length": 400, "width": 200, "theta_deg": theta_deg}
+        return {"rect_mm": rect}
+
+    document = {
+        "width_mm": 3000,
+        "depth_mm": 2000,
+        "border_thickness_mm": 22,
+        "border_height_mm": 70,
+        "aruco_tags": {"blue": [1], "yellow": [6]},
+        "zones": [
+            zone("yellow_disc", "yellow", "blue_disc", circle(500)),
+            zone("blue_disc", "blue", "yellow_disc", circle(2500)),
+            zone("yellow_bar", "yellow", "blue_bar", rect(679.3, 45)),
+            zone("blue_bar", "blue", "yellow_bar", rect(2320.7, 135)),
+        ],
+        "elements": [],
+    }
+
+    check_symmetry(parse_arena(msgspec.json.encode(document)))
 
 
 def test_check_symmetry_accepts_element_heading_written_modulo_pi(arena: Arena) -> None:
