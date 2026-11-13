@@ -9,8 +9,8 @@ from hypothesis import given
 from hypothesis import strategies as st
 
 from dvb_brain.domain.arena import Arena, ElementSpec, Side, Size, load_arena
+from dvb_brain.domain.decoding import SchemaError
 from dvb_brain.domain.geometry import Pose, Vec2, angle_diff
-from dvb_brain.domain.json_schema import SchemaError
 from dvb_brain.domain.strategy_model import (
     Abort,
     Action,

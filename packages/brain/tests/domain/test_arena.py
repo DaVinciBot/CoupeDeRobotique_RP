@@ -8,8 +8,8 @@ import pytest
 from shapely import Polygon
 
 from dvb_brain.domain.arena import Arena, Side, Zone, ZoneKind, load_arena, parse_arena
+from dvb_brain.domain.decoding import SchemaError
 from dvb_brain.domain.geometry import Vec2
-from dvb_brain.domain.json_schema import SchemaError
 
 TEMPLATE_ARENA = Path(__file__).parents[4] / "editions" / "_template" / "arena.json"
 
@@ -174,6 +174,22 @@ def test_parse_arena_converts_to_si() -> None:
     assert arena.element_aruco_tags == {"crate": frozenset({20})}
     assert list(arena.zones) == ["blue_start", "yellow_start", "middle"]
     assert list(arena.elements) == ["crate_blue", "crate_yellow"]
+
+
+def test_parsed_arena_is_read_only_and_hashable() -> None:
+    arena = parse_arena(encode(valid_document()))
+    mappings: list[Any] = [
+        arena.zones,
+        arena.elements,
+        arena.aruco_tags,
+        arena.element_aruco_tags,
+    ]
+
+    for mapping in mappings:
+        with pytest.raises(TypeError):
+            mapping["new"] = None
+    assert {arena: "cached"}[arena] == "cached"  # equal only to itself
+    assert arena != parse_arena(encode(valid_document()))
 
 
 def test_parse_arena_reads_zones() -> None:

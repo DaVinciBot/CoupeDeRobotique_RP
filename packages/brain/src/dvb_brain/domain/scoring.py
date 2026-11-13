@@ -8,15 +8,18 @@ additional points) is the business of the edition.
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
+from types import MappingProxyType
 from typing import Annotated, Literal
 
 import msgspec
 
-from dvb_brain.domain.json_schema import SchemaError, decode_json, field_error
+from dvb_brain.domain.decoding import Id, NonNegative, SchemaError, check_unique_ids, decode_json
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, eq=False)
 class Scoring:
+    """parse_scoring gives read-only mappings. Equal only to itself, like Arena."""
+
     points: Mapping[str, int]  # by scoring item id, in file order
     phase_starts: Mapping[str, float]  # match time at which each phase starts, in s, by id
 
@@ -27,11 +30,11 @@ def parse_scoring(data: bytes) -> Scoring:
     Raise a SchemaError that names the field and the value.
     """
     raw = decode_json(data, _ScoringFile)
-    _check_unique_ids("items", [item.id for item in raw.items])
-    _check_unique_ids("phases", [phase.id for phase in raw.phases])
+    check_unique_ids("items", (item.id for item in raw.items))
+    check_unique_ids("phases", (phase.id for phase in raw.phases))
     return Scoring(
-        points={item.id: item.points for item in raw.items},
-        phase_starts={phase.id: phase.start_s for phase in raw.phases},
+        points=MappingProxyType({item.id: item.points for item in raw.items}),
+        phase_starts=MappingProxyType({phase.id: phase.start_s for phase in raw.phases}),
     )
 
 
@@ -45,21 +48,19 @@ def load_scoring(path: Path) -> Scoring:
 
 # Schema of scoring.json: times in s. Each entry cites its rule, for the review.
 
-_Id = Annotated[str, msgspec.Meta(min_length=1)]
-
 
 class _ItemFile(msgspec.Struct, forbid_unknown_fields=True):
-    id: _Id
+    id: Id
     points: Annotated[int, msgspec.Meta(gt=0)]
-    rule: _Id
+    rule: Id
 
 
 class _PhaseFile(msgspec.Struct, forbid_unknown_fields=True):
     """Phase from start_s to the end of the match."""
 
-    id: _Id
-    start_s: Annotated[float, msgspec.Meta(ge=0)]
-    rule: _Id
+    id: Id
+    start_s: NonNegative
+    rule: Id
 
 
 class _ScoringFile(msgspec.Struct, forbid_unknown_fields=True):
@@ -67,11 +68,3 @@ class _ScoringFile(msgspec.Struct, forbid_unknown_fields=True):
     kind: Literal["cdr.scoring"]
     items: list[_ItemFile]
     phases: list[_PhaseFile]
-
-
-def _check_unique_ids(collection: str, ids: list[str]) -> None:
-    seen: set[str] = set()
-    for i, entry_id in enumerate(ids):
-        if entry_id in seen:
-            raise field_error(f"$.{collection}[{i}].id", "duplicate id", entry_id)
-        seen.add(entry_id)

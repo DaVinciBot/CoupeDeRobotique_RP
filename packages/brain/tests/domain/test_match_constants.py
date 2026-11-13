@@ -5,7 +5,7 @@ from typing import Any
 import msgspec
 import pytest
 
-from dvb_brain.domain.json_schema import SchemaError
+from dvb_brain.domain.decoding import SchemaError
 from dvb_brain.domain.match_constants import load_match_constants, parse_match_constants
 
 MATCH_CONFIG = Path(__file__).parents[4] / "config" / "match.json"

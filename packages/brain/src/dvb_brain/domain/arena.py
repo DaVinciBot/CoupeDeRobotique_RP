@@ -8,14 +8,23 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from enum import Enum, StrEnum, auto
 from pathlib import Path
+from types import MappingProxyType
 from typing import Annotated
 
 import msgspec
 from shapely import Point, Polygon
 from shapely.validation import explain_validity
 
+from dvb_brain.domain.decoding import (
+    Id,
+    NonNegative,
+    Positive,
+    SchemaError,
+    check_unique_ids,
+    decode_json,
+    field_error,
+)
 from dvb_brain.domain.geometry import Pose, Vec2, normalize_angle
-from dvb_brain.domain.json_schema import SchemaError, decode_json, field_error
 from dvb_brain.domain.units import deg_to_rad, mm_to_m
 
 
@@ -75,9 +84,17 @@ class ElementSpec:
     mirror_id: str  # id of the symmetric element; its own id when on the axis
 
 
-@dataclass(frozen=True, slots=True)
+def _no_element_tags() -> Mapping[str, frozenset[int]]:
+    return MappingProxyType({})
+
+
+@dataclass(frozen=True, slots=True, eq=False)
 class Arena:
-    """Table of an edition: x from 0 to width, y from 0 to depth, in metres."""
+    """Table of an edition: x from 0 to width, y from 0 to depth, in metres.
+
+    parse_arena gives read-only mappings. Two arenas are equal only when they are the same
+    object, so that an arena can be a cache key.
+    """
 
     width: float
     depth: float
@@ -87,11 +104,15 @@ class Arena:
     elements: Mapping[str, ElementSpec]  # by id, in file order
     aruco_tags: Mapping[Side, frozenset[int]]
     element_aruco_tags: Mapping[str, frozenset[int]] = field(
-        default_factory=dict[str, frozenset[int]]
+        default_factory=_no_element_tags
     )  # by element kind
 
     def zones_of(self, kind: ZoneKind, side: Side) -> tuple[Zone, ...]:
-        """Return the zones with this role that belong to side or to nobody."""
+        """Return the zones with this role that belong to side or to nobody.
+
+        EXCLUSIVE_OPPONENT zones are listed under their owner: to get the zones our robot must
+        never enter, ask with the side of the opponent.
+        """
         return tuple(
             zone
             for zone in self.zones.values()
@@ -141,10 +162,12 @@ def parse_arena(data: bytes) -> Arena:
         depth=mm_to_m(raw.depth_mm),
         border_thickness=mm_to_m(raw.border_thickness_mm),
         border_height=mm_to_m(raw.border_height_mm),
-        zones={zone.id: _to_zone(zone) for zone in raw.zones},
-        elements={element.id: _to_element(element) for element in raw.elements},
-        aruco_tags={Side.BLUE: raw.aruco_tags.blue, Side.YELLOW: raw.aruco_tags.yellow},
-        element_aruco_tags=raw.aruco_tags.elements,
+        zones=MappingProxyType({zone.id: _to_zone(zone) for zone in raw.zones}),
+        elements=MappingProxyType({element.id: _to_element(element) for element in raw.elements}),
+        aruco_tags=MappingProxyType(
+            {Side.BLUE: raw.aruco_tags.blue, Side.YELLOW: raw.aruco_tags.yellow}
+        ),
+        element_aruco_tags=MappingProxyType(raw.aruco_tags.elements),
     )
 
 
@@ -158,9 +181,6 @@ def load_arena(path: Path) -> Arena:
 
 # Schema of arena.json: lengths in mm, angles in degrees.
 
-_Id = Annotated[str, msgspec.Meta(min_length=1)]
-_PositiveMm = Annotated[float, msgspec.Meta(gt=0)]
-_NonNegativeMm = Annotated[float, msgspec.Meta(ge=0)]
 _Tags = frozenset[Annotated[int, msgspec.Meta(ge=0)]]
 
 
@@ -171,15 +191,15 @@ class _PoseFile(msgspec.Struct, forbid_unknown_fields=True):
 
 
 class _SizeFile(msgspec.Struct, forbid_unknown_fields=True):
-    length_mm: _PositiveMm
-    width_mm: _PositiveMm
-    height_mm: _PositiveMm
+    length_mm: Positive
+    width_mm: Positive
+    height_mm: Positive
 
 
 class _CircleFile(msgspec.Struct, forbid_unknown_fields=True):
     x: float
     y: float
-    radius: _PositiveMm
+    radius: Positive
 
 
 class _RectFile(msgspec.Struct, forbid_unknown_fields=True):
@@ -187,44 +207,44 @@ class _RectFile(msgspec.Struct, forbid_unknown_fields=True):
 
     x: float
     y: float
-    length: _PositiveMm
-    width: _PositiveMm
+    length: Positive
+    width: Positive
     theta_deg: float
 
 
 class _ZoneFile(msgspec.Struct, forbid_unknown_fields=True):
-    id: _Id
+    id: Id
     kinds: Annotated[frozenset[ZoneKind], msgspec.Meta(min_length=1)]
     owner: Side | None  # required: null for a shared zone, never by omission
-    mirror_id: _Id
+    mirror_id: Id
     # Exactly one shape.
     polygon_mm: Annotated[list[tuple[float, float]], msgspec.Meta(min_length=3)] | None = None
     circle_mm: _CircleFile | None = None
     rect_mm: _RectFile | None = None
-    height_mm: _NonNegativeMm = 0.0
+    height_mm: NonNegative = 0.0
     tags: frozenset[str] = frozenset()
     robot_poses: list[_PoseFile] = []
 
 
 class _ElementFile(msgspec.Struct, forbid_unknown_fields=True):
-    id: _Id
-    kind: _Id
+    id: Id
+    kind: Id
     pose: _PoseFile
     size: _SizeFile
-    mirror_id: _Id
+    mirror_id: Id
 
 
 class _ArucoTagsFile(msgspec.Struct, forbid_unknown_fields=True):
     blue: _Tags
     yellow: _Tags
-    elements: dict[_Id, _Tags] = {}  # by element kind
+    elements: dict[Id, _Tags] = {}  # by element kind
 
 
 class _ArenaFile(msgspec.Struct, forbid_unknown_fields=True):
-    width_mm: _PositiveMm
-    depth_mm: _PositiveMm
-    border_thickness_mm: _NonNegativeMm
-    border_height_mm: _NonNegativeMm
+    width_mm: Positive
+    depth_mm: Positive
+    border_thickness_mm: NonNegative
+    border_height_mm: NonNegative
     aruco_tags: _ArucoTagsFile
     zones: list[_ZoneFile]
     elements: list[_ElementFile]
@@ -232,11 +252,8 @@ class _ArenaFile(msgspec.Struct, forbid_unknown_fields=True):
 
 def _check_ids(collection: str, entries: list[tuple[str, str]]) -> None:
     """Check that ids are unique and that each mirror_id points to an entry that points back."""
-    mirror_of: dict[str, str] = {}
-    for i, (entry_id, mirror_id) in enumerate(entries):
-        if entry_id in mirror_of:
-            raise field_error(f"$.{collection}[{i}].id", "duplicate id", entry_id)
-        mirror_of[entry_id] = mirror_id
+    check_unique_ids(collection, (entry_id for entry_id, _ in entries))
+    mirror_of = dict(entries)
     for i, (entry_id, mirror_id) in enumerate(entries):
         path = f"$.{collection}[{i}].mirror_id"
         if mirror_id not in mirror_of:

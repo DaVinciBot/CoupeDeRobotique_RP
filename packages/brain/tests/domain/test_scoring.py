@@ -5,7 +5,7 @@ from typing import Any
 import msgspec
 import pytest
 
-from dvb_brain.domain.json_schema import SchemaError
+from dvb_brain.domain.decoding import SchemaError
 from dvb_brain.domain.scoring import load_scoring, parse_scoring
 
 TEMPLATE_SCORING = Path(__file__).parents[4] / "editions" / "_template" / "scoring.json"
@@ -33,6 +33,16 @@ def test_parse_scoring_reads_points_and_phases() -> None:
     assert scoring.points == {"crate_delivered": 3, "robot_parked": 10}
     assert list(scoring.points) == ["crate_delivered", "robot_parked"]  # file order
     assert scoring.phase_starts == {"final": 70.0}
+
+
+def test_parsed_scoring_is_read_only_and_hashable() -> None:
+    scoring = parse_scoring(encode(valid_document()))
+    mappings: list[Any] = [scoring.points, scoring.phase_starts]
+
+    for mapping in mappings:
+        with pytest.raises(TypeError):
+            mapping["new"] = 1
+    assert {scoring: "cached"}[scoring] == "cached"  # equal only to itself
 
 
 DELETE = object()

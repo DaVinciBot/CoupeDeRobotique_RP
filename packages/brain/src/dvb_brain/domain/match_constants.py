@@ -6,11 +6,11 @@ phases of a match, belong to the edition (domain/scoring.py).
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Annotated, Literal
+from typing import Literal
 
 import msgspec
 
-from dvb_brain.domain.json_schema import SchemaError, decode_json
+from dvb_brain.domain.decoding import Positive, SchemaError, decode_json
 from dvb_brain.domain.units import mm_to_m
 
 
@@ -39,11 +39,9 @@ def load_match_constants(path: Path) -> MatchConstants:
 
 # Schema of match.json: lengths in mm, times in s.
 
-_Positive = Annotated[float, msgspec.Meta(gt=0)]
-
 
 class _MatchFile(msgspec.Struct, forbid_unknown_fields=True):
     schema_version: Literal[1]
     kind: Literal["cdr.match"]
-    duration_s: _Positive
-    max_height_mm: _Positive
+    duration_s: Positive
+    max_height_mm: Positive

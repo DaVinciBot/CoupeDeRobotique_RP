@@ -19,8 +19,8 @@ from dvb_brain.domain.arena import (
     load_arena,
     parse_arena,
 )
+from dvb_brain.domain.decoding import SchemaError
 from dvb_brain.domain.geometry import Pose, Vec2, angle_diff
-from dvb_brain.domain.json_schema import SchemaError
 from dvb_brain.domain.symmetry import (
     check_symmetry,
     mirror_element_id,
