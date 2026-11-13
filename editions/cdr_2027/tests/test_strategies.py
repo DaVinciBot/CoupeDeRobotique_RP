@@ -18,7 +18,7 @@ EDITION = Path(__file__).parents[1]
 STRATEGIES = sorted((EDITION / "strategies").glob("*.strategy.json"))
 MATCH_CONFIG = EDITION.parents[1] / "config" / "match.json"
 
-# Action types of TODO 7.1, until the edition registers its actions (TODO 2.7, 7.1).
+# Action types of TODO 7.1, until the edition registers its actions (TODO 7.1, ADR 0006).
 ACTION_TYPES = frozenset(
     {"pick_stones", "build_wall", "build_tower", "build_gate", "raise_grail", "shoot_balls"}
 )

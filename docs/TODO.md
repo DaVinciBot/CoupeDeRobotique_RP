@@ -52,7 +52,7 @@ Checklist de tout ce qu'il faut faire pour le robot principal, dans l'ordre où 
 - [x] `.pre-commit-config.yaml` : ruff format, ruff check, pyright (hook local).
 - [ ] `clang-format` pour le firmware, vérifié en CI.
 - [x] Contrôles du socle :
-  - [x] règles import-linter (`[tool.importlinter]` du `pyproject.toml` racine) : le socle n'importe jamais `editions.*` ; `domain` n'importe ni `services`, ni `adapters`, ni `app`, ni asyncio ;
+  - [x] règles import-linter (`[tool.importlinter]` du `pyproject.toml` racine) : le socle n'importe jamais `editions.*` ; `domain` n'importe ni `services`, ni `adapters`, ni `app`, ni asyncio ; couches du brain dans l'ordre de la section 5.3, `services` et `adapters` indépendants (ADR 0008) ;
   - [x] `tools/core_check/theme_words.py` : cherche les mots du thème dans le socle (`pierre`, `stone`, `graal`, `grail`, `catapulte`, `château`, `castle`…) et échoue s'il en trouve (0) ;
   - [x] `tools/core_check/theme_coordinates.py` : recherche des coordonnées du thème dans le socle, d'après les `arena.json` des éditions.
 
@@ -123,18 +123,18 @@ Checklist de tout ce qu'il faut faire pour le robot principal, dans l'ordre où 
 
 ### 2.7 Interface `Edition`
 
-- [ ] `Protocol` `Edition` (section 0) : `id`, `arena`, `register_actions`, `rules`, `sim_elements`.
-- [ ] `MatchRules` générique : `is_action_allowed(action, world, t)`, `forbidden_zones(world)`, `end_zones(side)`.
-- [ ] Chargement par nom depuis la config (`"edition": "cdr_2027"`) via `importlib`.
+- [x] `Protocol` `Edition` (section 0) dans `app/edition.py` : `id`, `arena`, `scoring`, `rules` (ADR 0006). `register_actions` arrive avec le registre (7.1), `sim_elements` avec la simulation (11.1).
+- [x] `MatchRules` générique dans `domain/match_rules.py` : `end_zones(side)`. `is_action_allowed` et `forbidden_zones` arrivent avec le `WorldSnapshot` (7.2).
+- [x] Chargement par nom via `importlib` : `load_edition("cdr_2027")` appelle le `load()` du module et vérifie son `id`. `editions` est installé par le projet racine du workspace. Le nom sera lu dans la config en 9.1.
 
 ### 2.8 Machine à états du match — `domain/match_fsm.py`
 
-- [ ] `MatchState(Enum)` : `IDLE`, `INIT`, `READY`, `CALIBRATING`, `ARMED`, `RUNNING`, `ENDING`, `FINISHED`, `FAULT` (11.1).
-- [ ] `MatchEvent` : `LAUNCH`, `CHECKS_OK`, `CALIBRATE`, `ARM`, `DISARM`, `CORD_PULLED`, `END_BUDGET`, `T_END`, `FAULT(reason)`.
-- [ ] `transition(state, event) -> MatchState | Refused(reason)` avec une table explicite et `match`.
-- [ ] Depuis `ARMED`, seuls `DISARM` et `CORD_PULLED` ; `CORD_PULLED` ignoré dans tout autre état (RG F.6, faux départ RG H.4).
-- [ ] `FAULT` atteignable depuis tous les états, sortie seulement par relance manuelle.
-- [ ] Test exhaustif : chaque paire (état, événement) a un résultat attendu.
+- [x] `MatchState(Enum)` : `IDLE`, `INIT`, `READY`, `CALIBRATING`, `ARMED`, `RUNNING`, `ENDING`, `FINISHED`, `FAULT` (11.1).
+- [x] `MatchEvent` : `LAUNCH`, `CHECKS_OK`, `CALIBRATE`, `ARM`, `DISARM`, `CORD_PULLED`, `END_BUDGET`, `T_END` ; `Fault(reason)` à part, avec sa raison (ADR 0007).
+- [x] `transition(state, event) -> MatchState | Refused(reason)` avec une table explicite et `match` (ADR 0007). `T_END` termine aussi `RUNNING` (RG H.3) ; un nouveau `CALIBRATE` relance un recalage raté.
+- [x] Depuis `ARMED`, seuls `DISARM` et `CORD_PULLED` ; `CORD_PULLED` ignoré dans tout autre état (RG F.6, faux départ RG H.4).
+- [x] `FAULT` atteignable depuis tous les états non finaux, sortie seulement par relance manuelle : `FAULT` et `FINISHED` sont terminaux et refusent tout, une panne comprise, et la relance passe par une nouvelle exécution du brain (ADR 0007).
+- [x] Test exhaustif : chaque paire (état, événement) a un résultat attendu.
 
 ---
 
@@ -145,7 +145,7 @@ Checklist de tout ce qu'il faut faire pour le robot principal, dans l'ordre où 
 - [ ] `Clock` Protocol : `now()` (monotone, s), `async sleep(dt)`, `async sleep_until(t)`.
 - [ ] `SystemClock` (`time.monotonic`, `asyncio.sleep`).
 - [ ] `FakeClock` : `advance(dt)` réveille les `sleep` dans l'ordre.
-- [ ] `MatchClock` (domain) : `start(t0)`, `elapsed()`, `remaining()`, `is_attack_phase()`. Une seule instance, démarrée à la tirette (RG H.2).
+- [ ] `MatchClock` (domain, sans lecture d'horloge, ADR 0008) : démarrée à `t0`, `elapsed(now)`, `remaining(now)`, `in_phase(phase_id, now)` d'après `Scoring.phase_starts`. Une seule instance, démarrée à la tirette (RG H.2).
 
 ### 3.2 `Watch[T]` — `ports/watch.py`
 
@@ -153,7 +153,7 @@ Checklist de tout ce qu'il faut faire pour le robot principal, dans l'ordre où 
 
 ### 3.3 `MotionPort`
 
-- [ ] Types : `MoveKind` (`ROTATE_BY`, `ROTATE_TO`, `STRAIGHT`, `GOTO`, `PUSH_UNTIL_BLOCKED`), `MoveCommand` (`move_id`, `kind`, paramètres SI, `max_speed`, `max_accel`), `MotionState` (`MOVING`, `ARRIVED`, `BLOCKED`, `STOPPED`), `MotionStatus` (`move_id`, `state`, `pose`, `v`, `omega`, `emergency_stop`, `teensy_time`, `boot_id`), `StopMode` (`SMOOTH`, `URGENT`).
+- [ ] Types dans `domain/motion.py` (ADR 0008) : `MoveKind` (`ROTATE_BY`, `ROTATE_TO`, `STRAIGHT`, `GOTO`, `PUSH_UNTIL_BLOCKED`), `MoveCommand` (`move_id`, `kind`, paramètres SI, `max_speed`, `max_accel`), `MotionState` (`MOVING`, `ARRIVED`, `BLOCKED`, `STOPPED`), `MotionStatus` (`move_id`, `state`, `pose`, `v`, `omega`, `emergency_stop`, `teensy_time`, `boot_id`), `StopMode` (`SMOOTH`, `URGENT`).
 - [ ] `MotionPort` : `async move(cmd) -> MotionResult`, `async stop(mode)`, `async reset_pose(pose)`, `status() -> Watch[MotionStatus]`, `link_ok()`.
 
 ### 3.4 Contrat brain ↔ Teensy moteur — `docs/adr/0003-motion-protocol.md`
@@ -167,7 +167,7 @@ Checklist de tout ce qu'il faut faire pour le robot principal, dans l'ordre où 
 ### 3.5 Autres ports
 
 - [ ] `ActuatorPort` : `async command(actuator_id, position_name, timeout) -> ActuatorResult` (`DONE`, `BLOCKED`, `TIMEOUT`), `async release_all()`, `state(actuator_id)`, `sensor(name) -> Watch[bool]`.
-- [ ] `LidarPort` : `tracks() -> Watch[TrackSet]` ; `Track(id, center, radius, velocity, confirmed)`.
+- [ ] `LidarPort` : `tracks() -> Watch[TrackSet]` ; `Track(id, center, radius, velocity, confirmed)` et `TrackSet` dans `domain/world.py` (ADR 0008).
 - [ ] `RemoteVisionPort` : `observations() -> Watch[RemoteObservations]`, `async send(event)`.
 - [ ] `StartSwitchPort` : `inserted()`, `async wait_pulled()`.
 - [ ] `TelemetryPort` : `publish(topic, msg)` non bloquant, jeté si personne n'écoute.
@@ -189,8 +189,8 @@ Checklist de tout ce qu'il faut faire pour le robot principal, dans l'ordre où 
 - [ ] `Source(StrEnum)` : `ODOMETRY`, `LIDAR`, `REMOTE`, `STRATEGY`, `CONFIG`.
 - [ ] `Observed[T]` (5.5) : `value`, `stamp`, `source`, `age(now)`, `is_fresh(now, ttl)`.
 - [ ] `ElementState` générique : `present`, `taken`, `placed_at`, `carried_by_us`, `confidence`, `tags`.
-- [ ] `WorldSnapshot` : `t`, `robot_pose`, `robot_velocity`, `opponents`, `elements`, `our_constructions`, `carrying`, `lidar_alive`, `remote_alive`.
-- [ ] `WorldModel`, seul à écrire : `update_odometry`, `update_tracks`, `update_remote`, `mark_element`, `add_construction`, `snapshot()` en O(1).
+- [ ] `WorldSnapshot` (`domain/world.py`, comme tout le modèle du monde, ADR 0008) : `t`, `robot_pose`, `robot_velocity`, `opponents`, `elements`, `our_constructions`, `carrying`, `lidar_alive`, `remote_alive`.
+- [ ] `WorldModel`, seul à écrire : `update_odometry`, `update_tracks`, `update_remote`, `mark_element`, `add_construction`, `snapshot()` en O(1). Pas de lecture d'horloge : chaque mise à jour porte sa date. Un snapshot n'est jamais modifié après coup (nouvelles collections à chaque mise à jour).
 - [ ] Durées de vie dans `robot.json` (pistes lidar 0,3 s, calcul déporté 0,3 s, éléments vus 2 s).
 - [ ] Règles de fusion explicites : lidar pour l'évitement, calcul déporté pour identifier les robots et l'état des éléments.
 - [ ] Historique d'odométrie sur 2 s, `pose_at(t)` par interpolation (8.3).
@@ -272,10 +272,12 @@ Checklist de tout ce qu'il faut faire pour le robot principal, dans l'ordre où 
 - [ ] Handler : `async (ctx: ActionContext, action: Action) -> ActionResult` ; contexte = actionneurs, monde, navigator, horloge.
 - [ ] `ActionResult` : `DONE`, `FAILED(reason)`, `SKIPPED(reason)`, plus les mises à jour du monde.
 - [ ] Actions génériques `wait` et `noop` dans le socle.
+- [ ] `Edition.register_actions(registry)` (ADR 0006) ; le test des stratégies 2027 lit les types d'action dans le registre.
 - [ ] Actions 2027 dans `editions/cdr_2027/actions.py` : `pick_stones`, `build_wall`, `build_tower`, `build_gate`, `raise_grail`, `shoot_balls`, d'abord avec des séquences plausibles, puis les séquences réelles quand les mécanismes sont figés.
 
 ### 7.2 Garde-fous du règlement — `editions/cdr_2027/rules.py`
 
+- [ ] `MatchRules.is_action_allowed(action, world, t)` et `MatchRules.forbidden_zones(world)` dans le socle, avec le `WorldSnapshot` de la section 4, qui doit donc être dans `domain/` (ADR 0006).
 - [ ] Vol de pierres refusé tant qu'une carrière n'est pas vide, et jamais en détruisant le château adverse (RJ E.1).
 - [ ] Au plus 3 pierres stockées dans notre cour (RJ E.1).
 - [ ] Graal porté → interdit de sortir de la cour et des remparts ; Graal adverse jamais déplacé (RJ E.2.b).
@@ -306,7 +308,7 @@ Checklist de tout ce qu'il faut faire pour le robot principal, dans l'ordre où 
 ### 8.1 `MatchManager` — `services/match_manager.py`
 
 - [ ] `INIT` : attente des liens, envoi des réglages d'asservissement (5.6), vérification du profil `match` et de l'absence de ressource simulée (4.5).
-- [ ] `CALIBRATING` : recalage contre deux bordures puis `RESET_POSE`, objectif < 30 s (préparation de 3 min, RG H.1) ; robot entièrement dans la salle du trône ensuite (RJ D.3.b).
+- [ ] `CALIBRATING` : recalage contre deux bordures puis `RESET_POSE`, objectif < 30 s (préparation de 3 min, RG H.1) ; robot entièrement dans la salle du trône ensuite (RJ D.3.b). Un nouveau `CALIBRATE` recommence un recalage raté (ADR 0007).
 - [ ] `ARMED` : tirette en place exigée, anti-rebond 50 ms, seul le front « retirée » compte.
 - [ ] `RUNNING` : `MatchClock.start()` au front, envoi du départ au calcul déporté (× 3), lancement de l'exécuteur et de la fin de match.
 - [ ] Minuteur de fin indépendant de la stratégie : à 100 s moins `hard_stop_margin_s`, `stop(URGENT)`, `release_all`, plus aucune commande (RG H.3 ; −50 pts si le robot bouge encore, RG H.4).
@@ -331,7 +333,7 @@ Checklist de tout ce qu'il faut faire pour le robot principal, dans l'ordre où 
 
 ### 9.1 Configuration — `app/config.py`, `config/robot.json`
 
-- [ ] Schéma msgspec (5.6) : `edition`, `profile`, géométrie du robot (rayon, empreinte, position et hauteur du lidar), numéros de série des Teensy, navigation, évitement, durées de vie, asservissement, actionneurs, réel / simulé / désactivé par sous-système.
+- [ ] Schéma msgspec (5.6) : `edition`, `profile`, géométrie du robot (rayon, empreinte, position et hauteur du lidar), numéros de série des Teensy, navigation, évitement, durées de vie, asservissement, actionneurs, réel / simulé / désactivé par sous-système. Décodé vers des dataclasses SI de `domain/`, que reçoivent les services (ADR 0008).
 - [ ] Chargement au lancement, jamais à l'import.
 - [ ] Validations croisées : profil `match` ⇒ tout réel sauf le calcul déporté, évitement actif.
 - [ ] Erreur lisible qui nomme le champ (`navigation.avoidance.wait_s: expected >= 0, got -1`).
@@ -341,6 +343,7 @@ Checklist de tout ce qu'il faut faire pour le robot principal, dans l'ordre où 
 
 - [ ] `build_ports(cfg) -> Ports` selon le profil (`match`, `test`, `sim`, `replay`) : seul endroit qui sait quel adaptateur est branché.
 - [ ] `run_brain(ports, cfg)` avec `asyncio.TaskGroup`.
+- [ ] Édition chargée au lancement par `load_edition(cfg.edition)`, ses actions enregistrées ; les services reçoivent ses morceaux, jamais l'`Edition` (ADR 0006).
 - [ ] Commande `dvb-brain --config --profile --strategy --side`.
 - [ ] Tirette virtuelle en profil `test` uniquement (4.5).
 
@@ -373,6 +376,7 @@ Checklist de tout ce qu'il faut faire pour le robot principal, dans l'ordre où 
 - [ ] Pas de temps fixe (5 ms), temps simulé ou réel, graine fixée.
 - [ ] État : notre robot, adversaires, éléments de jeu (`Edition.sim_elements()`), score estimé.
 - [ ] Collisions comptées.
+- [ ] `Edition.sim_elements()` : type `SimElements` du socle, implémenté par chaque édition (ADR 0006).
 
 ### 11.2 Base roulante simulée
 

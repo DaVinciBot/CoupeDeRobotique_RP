@@ -27,7 +27,7 @@ Le thème change chaque année, mais le code doit resservir. On sépare donc un 
 | Dans le socle | Dans le module d'édition |
 | --- | --- |
 | Règlement général : match de 100 s, tirette, BAU, évitement obligatoire, homologation | Règles de jeu de l'année : phase d'attaque après 85 s, interdits (Graal hors du château, vol de pierres, 3 pierres max dans la cour), zone d'arrivée, barème |
-| Dashboard, éditeur de stratégie, carte, logs, configuration | `arena.json` : table, zones (départ, arrivée, interdite, construction…), éléments de jeu, symétries, barème, tags ArUco |
+| Dashboard, éditeur de stratégie, carte, logs, configuration | `arena.json` : table, zones (départ, arrivée, interdite, construction…), éléments de jeu, symétries, tags ArUco ; `scoring.json` : barème et phases du match (ADR 0005) |
 | Brain : processus, modèle du monde, navigation, évitement, exécution des stratégies, sûreté | Actions de jeu (`pick_stones`, `build_tower`…) en Python, par-dessus l'API des actionneurs |
 | Format `cdr.strategy` et ses champs génériques | Stratégies de l'année (`strategies/`) |
 | Simulation : base roulante, lidar, adversaires | Comportement des éléments de jeu en simulation, score estimé |
@@ -37,12 +37,15 @@ Le thème change chaque année, mais le code doit resservir. On sépare donc un 
 
 ```python
 class Edition(Protocol):
-    id: str                                         # "cdr_2027"
+    id: str                                         # "cdr_2027", name of the folder
     arena: Arena                                    # loaded from arena.json
+    scoring: Scoring                                # loaded from scoring.json: points, phases
     def register_actions(self, registry: ActionRegistry) -> None: ...
-    def rules(self) -> MatchRules: ...              # phases, guards, end zone
+    def rules(self) -> MatchRules: ...              # guards, forbidden zones, end zone
     def sim_elements(self) -> SimElements: ...      # game element behaviour and scoring
 ```
+
+Cette interface se construit avec le socle : `register_actions` arrive avec le registre d'actions, `sim_elements` avec la simulation ([ADR 0006](adr/0006-edition-interface.md)).
 
 - **Le socle n'importe jamais un module d'édition** : c'est la config qui choisit l'édition (`"edition": "cdr_2027"`). La CI le vérifie (import-linter).
 - **Aucun mot du thème ni coordonnée 2027 en dur dans le socle** (« pierre », « Graal »…) : la CI cherche ces mots et échoue.
@@ -280,6 +283,8 @@ Jamais de données modifiables partagées entre threads : le code reste compatib
 | `ports` | `MotionPort`, `ActuatorPort`, `LidarPort`, `RemoteVisionPort`, `StartSwitchPort`, `Clock` | Interfaces (`typing.Protocol`) |
 | `adapters` | Teensy série, lidar, calcul déporté ; simulation ; rejeu de logs ; faux matériel | Les ports |
 | `app` | Lancement et choix des adaptateurs selon le profil (`match`, `test`, `sim`, `replay`) | Tout |
+
+Les types de valeurs qui passent par les ports (commandes de mouvement, statuts, pistes lidar) et le modèle du monde sont dans `domain` ; `ports` ne contient que les interfaces. La CI vérifie ces couches avec import-linter ([ADR 0008](adr/0008-brain-layers.md)).
 
 L'horloge est un port : en simulation, un match se joue en quelques secondes et les tests sont reproductibles.
 
@@ -632,10 +637,12 @@ stateDiagram-v2
     IDLE --> INIT: lancer
     INIT --> READY: checks OK
     READY --> CALIBRATING: Recaler
+    CALIBRATING --> CALIBRATING: Recaler
     CALIBRATING --> ARMED: Armer (tirette en place, checks verts)
     ARMED --> READY: Désarmer
     ARMED --> RUNNING: tirette
     RUNNING --> ENDING: budget fin
+    RUNNING --> FINISHED: T = 100 s
     ENDING --> FINISHED: T = 100 s
     RUNNING --> FAULT: exception, Teensy muette, BAU
     note right of FAULT: STOP + posture de défaut, relance manuelle
@@ -643,7 +650,7 @@ stateDiagram-v2
 
 *Machine à états du match · 9 états*
 
-Depuis `ARMED`, seul « Désarmer » est possible (retour à `READY`). Seule la tirette physique mène à `RUNNING` (RG F.6).
+Depuis `ARMED`, seul « Désarmer » est possible (retour à `READY`). Seule la tirette physique mène à `RUNNING` (RG F.6). Une panne mène à `FAULT` depuis tout état non final, pas seulement depuis `RUNNING`. `FINISHED` et `FAULT` refusent tout ; un nouveau match passe par une nouvelle exécution du brain. Table complète : [ADR 0007](adr/0007-match-state-machine.md).
 
 ### 11.2 Défaillances
 
