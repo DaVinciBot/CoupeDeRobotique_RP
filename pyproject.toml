@@ -85,6 +85,7 @@ forbidden_modules = [
     "dvb_brain.adapters",
     "dvb_brain.app",
     "asyncio",
+    "datetime",
     "io",
     "os",
     "pathlib",

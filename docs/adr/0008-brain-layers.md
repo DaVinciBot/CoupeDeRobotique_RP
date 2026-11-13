@@ -20,7 +20,7 @@ En ajoutant la vérification de toutes les couches, on voit que le plan de la TO
 
 **Un contrat import-linter `layers`** dans le `pyproject.toml` racine : `app`, puis `adapters` et `services`, puis `ports`, puis `domain`. Chaque couche n'importe que les couches du dessous. `adapters` et `services` s'ignorent : seul `app` sait quel adaptateur est branché (CLAUDE.md).
 
-**`domain` ne lit ni fichier, ni horloge, ni appareil.** Il décode des octets (`parse_arena(data)`, `parse_scoring(data)`…) et reçoit l'heure en argument. La lecture d'un fichier est dans `app/files.py` : `load_file(path, parse_arena)` lit le fichier, le décode et ajoute son chemin au message d'une `SchemaError`. Les éditions s'en servent dans leur `load()`. Le contrat de pureté de `domain`, qui interdisait déjà `asyncio`, interdit aussi `io`, `os`, `pathlib`, `socket`, `subprocess`, `threading` et `time`.
+**`domain` ne lit ni fichier, ni horloge, ni appareil.** Il décode des octets (`parse_arena(data)`, `parse_scoring(data)`…) et reçoit l'heure en argument. La lecture d'un fichier est dans `app/files.py` : `load_file(path, parse_arena)` lit le fichier, le décode et ajoute son chemin au message d'une `SchemaError`. Les éditions s'en servent dans leur `load()`. Le contrat de pureté de `domain`, qui interdisait déjà `asyncio`, interdit aussi `datetime`, `io`, `os`, `pathlib`, `socket`, `subprocess`, `threading` et `time`.
 
 **Place des types** :
 

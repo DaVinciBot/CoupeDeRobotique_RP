@@ -13,10 +13,12 @@ from dvb_brain.app.files import load_file
 from dvb_brain.domain.arena import Arena, ElementSpec, Side, ZoneKind
 from dvb_brain.domain.geometry import Vec2
 from dvb_brain.domain.strategy_model import mirror_strategy, parse_strategy
+from dvb_brain.domain.symmetry import mirror_side
 
 EDITIONS = Path(__file__).parents[1]
 NAMES = sorted(path.parent.name for path in EDITIONS.glob("*/__init__.py"))
 TOLERANCE = 1e-9  # rounding of the mm to m conversion
+AREA_TOLERANCE = 1e-9  # m², zones that only share a side
 
 
 @pytest.fixture(scope="module", params=NAMES)
@@ -60,9 +62,13 @@ def test_everything_is_on_the_table(edition: Edition) -> None:
 
 def test_end_zones_are_never_in_the_opponent_areas(edition: Edition, side: Side) -> None:
     # RG H.4: entering an exclusive area of the opponent is a forfeit.
+    opponent_areas = edition.arena.zones_of(ZoneKind.EXCLUSIVE_OPPONENT, mirror_side(side))
     for zone in edition.rules().end_zones(side):
         assert ZoneKind.END in zone.kinds, zone.id
         assert zone.owner in (side, None), zone.id
+        for area in opponent_areas:
+            overlap = zone.polygon.intersection(area.polygon).area
+            assert overlap < AREA_TOLERANCE, f"{zone.id} overlaps {area.id}"
 
 
 def test_homologation_leaves_the_start_zone_does_an_action_and_ends(
