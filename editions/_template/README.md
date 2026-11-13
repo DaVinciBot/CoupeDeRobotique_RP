@@ -39,4 +39,6 @@ La PR qui ajoute un type ou un schéma au socle met à jour le fichier correspon
 8. Ajouter les mots du nouveau thème à `THEME_WORDS` dans `tools/core_check/theme_words.py`, pour que la CI les refuse dans le socle.
 9. Choisir l'édition dans `config/robot.json`.
 
+Les tests de `editions/tests/` vérifient toute édition sans rien écrire : chargement par son nom et symétrie de la table, zones et éléments sur la table, zones d'arrivée hors des aires adverses (RG H.4), forme de la stratégie d'homologation (RG I.3.b). Les tests propres au thème (cotes du plan, barème) vont dans `editions/cdr_<année>/tests/`.
+
 Les anciens modules d'édition restent dans le dépôt, pour pouvoir rejouer leurs logs et leurs stratégies.

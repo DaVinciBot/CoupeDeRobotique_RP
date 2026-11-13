@@ -1,12 +1,14 @@
-"""Checks of the 2027 strategies against the table, the actions and the rules (RG I.3.b)."""
+"""Checks of the 2027 strategies against the table and the actions.
+
+The shape of the homologation strategy (RG I.3.b) is checked for every edition in editions/tests.
+"""
 
 from pathlib import Path
 
 import pytest
 
 from dvb_brain.app.files import load_file
-from dvb_brain.domain.arena import Arena, Side, ZoneKind, parse_arena
-from dvb_brain.domain.geometry import Vec2
+from dvb_brain.domain.arena import Arena, parse_arena
 from dvb_brain.domain.match_constants import MatchConstants, parse_match_constants
 from dvb_brain.domain.strategy_model import (
     Strategy,
@@ -45,10 +47,6 @@ def check(strategy: Strategy, arena: Arena, match: MatchConstants) -> None:
     )
 
 
-def in_zone_of(arena: Arena, kind: ZoneKind, side: Side, point: Vec2) -> bool:
-    return any(arena.contains(zone.id, point) for zone in arena.zones_of(kind, side))
-
-
 @pytest.mark.parametrize("path", STRATEGIES, ids=lambda path: path.name)
 def test_strategy_passes_the_checks_on_both_sides(
     path: Path, arena: Arena, match: MatchConstants
@@ -57,19 +55,3 @@ def test_strategy_passes_the_checks_on_both_sides(
 
     check(strategy, arena, match)
     check(mirror_strategy(strategy, arena), arena, match)
-
-
-@pytest.mark.parametrize("side", [Side.BLUE, Side.YELLOW])
-def test_homologation_leaves_the_start_zone_does_an_action_and_comes_back(
-    side: Side, arena: Arena
-) -> None:
-    # RG I.3.b: leave the start zone and validate at least one action.
-    strategy = load_file(EDITION / "strategies" / "homologation.strategy.json", parse_strategy)
-    if strategy.side is not side:
-        strategy = mirror_strategy(strategy, arena)
-    positions = [step.move.position for step in strategy.steps]
-
-    assert in_zone_of(arena, ZoneKind.START, side, positions[0])
-    assert not all(in_zone_of(arena, ZoneKind.START, side, p) for p in positions)
-    assert any(step.actions for step in strategy.steps)
-    assert in_zone_of(arena, ZoneKind.END, side, positions[-1])  # RJ E.3
