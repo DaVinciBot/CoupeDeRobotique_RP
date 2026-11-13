@@ -2,6 +2,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 SCRIPT = Path(__file__).parents[1] / "theme_words.py"
 
 
@@ -32,6 +34,26 @@ def test_accented_word_is_reported(tmp_path: Path) -> None:
 
     assert result.returncode == 1
     assert 'theme word "chateau"' in result.stdout
+
+
+@pytest.mark.parametrize(
+    ("line", "word"),
+    [
+        ('label = "Écuries"', "ecurie"),
+        ("camelot_gate = 1", "camelot"),
+        ("king_arthur = 1", "arthur"),
+        ('name = "Chevalier"', "chevalier"),
+        ("knight_count = 2", "knight"),
+    ],
+)
+def test_words_of_the_2027_theme_are_reported(tmp_path: Path, line: str, word: str) -> None:
+    source = tmp_path / "labels.py"
+    source.write_text(line + "\n", encoding="utf-8")
+
+    result = run(source)
+
+    assert result.returncode == 1
+    assert f'theme word "{word}"' in result.stdout
 
 
 def test_generic_words_pass(tmp_path: Path) -> None:

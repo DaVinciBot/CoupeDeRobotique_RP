@@ -440,7 +440,7 @@ Trois mécanismes indépendants : **un graphe de visibilité** pour trouver le c
 
 ### 8.1 Carte
 
-- La table est décrite dans `editions/cdr_2027/arena.json` (bordures, carrières, remparts, douves, cours, salles du trône, plateforme du calcul déporté, écuries) ; le côté jaune est le symétrique du bleu.
+- La table est décrite dans `editions/cdr_2027/arena.json` (bordures, carrières, remparts, douves, cours, salles du trône, écuries) ; le côté jaune est le symétrique du bleu. La plateforme du calcul déporté, hors de l'aire de jeu, n'y est pas ([ADR 0002](adr/0002-arena-format.md)).
 - **Zones adverses interdites.** Entrer dans une « aire adverse à accès exclusif » donne un forfait (RG H.4). On interdit remparts, cour et salle du trône adverses.
 - Obstacles gonflés du rayon du robot + une marge (20 mm pour commencer) avec shapely : le robot devient un point.
 

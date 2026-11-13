@@ -5,19 +5,21 @@ phases of a match, belong to the edition (domain/scoring.py).
 """
 
 from dataclasses import dataclass
-from pathlib import Path
-from typing import Annotated, Literal
+from typing import Literal
 
 import msgspec
 
-from dvb_brain.domain.json_schema import SchemaError, decode_json
+from dvb_brain.domain.decoding import Positive, decode_json
 from dvb_brain.domain.units import mm_to_m
 
 
 @dataclass(frozen=True, slots=True)
 class MatchConstants:
     duration: float  # s, from the start cord to the end of the match (RG H.2)
-    max_height: float  # m, robot and handled objects, at any time (RG F.3)
+    # m, robot and handled objects, at any time (RG F.3). The rule tolerates the emergency stop
+    # button up to 375 mm and does not count the beacon mast; the rules of the year may let a
+    # released game element go higher in some zones, never an actuator.
+    max_height: float
 
 
 def parse_match_constants(data: bytes) -> MatchConstants:
@@ -29,21 +31,11 @@ def parse_match_constants(data: bytes) -> MatchConstants:
     return MatchConstants(duration=raw.duration_s, max_height=mm_to_m(raw.max_height_mm))
 
 
-def load_match_constants(path: Path) -> MatchConstants:
-    """Read a match.json file. At startup only: this blocks on the disk."""
-    try:
-        return parse_match_constants(path.read_bytes())
-    except SchemaError as error:
-        raise SchemaError(f"{path}: {error}") from error
-
-
 # Schema of match.json: lengths in mm, times in s.
-
-_Positive = Annotated[float, msgspec.Meta(gt=0)]
 
 
 class _MatchFile(msgspec.Struct, forbid_unknown_fields=True):
     schema_version: Literal[1]
     kind: Literal["cdr.match"]
-    duration_s: _Positive
-    max_height_mm: _Positive
+    duration_s: Positive
+    max_height_mm: Positive

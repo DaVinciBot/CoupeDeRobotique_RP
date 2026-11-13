@@ -5,18 +5,25 @@ pi - theta. Zones and elements find their symmetric through their mirror_id.
 """
 
 import math
+from typing import overload
 
 from shapely import Polygon
 from shapely.affinity import scale
 
 from dvb_brain.domain.arena import Arena, Side
+from dvb_brain.domain.decoding import SchemaError
 from dvb_brain.domain.geometry import Pose, Vec2, angle_diff, normalize_angle
-from dvb_brain.domain.json_schema import SchemaError
 
 # Rounding error of the mm to m conversion, not a property of the table.
 _TOLERANCE = 1e-6
 
 
+@overload
+def mirror_side(side: Side) -> Side: ...
+@overload
+def mirror_side(side: None) -> None: ...
+@overload
+def mirror_side(side: Side | None) -> Side | None: ...
 def mirror_side(side: Side | None) -> Side | None:
     """Return the other side; a shared owner (None) stays shared."""
     match side:

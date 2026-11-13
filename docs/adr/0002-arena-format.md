@@ -36,7 +36,7 @@ Le chargeur convertit chaque forme en polygone. Un cercle devient un polygone in
 
 **Aire de jeu seulement.** Le fichier ne décrit que l'aire de jeu (0 ≤ x ≤ largeur, 0 ≤ y ≤ profondeur). La plateforme du calcul déporté (RG G.4) et les supports de balises fixes (RG G.3), posés sur les bordures ou derrière, n'y figurent pas. Le robot ne peut pas les atteindre, et le lidar ignore déjà les points hors table.
 
-**Erreurs.** Une erreur de chargement nomme le champ, avec son chemin JSON, et la valeur fautive. Par exemple : `editions/cdr_2027/arena.json: $.zones[2].id: duplicate id, got 'blue_start'`. Les champs inconnus sont refusés. Le même décodage (`dvb_brain.domain.json_schema`) servira aux stratégies (2.6) et à la config (9.1).
+**Erreurs.** Une erreur de chargement nomme le champ, avec son chemin JSON, et la valeur fautive. Par exemple : `editions/cdr_<année>/arena.json: $.zones[2].id: duplicate id, got 'blue_start'`. Les champs inconnus sont refusés. Le même décodage (`dvb_brain.domain.decoding`) servira aux stratégies (2.6) et à la config (9.1). Le chemin du fichier est ajouté par `dvb_brain.app.files.load_file` : `domain` ne lit pas de fichier ([ADR 0008](0008-brain-layers.md)).
 
 Exemple de zone :
 

@@ -5,8 +5,8 @@ from typing import Any
 import msgspec
 import pytest
 
-from dvb_brain.domain.json_schema import SchemaError
-from dvb_brain.domain.scoring import load_scoring, parse_scoring
+from dvb_brain.domain.decoding import SchemaError
+from dvb_brain.domain.scoring import parse_scoring
 
 TEMPLATE_SCORING = Path(__file__).parents[4] / "editions" / "_template" / "scoring.json"
 
@@ -33,6 +33,16 @@ def test_parse_scoring_reads_points_and_phases() -> None:
     assert scoring.points == {"crate_delivered": 3, "robot_parked": 10}
     assert list(scoring.points) == ["crate_delivered", "robot_parked"]  # file order
     assert scoring.phase_starts == {"final": 70.0}
+
+
+def test_parsed_scoring_is_read_only_and_hashable() -> None:
+    scoring = parse_scoring(encode(valid_document()))
+    mappings: list[Any] = [scoring.points, scoring.phase_starts]
+
+    for mapping in mappings:
+        with pytest.raises(TypeError):
+            mapping["new"] = 1
+    assert {scoring: "cached"}[scoring] == "cached"  # equal only to itself
 
 
 DELETE = object()
@@ -81,20 +91,8 @@ def test_parse_scoring_rejects_a_duplicate_phase() -> None:
         parse_scoring(encode(document))
 
 
-def test_load_scoring_error_names_the_file(tmp_path: Path) -> None:
-    path = tmp_path / "scoring.json"
-    document = valid_document()
-    document["items"][0]["points"] = -2
-    path.write_bytes(encode(document))
-
-    with pytest.raises(SchemaError) as error:
-        load_scoring(path)
-
-    assert str(error.value).startswith(f"{path}: $.items[0].points:")
-
-
 def test_template_scoring_loads() -> None:
-    scoring = load_scoring(TEMPLATE_SCORING)
+    scoring = parse_scoring(TEMPLATE_SCORING.read_bytes())
 
     assert scoring.points == {}
     assert scoring.phase_starts == {}

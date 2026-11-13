@@ -9,7 +9,7 @@ from shapely import box
 
 from dvb_brain.app.edition import EditionError, load_edition
 from dvb_brain.domain.arena import Arena, Side, Zone, ZoneKind
-from dvb_brain.domain.json_schema import SchemaError
+from dvb_brain.domain.decoding import SchemaError
 from dvb_brain.domain.match_rules import MatchRules
 from dvb_brain.domain.scoring import Scoring
 

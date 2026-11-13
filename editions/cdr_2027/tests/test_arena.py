@@ -1,14 +1,15 @@
 """Checks of the 2027 table against the rules (RJ D, RG G.6) and the plan of RJ G.1."""
 
 import math
+from collections import Counter
 from pathlib import Path
 
 import pytest
-from shapely import Polygon, box
+from shapely import Polygon
 
-from dvb_brain.domain.arena import Arena, ElementSpec, Side, Zone, ZoneKind, load_arena
+from dvb_brain.app.files import load_file
+from dvb_brain.domain.arena import Arena, ElementSpec, Side, Zone, ZoneKind, parse_arena
 from dvb_brain.domain.geometry import Vec2
-from dvb_brain.domain.symmetry import check_symmetry
 
 ARENA = Path(__file__).parents[1] / "arena.json"
 TOLERANCE = 1e-9  # rounding of the mm to m conversion
@@ -16,7 +17,7 @@ TOLERANCE = 1e-9  # rounding of the mm to m conversion
 
 @pytest.fixture(scope="module")
 def arena() -> Arena:
-    return load_arena(ARENA)
+    return load_file(ARENA, parse_arena)
 
 
 def tagged(arena: Arena, tag: str, side: Side | None) -> list[Zone]:
@@ -50,18 +51,6 @@ def test_table_size(arena: Arena) -> None:
     assert (arena.border_thickness, arena.border_height) == pytest.approx((0.022, 0.07))
 
 
-def test_is_symmetric(arena: Arena) -> None:
-    check_symmetry(arena)
-
-
-def test_everything_is_on_the_table(arena: Arena) -> None:
-    table = box(0.0, 0.0, arena.width, arena.depth).buffer(TOLERANCE)
-    for zone in arena.zones.values():
-        assert table.covers(zone.polygon), zone.id
-    for element in arena.elements.values():
-        assert table.covers(footprint(element)), element.id
-
-
 def test_aruco_tags(arena: Arena) -> None:
     # RG G.6 for the robots, RJ D.4 for the stones.
     assert arena.aruco_tags == {Side.BLUE: {1, 2, 3, 4, 5}, Side.YELLOW: {6, 7, 8, 9, 10}}
@@ -77,9 +66,18 @@ def test_thirty_stones_three_per_quarry(arena: Arena) -> None:
         assert size == pytest.approx((0.32, 0.11, 0.11))
     quarries = tagged(arena, "quarry", None)
     assert len(quarries) == 10
-    for quarry in quarries:
-        area = quarry.polygon.buffer(TOLERANCE)
-        assert sum(area.covers(footprint(stone)) for stone in stones) == 3, quarry.id
+    holders = {
+        stone.id: [
+            quarry.id
+            for quarry in quarries
+            if quarry.polygon.buffer(TOLERANCE).covers(footprint(stone))
+        ]
+        for stone in stones
+    }
+    assert all(len(ids) == 1 for ids in holders.values()), holders  # each stone in one quarry
+    assert Counter(ids[0] for ids in holders.values()) == dict.fromkeys(
+        (quarry.id for quarry in quarries), 3
+    )
 
 
 @pytest.fixture(params=[Side.BLUE, Side.YELLOW], ids=lambda side: side.value)

@@ -8,14 +8,20 @@ check_strategy what needs the table, the actions of the edition and the match du
 from collections.abc import Collection
 from dataclasses import dataclass, replace
 from enum import StrEnum, auto
-from pathlib import Path
-from typing import Annotated, Literal
+from typing import Literal
 
 import msgspec
 
 from dvb_brain.domain.arena import Arena, Side
+from dvb_brain.domain.decoding import (
+    Id,
+    NonNegative,
+    Positive,
+    check_unique_ids,
+    decode_json,
+    field_error,
+)
 from dvb_brain.domain.geometry import Pose, Vec2, normalize_angle
-from dvb_brain.domain.json_schema import SchemaError, decode_json, field_error
 from dvb_brain.domain.symmetry import mirror_element_id, mirror_point, mirror_pose, mirror_side
 from dvb_brain.domain.units import deg_to_rad, mm_to_m
 
@@ -103,11 +109,8 @@ def parse_strategy(data: bytes) -> Strategy:
     the value.
     """
     raw = decode_json(data, _StrategyFile)
-    step_ids: set[str] = set()
-    for i, step in enumerate(raw.steps):
-        if step.id in step_ids:
-            raise field_error(f"$.steps[{i}].id", "duplicate id", step.id)
-        step_ids.add(step.id)
+    check_unique_ids("steps", (step.id for step in raw.steps))
+    step_ids = {step.id for step in raw.steps}
     steps = tuple(_to_step(f"$.steps[{i}]", step) for i, step in enumerate(raw.steps))
     for i, step in enumerate(steps):
         match step.on_timeout:
@@ -126,14 +129,6 @@ def parse_strategy(data: bytes) -> Strategy:
     )
 
 
-def load_strategy(path: Path) -> Strategy:
-    """Read a cdr.strategy file. At startup only: this blocks on the disk."""
-    try:
-        return parse_strategy(path.read_bytes())
-    except SchemaError as error:
-        raise SchemaError(f"{path}: {error}") from error
-
-
 def check_strategy(
     strategy: Strategy,
     *,
@@ -144,7 +139,8 @@ def check_strategy(
 ) -> None:
     """Check a strategy against the table, the action types of the edition and the match.
 
-    Raise a SchemaError that names the field of the file and the value.
+    Raise a SchemaError that names the field of the file and the value. The value is the one
+    of the strategy, in SI: a check on a length or an angle must convert it back for the message.
     """
     if strategy.arena_id != arena_id:
         raise field_error("$.arena_id", f"expected {arena_id!r}", strategy.arena_id)
@@ -165,8 +161,6 @@ def mirror_strategy(strategy: Strategy, arena: Arena) -> Strategy:
 
     Check the strategy first: each element_id must be known by the arena.
     """
-    side = mirror_side(strategy.side)
-    assert side is not None  # the side of a strategy is never shared
     steps = tuple(
         replace(
             step,
@@ -175,7 +169,7 @@ def mirror_strategy(strategy: Strategy, arena: Arena) -> Strategy:
         )
         for step in strategy.steps
     )
-    return replace(strategy, side=side, steps=steps)
+    return replace(strategy, side=mirror_side(strategy.side), steps=steps)
 
 
 def _mirror_move(move: Move, table_width: float) -> Move:
@@ -193,10 +187,6 @@ def _mirror_action(action: Action, arena: Arena) -> Action:
 
 # Schema of a cdr.strategy file: lengths in mm, angles in degrees, times in s, speeds in m/s.
 
-_Id = Annotated[str, msgspec.Meta(min_length=1)]
-_Positive = Annotated[float, msgspec.Meta(gt=0)]
-_NonNegative = Annotated[float, msgspec.Meta(ge=0)]
-
 
 class _UnitsFile(msgspec.Struct, forbid_unknown_fields=True):
     """Units of the file: the only ones the loader converts."""
@@ -208,41 +198,41 @@ class _UnitsFile(msgspec.Struct, forbid_unknown_fields=True):
 
 
 class _ToleranceFile(msgspec.Struct, forbid_unknown_fields=True):
-    position_mm: _Positive = 20.0
-    angle_deg: _Positive = 3.0
+    position_mm: Positive = 20.0
+    angle_deg: Positive = 3.0
 
 
 class _MoveFile(msgspec.Struct, forbid_unknown_fields=True):
     x_mm: float
     y_mm: float
-    speed_mps: _Positive
+    speed_mps: Positive
     theta_deg: float | None = None
     mode: MoveMode = MoveMode.FORWARD
     tolerance: _ToleranceFile = msgspec.field(default_factory=_ToleranceFile)
 
 
 class _ActionFile(msgspec.Struct, forbid_unknown_fields=True):
-    type: _Id
-    duration_s: _NonNegative
-    actuator_id: _Id | None = None
-    element_id: _Id | None = None
+    type: Id
+    duration_s: NonNegative
+    actuator_id: Id | None = None
+    element_id: Id | None = None
     score_delta: int = 0
 
 
 class _StepFile(msgspec.Struct, forbid_unknown_fields=True):
-    id: _Id
+    id: Id
     label: str
     move: _MoveFile
     actions: list[_ActionFile]
-    timeout_s: _NonNegative  # 0: no limit
+    timeout_s: NonNegative  # 0: no limit
     on_timeout: str  # skip, abort or goto:<step id>
-    not_before_s: _NonNegative | None = None
+    not_before_s: NonNegative | None = None
 
 
 class _MetadataFile(msgspec.Struct, forbid_unknown_fields=True):
     """Filled by the strategy editor, never used to decide."""
 
-    estimated_time_s: _NonNegative = 0.0
+    estimated_time_s: NonNegative = 0.0
     estimated_score: int = 0
     saved_at: str = ""
 
@@ -250,11 +240,11 @@ class _MetadataFile(msgspec.Struct, forbid_unknown_fields=True):
 class _StrategyFile(msgspec.Struct, forbid_unknown_fields=True):
     schema_version: Literal[1]
     kind: Literal["cdr.strategy"]
-    name: _Id
-    arena_id: _Id
+    name: Id
+    arena_id: Id
     side: Side
     units: _UnitsFile
-    end_reserve_s: _NonNegative
+    end_reserve_s: NonNegative
     steps: list[_StepFile]
     metadata: _MetadataFile = msgspec.field(default_factory=_MetadataFile)
 
