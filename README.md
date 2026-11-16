@@ -64,6 +64,7 @@ Les firmwares et le dashboard n'ont pas encore rejoint `dev` : leurs commandes s
 ## Structure du dépôt
 
 ```text
+├── .claude/           # Claude Code : hook, skill de revue, agents de relecture (ADR 0009)
 ├── packages/          # paquets Python du workspace uv, chacun avec src/ et tests/
 │   ├── brain/         # dvb_brain : domain/ services/ ports/ adapters/ app/
 │   ├── common_msgs/   # dvb_common_msgs : messages entre processus
@@ -78,7 +79,7 @@ Les firmwares et le dashboard n'ont pas encore rejoint `dev` : leurs commandes s
 ├── editions/          # un module par thème annuel, _template/ pour en démarrer un
 ├── config/            # configuration du robot (robot.json)
 ├── deploy/            # installation sur la Pi (systemd, nginx, udev)
-├── tools/             # outils de CI (core_check)
+├── tools/             # outils de CI (core_check) et revue avant push (review_gate)
 └── docs/              # architecture, TODO, ADR (docs/adr/)
 ```
 

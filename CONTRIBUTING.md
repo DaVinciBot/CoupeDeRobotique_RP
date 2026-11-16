@@ -64,6 +64,21 @@ Le document de référence est [docs/ARCHITECTURE RP 2027.md](docs/ARCHITECTURE%
 - rédigé en français, ajouté dans la PR qui applique la décision et cité dans sa description ;
 - un ADR mergé ne se réécrit pas : une nouvelle décision fait un nouvel ADR, qui indique celui qu'il remplace.
 
+## Travailler avec Claude Code
+
+Le dossier `.claude/` est versionné ([ADR 0009](docs/adr/0009-claude-review-before-push.md)) :
+
+| Fichier | Rôle |
+| --- | --- |
+| `.claude/settings.json` | Hook `tools/review_gate/review_gate.py` sur les commandes `git` et `gh` ; tampons protégés en écriture ; aucune signature de Claude |
+| `.claude/skills/review-branch/` | Revue détaillée avant push : contrôles, relectures indépendantes par agents, corrections, rapport, tampon |
+| `.claude/agents/dvb-*.md` | Agents de relecture du projet : conformité à la demande (`dvb-request-reviewer`), architecture et solidité pour la suite (`dvb-architecture-reviewer`) |
+
+- **Revue avant push.** Claude ne peut lancer ni `git push` ni `gh pr create` tant que le commit HEAD n'a pas de tampon de revue (`.git/dvb-review/<sha>.md`, jamais versionné). Le tampon s'obtient par la skill `review-branch`, qui finit par `uv run python tools/review_gate/review_gate.py stamp --report <rapport>`. Les personnes ne sont pas concernées : un push lancé depuis son propre terminal ne passe pas par le hook.
+- **Aucune signature de Claude.** Le hook refuse un commit, un push, une PR ou une issue dont le texte met Claude en co-auteur ou en signataire.
+- **Version.** Claude Code 2.1.295 ou plus récent (`onFailure` des hooks). `uv sync --frozen` doit avoir été lancé : le hook passe par uv.
+- **Plugins recommandés.** Le CLAUDE.md (section 5) utilise les skills et agents suivants quand ils sont installés, avec un repli sinon : `superpowers` et `feature-dev` (marketplace officielle `claude-plugins-official`), `andrej-karpathy-skills` (marketplace `forrestchang/andrej-karpathy-skills`), `voltagent-qa-sec` et `voltagent-domains` (marketplace `VoltAgent/awesome-claude-code-subagents`). Installation dans Claude Code : `/plugin marketplace add <dépôt>`, puis `/plugin install <plugin>@<marketplace>`.
+
 ## Règles automatiques
 
 - Pas de push direct sur `dev` ni sur `main` : tout passe par une PR.

@@ -736,6 +736,7 @@ Un seul dépôt pour le robot principal, toutes éditions confondues. Les paquet
 
 ```text
 davincibot-robot/
+├── .claude/                  # Claude Code: review hook, review-branch skill, reviewer agents (ADR 0009)
 ├── pyproject.toml            # uv workspace
 ├── packages/
 │   ├── usb_com/              # Pi <-> Teensy protocol (C++ + Python), COBS + CRC-16
@@ -756,7 +757,8 @@ davincibot-robot/
 │   └── robot.json            # robot configuration (validated at load)
 ├── deploy/                   # systemd units, nginx.conf, udev rules, NetworkManager profiles
 ├── tools/
-│   └── core_check/           # CI: theme-word scan of the core (import rules: pyproject.toml)
+│   ├── core_check/           # CI: theme-word scan of the core (import rules: pyproject.toml)
+│   └── review_gate/          # Claude Code: review stamp required before push (ADR 0009)
 └── docs/
     └── adr/                  # one short file per architecture decision
 ```
@@ -770,6 +772,7 @@ davincibot-robot/
 | Types | **pyright** strict | Rapide, bon support des `Protocol` ; ty à surveiller |
 | Tests | **pytest** + Hypothesis + pytest-asyncio | Fixtures pour injecter ports et horloge simulés |
 | Hooks locaux | **pre-commit** (ruff, pyright) | On corrige avant de pousser |
+| Revue avant push | **Claude Code** : skill `review-branch`, agents de relecture, hook `review_gate` (ADR 0009) | Ce que Claude pousse est relu contre la demande, l'architecture et le règlement |
 | CI | **GitHub Actions** | Dépôt déjà sur GitHub |
 | Front | **pnpm**, TypeScript strict, ESLint, Vitest | Types des messages générés depuis Python |
 | Firmware | **PlatformIO**, clang-format, tests du codec sur PC | Déjà en place, compilé en CI |
