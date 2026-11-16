@@ -17,7 +17,7 @@ Le hook `tools/review_gate/review_gate.py` (ADR 0009) refuse `git push` et `gh p
    - **la demande, mot pour mot** : les messages de la personne qui décrivent le travail (et leurs précisions ultérieures), pas un résumé ;
    - les cases de `docs/TODO.md` concernées ;
    - les sections de `docs/ARCHITECTURE RP 2027.md` et les ADR de `docs/adr/` concernés ;
-   - les règles du règlement concernées (RG v1.3, RJ v1.0, PDF dans `docs/`), s'il y a du comportement en match ;
+   - les règles du règlement concernées (versions et fichiers : CLAUDE.md, « Sources de vérité »), s'il y a du comportement en match ;
    - la liste des fichiers modifiés : `git diff --stat <base>...HEAD`.
 
 ## 1. Contrôles automatiques
@@ -50,7 +50,7 @@ Lancer les agents **en parallèle, dans un seul message**. Chacun reçoit le mê
 
 | Quand | Agent préféré | Repli s'il n'est pas disponible |
 | --- | --- | --- |
-| Toujours | `dvb-request-reviewer` et `dvb-architecture-reviewer` (agents du projet, `.claude/agents/`) | — |
+| Toujours | `dvb-request-reviewer` et `dvb-architecture-reviewer` (agents du projet, `.claude/agents/`) | Session ouverte avant leur ajout : `general-purpose`, à qui l'on demande de lire `.claude/agents/<nom>.md` et de le suivre |
 | Code Python ou C++ modifié | `voltagent-qa-sec:surgeon-reviewer` | `feature-dev:code-reviewer`, sinon `general-purpose` |
 | Tests ajoutés ou modifiés, ou code sans test | `voltagent-qa-sec:qa-expert` | `general-purpose` |
 | `firmware/`, `packages/usb_com/`, contrat brain ↔ Teensy | `voltagent-domains:embedded-systems` | `general-purpose` |
@@ -105,16 +105,16 @@ Puis :
 uv run python tools/review_gate/review_gate.py stamp --report <rapport>
 ```
 
-`stamp` relance les contrôles de la CI sur HEAD, vérifie les six sections et enregistre le tampon dans `.git/dvb-review/<sha>.md`. Tout nouveau commit après le tampon demande une nouvelle revue de ce qui a changé.
+`stamp` relance les étapes `uv run` de la CI sur HEAD (pas les jobs firmware et dashboard : ils sont lancés à l'étape 1), vérifie les six sections et enregistre le tampon dans `.git/dvb-review/<sha>.md`. Tout nouveau commit après le tampon demande une nouvelle revue de ce qui a changé.
 
 ## 7. Pousser et ouvrir la PR
 
-`git push`, puis `gh pr create` vers `dev`. La description de PR suit `.github/pull_request_template.md` ; sa section « Revue avant push » résume le rapport (agents utilisés, écarts corrigés, points ouverts).
+`git push`, puis `gh pr create` vers `dev`, chacun seul dans sa commande, depuis le dossier du dépôt et pour la branche courante : le hook refuse un push combiné à un `cd`, à un `git commit` ou à une autre branche. La description de PR suit `.github/pull_request_template.md` ; sa section « Revue avant push » résume le rapport (agents utilisés, écarts corrigés, points ouverts).
 
 ## Interdits
 
 - Écrire ou copier un tampon autrement que par `stamp`.
-- Contourner le hook (`bash -c`, alias, autre outil, autre chemin vers git).
+- Contourner le hook (`gh api`, outil MCP GitHub, alias, autre outil).
 - Alléger la revue sans le dire dans le rapport.
 - Mettre Claude en co-auteur ou en signataire, où que ce soit.
 

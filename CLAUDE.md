@@ -129,6 +129,7 @@ Un agent de relecture reçoit la demande mot pour mot et le diff, jamais ses pro
 **Ce qui part sur GitHub est vérifié, cohérent et testé, pas seulement « ça marche maintenant ».**
 
 - Avant tout `git push` et toute `gh pr create`, suivre la skill `review-branch` : contrôles, relecture de tout le diff, relectures indépendantes par agents, corrections, rapport, tampon. Un hook (`.claude/settings.json`, `tools/review_gate/`, ADR 0009) refuse le push ou la PR tant que le commit HEAD n'a pas de tampon.
+- Pousser et ouvrir la PR seulement par `git push` et `gh pr create`, seuls dans leur commande, pour la branche courante, depuis le dossier du dépôt. Jamais par un outil MCP GitHub ni `gh api`.
 - La revue répond à quatre questions. La branche fait-elle exactement la demande, rien de plus ? Est-elle cohérente avec l'architecture, les ADR, le règlement et les invariants de sûreté ? Est-elle testée hors robot ? Les cases suivantes de `docs/TODO.md` pourront-elles s'appuyer dessus sans la réécrire ?
 - Le résumé du rapport va dans la section « Revue avant push » de la PR.
 - Interdit : écrire un tampon autrement que par `review_gate.py stamp`, contourner le hook, alléger la revue sans le dire. Une personne qui veut pousser sans revue le fait elle-même, depuis son terminal.
