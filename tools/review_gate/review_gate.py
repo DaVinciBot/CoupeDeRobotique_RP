@@ -60,12 +60,17 @@ ATTRIBUTION = re.compile(
     re.IGNORECASE,
 )
 
-# A heredoc body is data, not shell: it is dropped before parsing (its text is still scanned).
+# A heredoc body is data, not shell, unless it feeds a shell: it is dropped before parsing (its
+# text is still scanned for signatures).
 HEREDOC = re.compile(
     r"(?P<head><<-?[ \t]*(?P<quote>['\"]?)(?P<tag>\w+)(?P=quote)[^\n]*\n)(?s:.*?)"
     r"^[ \t]*(?P=tag)[ \t]*$",
     re.MULTILINE,
 )
+SHELL_FED = re.compile(r"(?:^|[\s|;&(/])(?:bash|sh|zsh|eval|source)(?=\s|<|$)")
+# Quoted strings, escapes and comments of a shell line, to drop the comments (# starting a word).
+SHELL_PIECES = re.compile(r"'[^']*'|\"(?:\\.|[^\"\\])*\"|\\.|#[^\n]*|[^'\"\\#]+|.", re.DOTALL)
+WORD_START = frozenset(" \t\n;&|()<>")
 # Used only when the parser fails, to know whether the command publishes.
 PUBLISH = re.compile(r"\bgit\b[^\n;&|]*\bpush\b|\bgh\b[^\n;&|]*\bpr\s+(?:create|new)\b")
 
@@ -75,7 +80,7 @@ REDIRECTIONS = frozenset("<>&")  # a token made of these chars redirects: it and
 ASSIGNMENT = re.compile(r"[A-Za-z_][A-Za-z0-9_]*=")
 WRAPPERS = frozenset(
     {"builtin", "command", "env", "exec", "nice", "nohup", "noglob", "stdbuf", "sudo", "time"}
-    | {"timeout", "xargs"}
+    | {"timeout"}
 )
 SHELLS = frozenset({"bash", "sh", "zsh"})
 SHELL_COMMAND_FLAG = re.compile(r"-[a-z]*c[a-z]*")  # bash -c, bash -lc...
@@ -94,6 +99,7 @@ PUSH_UNFOLLOWED = frozenset({"--all", "--branches", "--mirror", "--tags", "--del
 
 GH_OPTIONS_WITH_VALUE = frozenset({"-R", "--repo"})
 GH_PULL_REQUEST = frozenset({("pr", "create"), ("pr", "new")})
+GH_MERGE = ("pr", "merge")
 GH_TEXT_COMMANDS = GH_PULL_REQUEST | {
     ("issue", "comment"),
     ("issue", "create"),
@@ -122,6 +128,9 @@ Le contrôle de revue ne suit que `git push` et `gh pr create` lancés pour la b
 depuis le dossier de la session, dans une commande qui ne déplace pas HEAD. Les lancer seuls,
 après la revue du HEAD à publier (skill review-branch). Ne pas contourner ce contrôle."""
 
+MERGE_REFUSED = """Merge refusé : une PR se merge après la relecture d'une autre personne
+(CONTRIBUTING.md, « Pull requests »). La laisser à la personne."""
+
 MCP_REFUSED = """Outil {tool} refusé : il publie sur GitHub sans passer par la revue (ADR 0009).
 Pousser avec `git push` et ouvrir la PR avec `gh pr create`, après la skill review-branch."""
 
@@ -139,6 +148,7 @@ class Analysis:
     """What a shell command does that the gate cares about."""
 
     publishes: bool  # git push or gh pr create
+    merges: bool  # gh pr merge
     pushes: bool  # git push: its commits are scanned for signatures
     readable: bool  # False when the syntax defeats the parser: publishes then comes from PUBLISH
     moves_head: bool  # git commit, rebase...: HEAD would change before the publication
@@ -182,24 +192,20 @@ def simple_commands(command: str) -> list[list[str]] | None:
 
     None when the line defeats the parser (a quote left open outside a heredoc, for example).
     """
-    text = drop_heredoc_bodies(command).replace("`", " ; ")
-    lexer = shlex.shlex(text, posix=True, punctuation_chars=PUNCTUATION)
+    lexer = shlex.shlex(shell_text(command), posix=True, punctuation_chars=PUNCTUATION)
     lexer.whitespace = " \t\r"
     lexer.whitespace_split = True
-    lexer.commenters = ""  # shlex comments differ from the shell's: handled below
+    lexer.commenters = ""  # shlex comments differ from the shell's: shell_text drops them
     try:
         tokens = list(lexer)
     except ValueError:
         return None
     groups: list[list[str]] = [[]]
-    comment = redirected = False
+    redirected = False
     for token in tokens:
         if set(token) <= SEPARATORS:
-            comment = comment and "\n" not in token
             redirected = False
             groups.append([])
-        elif comment or token.startswith("#"):
-            comment = True
         elif set(token) <= REDIRECTIONS:
             if groups[-1] and groups[-1][-1].isdigit():
                 groups[-1].pop()  # the file descriptor of 2>&1
@@ -260,16 +266,27 @@ def positionals(words: list[str], options: frozenset[str]) -> list[str]:
     return found
 
 
-def drop_heredoc_bodies(command: str) -> str:
-    return HEREDOC.sub(lambda match: match["head"], command)
+def shell_text(command: str) -> str:
+    """The command without its heredoc bodies (unless they feed a shell) and its comments, with
+    each command substitution in backquotes made a command of its own."""
+
+    def body(match: re.Match[str]) -> str:
+        line = command[command.rfind("\n", 0, match.start()) + 1 : match.end("head")]
+        return match[0] if SHELL_FED.search(line) else match["head"]
+
+    kept: list[str] = []
+    for piece in SHELL_PIECES.findall(HEREDOC.sub(body, command)):
+        if not (piece.startswith("#") and (not kept or kept[-1][-1] in WORD_START)):
+            kept.append(piece)
+    return "".join(kept).replace("`", " ; ")
 
 
 def analyze(command: str) -> Analysis:
     commands = simple_commands(command)
     if commands is None:
-        publishes = bool(PUBLISH.search(drop_heredoc_bodies(command)))
-        return Analysis(publishes, publishes, False, False, (), (), (), True, ())
-    publishes = pushes = moves_head = writes_text = False
+        publishes = bool(PUBLISH.search(shell_text(command)))
+        return Analysis(publishes, False, publishes, False, False, (), (), (), True, ())
+    publishes = merges = pushes = moves_head = writes_text = False
     directories: list[str] = []
     unfollowed: list[str] = []
     revisions: list[str] = []
@@ -279,6 +296,9 @@ def analyze(command: str) -> Analysis:
         if program in DIRECTORY_COMMANDS:
             moves_back = program == "popd" or (program == "pushd" and len(words) == 1)
             directories.append("-" if moves_back else words[1] if len(words) > 1 else "~")
+        if program == "xargs" and PUBLISH.search(" ".join(words)):
+            publishes = True
+            unfollowed.append("xargs")  # what it publishes comes from stdin
         options, arguments = split_program(words, "git", GIT_OPTIONS_WITH_VALUE)
         directories += option_values(options, ("-C",))
         unfollowed += [word for word in options if word.split("=", 1)[0] in GIT_UNFOLLOWED]
@@ -296,11 +316,13 @@ def analyze(command: str) -> Analysis:
             publishes = True
             heads = option_values(gh_arguments, ("-H", "--head"))
             revisions += [head.rsplit(":", 1)[-1] for head in heads] or ["HEAD"]
+        merges |= tuple(gh_arguments[:2]) == GH_MERGE
         if tuple(gh_arguments[:2]) in GH_TEXT_COMMANDS:
             writes_text = True
             text_files += option_values(gh_arguments, TEXT_FILE_OPTIONS)
     return Analysis(
         publishes,
+        merges,
         pushes,
         True,
         moves_head,
@@ -363,6 +385,8 @@ def refusal(command: str, cwd: Path) -> str | None:
         for text in (command, *read_texts(cwd, analysis.text_files)):
             if hit := find_attribution(text):
                 return SIGNATURE_FOUND.format(where="dans le texte", hit=hit)
+    if analysis.merges:
+        return MERGE_REFUSED
     if not analysis.publishes:
         return None
     if problem := form_problem(analysis, cwd):

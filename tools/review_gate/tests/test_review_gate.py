@@ -130,6 +130,10 @@ def run_hook(cwd: Path, command: str) -> subprocess.CompletedProcess[str]:
         "git add a.txt\ngit push",
         "git status; git push 2>&1 | tail -5",
         "git add -A  # stage everything\ngit push",
+        "git add . # don't forget\ngit push",
+        'echo "#x"; git push',
+        "bash <<'EOF'\ngit push\nEOF",
+        "cat <<'EOF' | sh\ngit push\nEOF",
         "env GIT_TRACE=1 git push",
         "env -u FOO git push",
         "timeout 60 git push",
@@ -190,7 +194,7 @@ def test_cd_to_the_same_directory_is_followed(repo: Path) -> None:
         "git push --all",
         "git push --tags",
         "gh pr create --head other --fill",
-        "git add . # don't forget\ngit push",
+        "printf other | xargs git push origin",
     ],
 )
 def test_publication_in_a_form_the_gate_cannot_follow_is_refused(repo: Path, command: str) -> None:
@@ -211,6 +215,9 @@ def test_publication_in_a_form_the_gate_cannot_follow_is_refused(repo: Path, com
         'git commit -m "docs: explain git push"',
         'git commit -m "fix: push handler"',
         "git commit -m wip#1",
+        "git commit -m '#12 fix'",
+        "echo $# arguments",
+        "cat > deploy.sh <<'EOF'\n#!/bin/sh\necho it's\ngit push origin x\nEOF",
         "git commit -F missing.txt",
         "echo git push",
         "git log --oneline",
@@ -224,6 +231,15 @@ def test_publication_in_a_form_the_gate_cannot_follow_is_refused(repo: Path, com
 )
 def test_other_commands_pass(repo: Path, command: str) -> None:
     assert run_hook(repo, command).returncode == 0
+
+
+def test_merge_is_left_to_a_person(repo: Path) -> None:
+    record_review(repo)
+
+    result = run_hook(repo, "gh pr merge 12 --squash")
+
+    assert result.returncode == 2
+    assert "Merge refusé" in result.stderr
 
 
 def test_review_of_an_older_commit_does_not_count(repo: Path) -> None:

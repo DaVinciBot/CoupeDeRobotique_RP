@@ -28,6 +28,7 @@ Le hook `tools/review_gate/review_gate.py` refuse :
 - `git push` et `gh pr create` (ou `gh pr new`) tant qu'il n'existe pas de tampon `.git/dvb-review/<sha>.md` pour le commit HEAD ;
 - un push ou une PR sous une forme qu'il ne sait pas suivre : autre dossier (`cd`, `git -C`), autre branche que la branche courante, `--all` ou `--tags`, HEAD déplacé dans la même commande (`git commit … && git push`), syntaxe qu'il ne sait pas lire. Claude lance alors le push seul, depuis le dossier du dépôt ;
 - un outil MCP GitHub qui publie (création de PR, push de fichiers, merge) : ces outils ne passent pas par la revue ;
+- `gh pr merge` : une PR se merge après la relecture d'une autre personne (CONTRIBUTING, « Pull requests ») ;
 - un commit, un push, une PR, une issue ou un commentaire dont le texte met Claude en co-auteur ou en signataire (lignes que Claude Code écrit lui-même, pas le prénom Claude).
 
 Le hook voit toutes les commandes Bash, parce que le filtre `if` de Claude Code ne reconnaît pas toutes les formes d'un push (`env … git push`, `bash -c …`) : c'est le script qui décide, et ses tests décrivent exactement ce qui est refusé. En cas d'erreur interne, il refuse plutôt que de laisser passer.
@@ -50,4 +51,4 @@ Le hook ne concerne que Claude : un push lancé par une personne depuis son term
 - Tout commit après le tampon demande une nouvelle revue de ce qui a changé.
 - `stamp` ne relance que les étapes `uv run` de la CI. Les jobs firmware et dashboard sont lancés à la main par la skill quand ils sont touchés ; un nouveau job `uv run` (scénarios de match, TODO 11.5) fait échouer le test de synchronisation tant qu'il n'est pas ajouté à `stamp`.
 - Le hook demande Claude Code 2.1.295 ou plus récent (`onFailure` des hooks) et uv avec Python 3.14.
-- Le hook protège contre l'oubli, pas contre un contournement volontaire : `gh api`, un tampon copié par une commande Bash, un autre outil. Celui-ci est interdit par le `CLAUDE.md`.
+- Le hook protège contre l'oubli, pas contre un contournement volontaire : `gh api`, un alias git, une configuration `remote.<nom>.push`, un tampon copié par une commande Bash, un autre outil. Celui-ci est interdit par le `CLAUDE.md`.
