@@ -226,6 +226,9 @@ def simple_commands(command: str) -> list[list[str]] | None:
         elif program in SHELLS:
             flags = [i for i, word in enumerate(words[:-1]) if SHELL_COMMAND_FLAG.fullmatch(word)]
             inner = simple_commands(words[flags[0] + 1]) if flags else []
+        elif program == "xargs":  # the command it runs gets more arguments from stdin
+            starts = [i for i, word in enumerate(words) if Path(word).name in PROGRAMS]
+            inner = simple_commands(shlex.join(words[starts[0] :])) if starts else []
         else:
             inner = []
         if inner is None:

@@ -233,10 +233,11 @@ def test_other_commands_pass(repo: Path, command: str) -> None:
     assert run_hook(repo, command).returncode == 0
 
 
-def test_merge_is_left_to_a_person(repo: Path) -> None:
+@pytest.mark.parametrize("command", ["gh pr merge 12 --squash", "echo 12 | xargs gh pr merge"])
+def test_merge_is_left_to_a_person(repo: Path, command: str) -> None:
     record_review(repo)
 
-    result = run_hook(repo, "gh pr merge 12 --squash")
+    result = run_hook(repo, command)
 
     assert result.returncode == 2
     assert "Merge refusé" in result.stderr
@@ -300,6 +301,7 @@ def test_other_text_is_not_a_signature(text: str) -> None:
         f"git commit -F - <<'EOF'\nfeat: don't break\n\n{SIGNED}\nEOF",
         'gh pr create --title "feat: b" --body "Done.\n\nGenerated with [Claude Code](https://x)"',
         f"gh issue comment 3 --body '{SIGNED}'",
+        f"xargs -0 git commit -m 'feat: b' -m '{SIGNED}'",
     ],
 )
 def test_text_signed_by_claude_is_refused(repo: Path, command: str) -> None:
