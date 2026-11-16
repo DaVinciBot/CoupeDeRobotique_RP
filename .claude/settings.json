@@ -1,0 +1,35 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "if": "Bash(git *)",
+            "command": "uv run --frozen --quiet python \"$CLAUDE_PROJECT_DIR/tools/review_gate/review_gate.py\" hook",
+            "timeout": 30,
+            "onFailure": "block",
+            "statusMessage": "review_gate : revue et signature"
+          },
+          {
+            "type": "command",
+            "if": "Bash(gh *)",
+            "command": "uv run --frozen --quiet python \"$CLAUDE_PROJECT_DIR/tools/review_gate/review_gate.py\" hook",
+            "timeout": 30,
+            "onFailure": "block",
+            "statusMessage": "review_gate : revue et signature"
+          }
+        ]
+      }
+    ]
+  },
+  "permissions": {
+    "deny": ["Edit(**/.git/dvb-review/**)"]
+  },
+  "attribution": {
+    "commit": "",
+    "pr": "",
+    "sessionUrl": false
+  }
+}
