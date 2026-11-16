@@ -2,23 +2,13 @@
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "Bash",
+        "matcher": "^(Bash|mcp__.*[Gg]it[Hh]ub.*)$",
         "hooks": [
           {
             "type": "command",
-            "if": "Bash(git *)",
-            "command": "uv run --frozen --quiet python \"$CLAUDE_PROJECT_DIR/tools/review_gate/review_gate.py\" hook",
+            "command": "uv run --no-project --quiet python \"$CLAUDE_PROJECT_DIR/tools/review_gate/review_gate.py\" hook",
             "timeout": 30,
-            "onFailure": "block",
-            "statusMessage": "review_gate : revue et signature"
-          },
-          {
-            "type": "command",
-            "if": "Bash(gh *)",
-            "command": "uv run --frozen --quiet python \"$CLAUDE_PROJECT_DIR/tools/review_gate/review_gate.py\" hook",
-            "timeout": 30,
-            "onFailure": "block",
-            "statusMessage": "review_gate : revue et signature"
+            "onFailure": "block"
           }
         ]
       }

@@ -1,15 +1,18 @@
-"""Gate the git and gh commands that Claude Code runs (ADR 0009).
+"""Gate what Claude Code publishes on GitHub (ADR 0009).
 
 Usage:
     review_gate.py hook                  PreToolUse hook of .claude/settings.json: reads the hook
-                                         JSON on stdin; exit code 2 refuses the command, with the
+                                         JSON on stdin; exit code 2 refuses the tool call, with the
                                          reason on stderr.
     review_gate.py stamp --report FILE   Runs the checks of the CI on HEAD and records the review
                                          report as the stamp of HEAD.
 
-The hook refuses:
-- `git push` and `gh pr create` while no review is recorded for HEAD;
-- a commit, a push, a pull request or an issue whose text names Claude as co-author or signer.
+The hook sees every Bash command and the GitHub tools of the MCP servers. It refuses:
+- `git push` and `gh pr create` while no review is recorded for HEAD, or in a form it cannot
+  follow: another directory, another branch, HEAD moved by the same command, unreadable syntax;
+- a push or a pull request made with a GitHub MCP tool, which no review covers;
+- a commit, a push, a pull request, an issue or a comment whose text signs it as Claude.
+It guards against forgetting the review, not against a deliberate bypass (CLAUDE.md, section 6).
 """
 
 import argparse
@@ -25,7 +28,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
-# The python job of .github/workflows/ci.yml, in the same order: a test keeps them in sync.
+# Every `uv run` step of .github/workflows/ci.yml, in the same order: a test keeps them in sync.
 CHECKS: tuple[tuple[str, ...], ...] = (
     ("uv", "run", "--frozen", "ruff", "format", "--check"),
     ("uv", "run", "--frozen", "ruff", "check"),
@@ -49,31 +52,62 @@ REPORT_SECTIONS = (
 # Stamps live in the git directory: never tracked, shared by the worktrees of the clone.
 STAMP_DIR = "dvb-review"
 
-# Claude never signs a commit, a pull request or an issue (CLAUDE.md, "Git et PR").
+# The trailers and footers that Claude Code writes, not any person named Claude.
 ATTRIBUTION = re.compile(
-    r"(?:co-authored-by|signed-off-by):[^\n]*(?:claude|anthropic)|generated with \[?claude code",
+    r"(?:co-authored-by|signed-off-by):[^\n]*"
+    r"(?:@anthropic\.com|\bclaude\s+(?:code|opus|sonnet|haiku|fable)\b)"
+    r"|generated\s+with\s+\[?claude\s+code",
     re.IGNORECASE,
 )
 
+# A heredoc body is data, not shell: it is dropped before parsing (its text is still scanned).
+HEREDOC = re.compile(
+    r"(?P<head><<-?[ \t]*(?P<quote>['\"]?)(?P<tag>\w+)(?P=quote)[^\n]*\n)(?s:.*?)"
+    r"^[ \t]*(?P=tag)[ \t]*$",
+    re.MULTILINE,
+)
+# Used only when the parser fails, to know whether the command publishes.
+PUBLISH = re.compile(r"\bgit\b[^\n;&|]*\bpush\b|\bgh\b[^\n;&|]*\bpr\s+(?:create|new)\b")
+
 PUNCTUATION = ";&|()<>\n"
 SEPARATORS = frozenset(";&|()\n")  # a token made of these chars ends a simple command
+REDIRECTIONS = frozenset("<>&")  # a token made of these chars redirects: it and its target go
 ASSIGNMENT = re.compile(r"[A-Za-z_][A-Za-z0-9_]*=")
-WRAPPERS = frozenset({"builtin", "command", "env", "exec", "nohup", "time"})
-SHELLS = frozenset({"bash", "sh", "zsh"})
-GIT_OPTIONS_WITH_VALUE = frozenset({"-C", "-c", "--git-dir", "--work-tree", "--namespace"})
-GIT_TEXT_COMMANDS = frozenset({"commit", "merge", "notes", "tag"})
-GH_TEXT_COMMANDS = frozenset(
-    {
-        ("issue", "comment"),
-        ("issue", "create"),
-        ("issue", "edit"),
-        ("pr", "comment"),
-        ("pr", "create"),
-        ("pr", "edit"),
-        ("pr", "review"),
-    }
+WRAPPERS = frozenset(
+    {"builtin", "command", "env", "exec", "nice", "nohup", "noglob", "stdbuf", "sudo", "time"}
+    | {"timeout", "xargs"}
 )
+SHELLS = frozenset({"bash", "sh", "zsh"})
+SHELL_COMMAND_FLAG = re.compile(r"-[a-z]*c[a-z]*")  # bash -c, bash -lc...
+PROGRAMS = SHELLS | {"eval", "gh", "git"}  # what a wrapper may run that the gate looks into
+DIRECTORY_COMMANDS = frozenset({"cd", "popd", "pushd"})
+
+GIT_OPTIONS_WITH_VALUE = frozenset({"-C", "-c", "--git-dir", "--work-tree", "--namespace"})
+GIT_UNFOLLOWED = ("--git-dir", "--work-tree")
+GIT_HEAD_MOVERS = frozenset(
+    {"am", "checkout", "cherry-pick", "commit", "merge", "pull", "rebase", "reset", "revert"}
+    | {"switch"}
+)
+GIT_TEXT_COMMANDS = frozenset({"commit", "merge", "notes", "tag"})
+PUSH_OPTIONS_WITH_VALUE = frozenset({"-o", "--push-option", "--receive-pack", "--exec", "--repo"})
+PUSH_UNFOLLOWED = frozenset({"--all", "--branches", "--mirror", "--tags", "--delete", "-d"})
+
+GH_OPTIONS_WITH_VALUE = frozenset({"-R", "--repo"})
+GH_PULL_REQUEST = frozenset({("pr", "create"), ("pr", "new")})
+GH_TEXT_COMMANDS = GH_PULL_REQUEST | {
+    ("issue", "comment"),
+    ("issue", "create"),
+    ("issue", "edit"),
+    ("pr", "comment"),
+    ("pr", "edit"),
+    ("pr", "review"),
+}
 TEXT_FILE_OPTIONS = ("-F", "--file", "--body-file")
+
+MCP_PUBLISH = re.compile(
+    r"__(?:create_pr|create_pull_request|merge_pr|merge_pull_request|push_files"
+    r"|create_or_update_file|delete_file)$"
+)
 
 REVIEW_MISSING = """Revue manquante : aucun tampon de revue pour HEAD {sha}.
 Avant `git push` ou `gh pr create`, suivre la skill review-branch
@@ -83,19 +117,36 @@ corrections, rapport, puis
 Ne pas contourner ce contrôle (CLAUDE.md, section 6). Une personne qui veut pousser sans revue
 le fait elle-même, depuis son terminal."""
 
+FORM_REFUSED = """Push ou PR refusé : {problem}.
+Le contrôle de revue ne suit que `git push` et `gh pr create` lancés pour la branche courante,
+depuis le dossier de la session, dans une commande qui ne déplace pas HEAD. Les lancer seuls,
+après la revue du HEAD à publier (skill review-branch). Ne pas contourner ce contrôle."""
+
+MCP_REFUSED = """Outil {tool} refusé : il publie sur GitHub sans passer par la revue (ADR 0009).
+Pousser avec `git push` et ouvrir la PR avec `gh pr create`, après la skill review-branch."""
+
 SIGNATURE_FOUND = """Signature de Claude refusée {where} : « {hit} ».
 Claude ne se met jamais en co-auteur ni en signataire (CLAUDE.md, « Git et PR »).
 Retirer cette ligne et recommencer."""
+
+GATE_FAILED = """Le contrôle review_gate a échoué ({error}) : commande refusée par prudence.
+La lancer plus simplement (seule, depuis le dossier du dépôt) ; si l'échec persiste, le dire à la
+personne. Ne pas contourner ce contrôle."""
 
 
 @dataclass(frozen=True, slots=True)
 class Analysis:
     """What a shell command does that the gate cares about."""
 
-    pushes: bool
-    opens_pull_request: bool
-    writes_text: bool
-    text_files: tuple[str, ...]
+    publishes: bool  # git push or gh pr create
+    pushes: bool  # git push: its commits are scanned for signatures
+    readable: bool  # False when the syntax defeats the parser: publishes then comes from PUBLISH
+    moves_head: bool  # git commit, rebase...: HEAD would change before the publication
+    directories: tuple[str, ...]  # targets of cd, pushd, popd and git -C
+    unfollowed: tuple[str, ...]  # options the gate cannot follow: --all, --git-dir...
+    revisions: tuple[str, ...]  # what is published: sources of the refspecs, gh --head
+    writes_text: bool  # commit, tag, pull request, issue or comment
+    text_files: tuple[str, ...]  # files read by -F, --file, --body-file
 
 
 def git(repo: Path, *args: str) -> str:
@@ -115,28 +166,46 @@ def find_attribution(text: str) -> str | None:
 
 
 def strip_prefix(words: list[str]) -> list[str]:
-    """Drop the variable assignments and wrappers (env, command...) before the program name."""
+    """The words from the program on: variable assignments and wrappers (env, timeout...) go."""
     i = 0
-    while i < len(words) and (
-        ASSIGNMENT.match(words[i]) or words[i] in WRAPPERS or (i and words[i].startswith("-"))
-    ):
+    while i < len(words) and ASSIGNMENT.match(words[i]):
         i += 1
+    if i < len(words) and Path(words[i]).name in WRAPPERS:
+        # A wrapper has options of its own: what it runs is the next git, gh or shell.
+        programs = (j for j in range(i + 1, len(words)) if Path(words[j]).name in PROGRAMS)
+        return words[next(programs, len(words)) :]
     return words[i:]
 
 
-def simple_commands(command: str) -> list[list[str]]:
-    """Split a shell command line into its simple commands, including those of `bash -c`."""
-    lexer = shlex.shlex(command, posix=True, punctuation_chars=PUNCTUATION)
+def simple_commands(command: str) -> list[list[str]] | None:
+    """The simple commands of a shell line, with those run by `bash -c` and `eval`.
+
+    None when the line defeats the parser (a quote left open outside a heredoc, for example).
+    """
+    text = drop_heredoc_bodies(command).replace("`", " ; ")
+    lexer = shlex.shlex(text, posix=True, punctuation_chars=PUNCTUATION)
     lexer.whitespace = " \t\r"
     lexer.whitespace_split = True
+    lexer.commenters = ""  # shlex comments differ from the shell's: handled below
     try:
         tokens = list(lexer)
-    except ValueError:  # unbalanced quotes: the shell refuses the line too
-        return []
+    except ValueError:
+        return None
     groups: list[list[str]] = [[]]
+    comment = redirected = False
     for token in tokens:
         if set(token) <= SEPARATORS:
+            comment = comment and "\n" not in token
+            redirected = False
             groups.append([])
+        elif comment or token.startswith("#"):
+            comment = True
+        elif set(token) <= REDIRECTIONS:
+            if groups[-1] and groups[-1][-1].isdigit():
+                groups[-1].pop()  # the file descriptor of 2>&1
+            redirected = True
+        elif redirected:
+            redirected = False  # the target of the redirection
         else:
             groups[-1].append(token)
     commands: list[list[str]] = []
@@ -145,22 +214,30 @@ def simple_commands(command: str) -> list[list[str]]:
         if not words:
             continue
         commands.append(words)
-        if Path(words[0]).name in SHELLS:
-            for i, word in enumerate(words[1:-1], start=1):
-                if word.startswith("-") and not word.startswith("--") and "c" in word:
-                    commands += simple_commands(words[i + 1])
-                    break
+        program = Path(words[0]).name
+        if program == "eval":
+            inner = simple_commands(" ".join(words[1:]))
+        elif program in SHELLS:
+            flags = [i for i, word in enumerate(words[:-1]) if SHELL_COMMAND_FLAG.fullmatch(word)]
+            inner = simple_commands(words[flags[0] + 1]) if flags else []
+        else:
+            inner = []
+        if inner is None:
+            return None
+        commands += inner
     return commands
 
 
-def git_arguments(words: list[str]) -> list[str]:
-    """Arguments after `git` and its global options, or [] when the program is not git."""
-    if Path(words[0]).name != "git":
-        return []
+def split_program(
+    words: list[str], program: str, options: frozenset[str]
+) -> tuple[list[str], list[str]]:
+    """Global options and arguments of `program`, or two empty lists for another program."""
+    if Path(words[0]).name != program:
+        return [], []
     i = 1
     while i < len(words) and words[i].startswith("-"):
-        i += 2 if words[i] in GIT_OPTIONS_WITH_VALUE else 1
-    return words[i:]
+        i += 2 if words[i] in options else 1
+    return words[1:i], words[i:]
 
 
 def option_values(words: list[str], options: Sequence[str]) -> list[str]:
@@ -172,22 +249,107 @@ def option_values(words: list[str], options: Sequence[str]) -> list[str]:
     return [value for value in values if value != "-"]
 
 
+def positionals(words: list[str], options: frozenset[str]) -> list[str]:
+    """The words that are neither options nor values of options."""
+    found: list[str] = []
+    i = 0
+    while i < len(words):
+        if not words[i].startswith("-"):
+            found.append(words[i])
+        i += 2 if words[i] in options else 1
+    return found
+
+
+def drop_heredoc_bodies(command: str) -> str:
+    return HEREDOC.sub(lambda match: match["head"], command)
+
+
 def analyze(command: str) -> Analysis:
-    pushes = opens_pull_request = writes_text = False
+    commands = simple_commands(command)
+    if commands is None:
+        publishes = bool(PUBLISH.search(drop_heredoc_bodies(command)))
+        return Analysis(publishes, publishes, False, False, (), (), (), True, ())
+    publishes = pushes = moves_head = writes_text = False
+    directories: list[str] = []
+    unfollowed: list[str] = []
+    revisions: list[str] = []
     text_files: list[str] = []
-    for words in simple_commands(command):
-        arguments = git_arguments(words)
-        gh_command = tuple(words[1:3]) if Path(words[0]).name == "gh" else ()
+    for words in commands:
+        program = Path(words[0]).name
+        if program in DIRECTORY_COMMANDS:
+            moves_back = program == "popd" or (program == "pushd" and len(words) == 1)
+            directories.append("-" if moves_back else words[1] if len(words) > 1 else "~")
+        options, arguments = split_program(words, "git", GIT_OPTIONS_WITH_VALUE)
+        directories += option_values(options, ("-C",))
+        unfollowed += [word for word in options if word.split("=", 1)[0] in GIT_UNFOLLOWED]
         if arguments[:1] == ["push"]:
-            pushes = True
-        elif arguments and arguments[0] in GIT_TEXT_COMMANDS:
+            publishes = pushes = True
+            unfollowed += [word for word in arguments if word in PUSH_UNFOLLOWED]
+            specs = positionals(arguments[1:], PUSH_OPTIONS_WITH_VALUE)[1:]
+            revisions += [spec.lstrip("+").split(":", 1)[0] for spec in specs] or ["HEAD"]
+        moves_head |= bool(arguments) and arguments[0] in GIT_HEAD_MOVERS
+        if arguments and arguments[0] in GIT_TEXT_COMMANDS:
             writes_text = True
             text_files += option_values(arguments, TEXT_FILE_OPTIONS)
-        elif gh_command in GH_TEXT_COMMANDS:
-            opens_pull_request |= gh_command == ("pr", "create")
+        _, gh_arguments = split_program(words, "gh", GH_OPTIONS_WITH_VALUE)
+        if tuple(gh_arguments[:2]) in GH_PULL_REQUEST:
+            publishes = True
+            heads = option_values(gh_arguments, ("-H", "--head"))
+            revisions += [head.rsplit(":", 1)[-1] for head in heads] or ["HEAD"]
+        if tuple(gh_arguments[:2]) in GH_TEXT_COMMANDS:
             writes_text = True
-            text_files += option_values(words, TEXT_FILE_OPTIONS)
-    return Analysis(pushes, opens_pull_request, writes_text, tuple(text_files))
+            text_files += option_values(gh_arguments, TEXT_FILE_OPTIONS)
+    return Analysis(
+        publishes,
+        pushes,
+        True,
+        moves_head,
+        tuple(directories),
+        tuple(unfollowed),
+        tuple(revisions),
+        writes_text,
+        tuple(text_files),
+    )
+
+
+def read_texts(cwd: Path, names: Sequence[str]) -> list[str]:
+    """The text files that exist now. Git or gh reports the others; a file written by the same
+    command is in the command text, which is scanned too."""
+    texts: list[str] = []
+    for name in names:
+        try:
+            texts.append((cwd / Path(name).expanduser()).read_text(encoding="utf-8"))
+        except OSError, RuntimeError, UnicodeDecodeError:
+            continue
+    return texts
+
+
+def is_directory(cwd: Path, directory: str) -> bool:
+    """Whether `cd directory` from cwd stays in cwd."""
+    if directory == "-" or "$" in directory:
+        return False
+    try:
+        return (cwd / Path(directory).expanduser()).resolve() == cwd.resolve()
+    except RuntimeError:  # unknown user in ~user
+        return False
+
+
+def form_problem(analysis: Analysis, cwd: Path) -> str | None:
+    """Why the gate cannot tell what a publication publishes, if it cannot."""
+    if not analysis.readable:
+        return "le contrôle ne sait pas lire cette commande (guillemet ouvert hors d'un heredoc ?)"
+    if analysis.moves_head:
+        return "la même commande déplace HEAD (commit, rebase, pull...)"
+    if analysis.unfollowed:
+        return f"options que le contrôle ne suit pas : {' '.join(analysis.unfollowed)}"
+    for directory in analysis.directories:
+        if not is_directory(cwd, directory):
+            return f"elle change de dossier ({directory})"
+    current = {"HEAD", "@", git(cwd, "branch", "--show-current")} - {""}
+    for revision in analysis.revisions:
+        if revision.removeprefix("refs/heads/") not in current:
+            return f"elle publie autre chose que la branche courante ({revision or 'suppression'})"
+    return None
 
 
 def stamp_path(repo: Path, sha: str) -> Path:
@@ -195,24 +357,33 @@ def stamp_path(repo: Path, sha: str) -> Path:
 
 
 def refusal(command: str, cwd: Path) -> str | None:
-    """Why the hook refuses the command, or None to let it run."""
+    """Why the hook refuses the Bash command, or None to let it run."""
     analysis = analyze(command)
     if analysis.writes_text:
-        texts = [
-            command,
-            *(Path(cwd, name).read_text(encoding="utf-8") for name in analysis.text_files),
-        ]
-        for text in texts:
+        for text in (command, *read_texts(cwd, analysis.text_files)):
             if hit := find_attribution(text):
                 return SIGNATURE_FOUND.format(where="dans le texte", hit=hit)
+    if not analysis.publishes:
+        return None
+    if problem := form_problem(analysis, cwd):
+        return FORM_REFUSED.format(problem=problem)
     if analysis.pushes:
         unpushed = git(cwd, "log", "HEAD", "--not", "--remotes", "--format=%B")
         if hit := find_attribution(unpushed):
             return SIGNATURE_FOUND.format(where="dans un commit à pousser", hit=hit)
-    if analysis.pushes or analysis.opens_pull_request:
-        sha = git(cwd, "rev-parse", "HEAD")
-        if not stamp_path(cwd, sha).exists():
-            return REVIEW_MISSING.format(sha=sha)
+    sha = git(cwd, "rev-parse", "HEAD")
+    if not stamp_path(cwd, sha).exists():
+        return REVIEW_MISSING.format(sha=sha)
+    return None
+
+
+def mcp_refusal(tool: str, tool_input: object) -> str | None:
+    """Why the hook refuses the GitHub MCP tool call, or None to let it run."""
+    if MCP_PUBLISH.search(tool):
+        return MCP_REFUSED.format(tool=tool)
+    text = json.dumps(tool_input, ensure_ascii=False).replace("\\n", "\n")
+    if hit := find_attribution(text):
+        return SIGNATURE_FOUND.format(where="dans le texte", hit=hit)
     return None
 
 
@@ -240,6 +411,7 @@ def stamp(repo: Path, report: Path, checks: Sequence[Sequence[str]]) -> int:
     if missing := missing_sections(text):
         print(f"Sections absentes ou vides du rapport : {', '.join(missing)}.", file=sys.stderr)
         return 1
+    sha = git(repo, "rev-parse", "HEAD")
     for check in checks:
         result = subprocess.run(check, cwd=repo, capture_output=True, text=True, check=False)
         if result.returncode:
@@ -247,7 +419,9 @@ def stamp(repo: Path, report: Path, checks: Sequence[Sequence[str]]) -> int:
                 f"Échec de `{' '.join(check)}` :\n{result.stdout}{result.stderr}", file=sys.stderr
             )
             return 1
-    sha = git(repo, "rev-parse", "HEAD")
+    if git(repo, "rev-parse", "HEAD") != sha or git(repo, "status", "--porcelain"):
+        print("HEAD ou l'arbre a changé pendant les contrôles : relancer stamp.", file=sys.stderr)
+        return 1
     path = stamp_path(repo, sha)
     path.parent.mkdir(exist_ok=True)
     header = (
@@ -259,8 +433,25 @@ def stamp(repo: Path, report: Path, checks: Sequence[Sequence[str]]) -> int:
     return 0
 
 
+def hook() -> int:
+    try:
+        payload = json.load(sys.stdin)
+        tool, tool_input = payload["tool_name"], payload["tool_input"]
+        if tool == "Bash":
+            cwd = Path(payload.get("cwd") or Path.cwd())
+            reason = refusal(tool_input["command"], cwd)
+        else:
+            reason = mcp_refusal(tool, tool_input)
+    except Exception as error:  # a gate that crashes must not let a push through
+        reason = GATE_FAILED.format(error=error)
+    if reason:
+        print(reason, file=sys.stderr)
+        return 2
+    return 0
+
+
 def main(argv: list[str]) -> int:
-    parser = argparse.ArgumentParser(description="Gate the git and gh commands of Claude Code.")
+    parser = argparse.ArgumentParser(description="Gate what Claude Code publishes on GitHub.")
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("hook", help="PreToolUse hook: hook JSON on stdin")
     stamp_parser = commands.add_parser("stamp", help="record the review of HEAD")
@@ -268,12 +459,7 @@ def main(argv: list[str]) -> int:
     args = parser.parse_args(argv)
     if args.command == "stamp":
         return stamp(REPO_ROOT, args.report, CHECKS)
-    payload = json.load(sys.stdin)
-    reason = refusal(payload["tool_input"]["command"], Path(payload.get("cwd") or Path.cwd()))
-    if reason:
-        print(reason, file=sys.stderr)
-        return 2
-    return 0
+    return hook()
 
 
 if __name__ == "__main__":
