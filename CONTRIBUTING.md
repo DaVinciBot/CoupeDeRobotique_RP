@@ -64,6 +64,21 @@ Le document de référence est [docs/ARCHITECTURE RP 2027.md](docs/ARCHITECTURE%
 - rédigé en français, ajouté dans la PR qui applique la décision et cité dans sa description ;
 - un ADR mergé ne se réécrit pas : une nouvelle décision fait un nouvel ADR, qui indique celui qu'il remplace.
 
+## Travailler avec Claude Code
+
+Le dossier `.claude/` est versionné ([ADR 0009](docs/adr/0009-claude-review-before-push.md)) :
+
+| Fichier | Rôle |
+| --- | --- |
+| `.claude/settings.json` | Hook git `pre-push` réservé aux commandes de Claude (variables `GIT_CONFIG_*`) et hook Claude Code sur les commandes git et gh et les outils MCP GitHub, tous deux dans `tools/review_gate/review_gate.py` ; outils Edit et Write interdits sur les tampons ; aucune signature de Claude |
+| `.claude/skills/review-branch/` | Revue détaillée avant push : contrôles, relectures indépendantes par agents, corrections, rapport, tampon |
+| `.claude/agents/dvb-*.md` | Agents de relecture du projet : conformité à la demande (`dvb-request-reviewer`), architecture et solidité pour la suite (`dvb-architecture-reviewer`) |
+
+- **Revue avant push.** Claude ne peut pas pousser un commit qui n'a pas de tampon de revue (`.git/dvb-review/<sha>.md`, jamais versionné) : un hook git `pre-push`, déclaré par les variables `GIT_CONFIG_*` de `.claude/settings.json`, ne tourne que dans les commandes de Claude et voit ce que git pousse réellement. Le tampon s'obtient par la skill `review-branch`, qui finit par `uv run python tools/review_gate/review_gate.py stamp --report <rapport>`. `--no-verify` et les outils MCP GitHub qui publient sont refusés. Claude ne peut pas pousser une copie de travail sans `tools/review_gate/` (branche antérieure au dispositif : merger `dev` d'abord ; autre dépôt). Les personnes ne sont pas concernées : leur terminal n'a pas ces variables.
+- **Aucune signature de Claude.** Le hook refuse un commit, un push, une PR ou une issue dont le texte met Claude en co-auteur ou en signataire (lignes que Claude Code écrit lui-même, pas le prénom Claude).
+- **Version.** Claude Code 2.1.295 ou plus récent (`onFailure` des hooks), git 2.54 ou plus récent (hooks déclarés dans la config git) et uv avec Python 3.14 (les hooks passent par `uv run`). Sans uv, les commandes git et gh de Claude sont refusées ; avec un git plus ancien, ses push et ses PR le sont.
+- **Plugins recommandés.** Le CLAUDE.md (section 5) utilise les skills et agents suivants quand ils sont installés, avec un repli sinon : `superpowers` et `feature-dev` (marketplace `claude-plugins-official`, dépôt `anthropics/claude-plugins-official`), `andrej-karpathy-skills` (marketplace `karpathy-skills`, dépôt `forrestchang/andrej-karpathy-skills`), `voltagent-qa-sec` et `voltagent-domains` (marketplace `voltagent-subagents`, dépôt `VoltAgent/awesome-claude-code-subagents`). Installation dans Claude Code : `/plugin marketplace add <dépôt>`, puis `/plugin install <plugin>@<marketplace>`, par exemple `/plugin install voltagent-qa-sec@voltagent-subagents`.
+
 ## Règles automatiques
 
 - Pas de push direct sur `dev` ni sur `main` : tout passe par une PR.

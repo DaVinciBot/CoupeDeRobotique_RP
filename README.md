@@ -16,6 +16,7 @@ Code du robot principal de l'équipe DaVinciBot, pour la Coupe de France de Robo
 | Outil | Pour quoi | Nécessaire pour |
 | --- | --- | --- |
 | [uv](https://docs.astral.sh/uv/getting-started/installation/) | Python et dépendances. uv installe lui-même Python 3.14 (`.python-version`). | Tout le code Python |
+| [git](https://git-scm.com/downloads) 2.54 ou plus récent | Hooks déclarés dans la config git : contrôle des push de Claude Code (ADR 0009) | Claude Code, tests de `tools/review_gate` (sautés hors CI avec un git plus ancien) |
 | [PlatformIO Core](https://docs.platformio.org/en/latest/core/installation/) (`pio`) | Compilation et tests des firmwares Teensy | `firmware/` seulement |
 | [pnpm](https://pnpm.io/installation) | Dépendances et build du dashboard | `dashboard/` seulement |
 
@@ -64,6 +65,7 @@ Les firmwares et le dashboard n'ont pas encore rejoint `dev` : leurs commandes s
 ## Structure du dépôt
 
 ```text
+├── .claude/           # Claude Code : hook, skill de revue, agents de relecture (ADR 0009)
 ├── packages/          # paquets Python du workspace uv, chacun avec src/ et tests/
 │   ├── brain/         # dvb_brain : domain/ services/ ports/ adapters/ app/
 │   ├── common_msgs/   # dvb_common_msgs : messages entre processus
@@ -78,7 +80,7 @@ Les firmwares et le dashboard n'ont pas encore rejoint `dev` : leurs commandes s
 ├── editions/          # un module par thème annuel, _template/ pour en démarrer un
 ├── config/            # configuration du robot (robot.json)
 ├── deploy/            # installation sur la Pi (systemd, nginx, udev)
-├── tools/             # outils de CI (core_check)
+├── tools/             # outils de CI (core_check) et revue avant push (review_gate)
 └── docs/              # architecture, TODO, ADR (docs/adr/)
 ```
 

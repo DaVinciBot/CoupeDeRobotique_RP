@@ -1,0 +1,51 @@
+{
+  "env": {
+    "GIT_CONFIG_COUNT": "2",
+    "GIT_CONFIG_KEY_0": "hook.dvb-review.event",
+    "GIT_CONFIG_VALUE_0": "pre-push",
+    "GIT_CONFIG_KEY_1": "hook.dvb-review.command",
+    "GIT_CONFIG_VALUE_1": "uv run --no-project --quiet --python 3.14 python tools/review_gate/review_gate.py pre-push"
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "if": "Bash(git *)",
+            "command": "uv run --no-project --quiet --python 3.14 python \"$CLAUDE_PROJECT_DIR/tools/review_gate/review_gate.py\" hook",
+            "timeout": 30,
+            "onFailure": "block"
+          },
+          {
+            "type": "command",
+            "if": "Bash(gh *)",
+            "command": "uv run --no-project --quiet --python 3.14 python \"$CLAUDE_PROJECT_DIR/tools/review_gate/review_gate.py\" hook",
+            "timeout": 30,
+            "onFailure": "block"
+          }
+        ]
+      },
+      {
+        "matcher": "mcp__.*[Gg]it[Hh]ub.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "uv run --no-project --quiet --python 3.14 python \"$CLAUDE_PROJECT_DIR/tools/review_gate/review_gate.py\" hook",
+            "timeout": 30,
+            "onFailure": "block"
+          }
+        ]
+      }
+    ]
+  },
+  "permissions": {
+    "deny": ["Edit(**/.git/dvb-review/**)"]
+  },
+  "attribution": {
+    "commit": "",
+    "pr": "",
+    "sessionUrl": false
+  }
+}

@@ -55,6 +55,7 @@ Checklist de tout ce qu'il faut faire pour le robot principal, dans l'ordre où 
   - [x] règles import-linter (`[tool.importlinter]` du `pyproject.toml` racine) : le socle n'importe jamais `editions.*` ; `domain` n'importe ni `services`, ni `adapters`, ni `app`, ni asyncio, ni les modules d'entrée-sortie et d'horloge (`pathlib`, `os`, `io`, `time`, `datetime`, `socket`, `subprocess`, `threading`) ; couches du brain dans l'ordre de la section 5.3, `services` et `adapters` indépendants (ADR 0008) ;
   - [x] `tools/core_check/theme_words.py` : cherche les mots du thème dans le socle et dans `config/match.json` (`pierre`, `stone`, `graal`, `grail`, `catapulte`, `château`, `castle`, `écurie`, `chevalier`…) et échoue s'il en trouve (0) ;
   - [x] `tools/core_check/theme_coordinates.py` : recherche des coordonnées du thème dans le socle, d'après les `arena.json` des éditions.
+- [x] Revue avant push des changements faits avec Claude Code (ADR 0009) : skill `review-branch`, agents `dvb-*`, hook git `pre-push` réservé à Claude (`tools/review_gate/`) qui refuse un push sans tampon de revue et toute signature de Claude.
 
 ### 1.4 CI — `.github/workflows/ci.yml`
 
@@ -399,7 +400,7 @@ Checklist de tout ce qu'il faut faire pour le robot principal, dans l'ordre où 
 
 - [ ] Matrice 2 côtés × 4 adversaires × 5 graines pour chaque stratégie de `strategies/`.
 - [ ] Assertions : aucune collision, aucune entrée en `EXCLUSIVE_OPPONENT`, arrêt avant 100 s, fin entièrement dans la salle du trône, sortie de zone + une action réussie (RG I.3.b).
-- [ ] Moins de 2 min en CI ; job obligatoire pour les PR qui touchent `domain/`, `services/` ou `editions/`.
+- [ ] Moins de 2 min en CI ; job obligatoire pour les PR qui touchent `domain/`, `services/` ou `editions/` ; étape `uv run` ajoutée aux contrôles de `review_gate.py stamp` (ADR 0009).
 - [ ] Rapport par scénario en artefact CI.
 
 ---
