@@ -97,6 +97,16 @@ def claude_env(monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv(name, value)
 
 
+def require_config_hooks(repo: Path) -> None:
+    """Skip on a git that ignores hooks declared in the config (before 2.54), but not in the CI."""
+    if "dvb-review" in run_git(repo, "hook", "list", "pre-push").stdout.split():
+        return
+    reason = "this git ignores the hooks declared in its config (git 2.54 or newer needed)"
+    if os.environ.get("CI"):
+        pytest.fail(reason)
+    pytest.skip(reason)
+
+
 @pytest.fixture
 def remote(repo: Path, tmp_path: Path, claude_env: None) -> Path:
     """A bare remote of a repository that holds this script, pushed to from Claude's commands."""
@@ -107,6 +117,7 @@ def remote(repo: Path, tmp_path: Path, claude_env: None) -> Path:
     shutil.copy(SCRIPT, repo / "tools" / "review_gate" / "review_gate.py")
     git(repo, "add", "tools")
     git(repo, "commit", "-q", "-m", "build: add the review gate")
+    require_config_hooks(repo)
     return path
 
 
@@ -226,13 +237,31 @@ def test_review_is_shared_by_the_worktrees(repo: Path, remote: Path, tmp_path: P
     assert run_git(tmp_path / "wt", "push", "origin", "feat/y").returncode == 0
 
 
-def test_repository_without_the_gate_is_not_concerned(
-    repo: Path, tmp_path: Path, claude_env: None
+@pytest.mark.parametrize("where", ["worktree", "subdirectory"])
+def test_push_from_anywhere_in_the_clone_needs_a_review(
+    repo: Path, remote: Path, tmp_path: Path, where: str
 ) -> None:
+    if where == "worktree":
+        git(repo, "worktree", "add", "-q", "-b", "feat/y", str(tmp_path / "wt"))
+        cwd, branch = tmp_path / "wt", "feat/y"
+    else:
+        cwd, branch = repo / "tools", "feat/x"
+
+    result = run_git(cwd, "push", "origin", branch)
+
+    assert result.returncode != 0
+    assert "Revue manquante" in result.stderr
+
+
+def test_checkout_without_the_gate_is_refused(repo: Path, tmp_path: Path, claude_env: None) -> None:
     git(tmp_path, "init", "-q", "--bare", str(tmp_path / "remote.git"))
     git(repo, "remote", "add", "origin", str(tmp_path / "remote.git"))
+    require_config_hooks(repo)
 
-    assert run_git(repo, "push", "origin", "feat/x").returncode == 0
+    result = run_git(repo, "push", "origin", "feat/x")
+
+    assert result.returncode != 0
+    assert "review_gate.py" in result.stderr
 
 
 def test_pre_push_refuses_what_it_cannot_check(tmp_path: Path) -> None:
@@ -289,6 +318,8 @@ def test_push_without_the_pre_push_hook_is_refused(repo: Path, remote: Path, com
         'git commit -m "docs: never git push --no-verify"',
         "gh pr view 12",
         "gh pr merge 12 --squash",
+        'git log origin/dev..HEAD --grep "Generated with Claude Code"',
+        f"gh pr list --search '{SIGNED} in:body'",
     ],
 )
 def test_other_commands_pass(repo: Path, remote: Path, command: str) -> None:
@@ -373,6 +404,7 @@ def test_hook_refuses_what_it_cannot_check() -> None:
         "mcp__plugin_github_github__push_files",
         "mcp__claude_ai_GitHub__create_pr",
         "mcp__claude_ai_GitHub__create_or_update_file",
+        "mcp__claude_ai_GitHub__delete_file",
     ],
 )
 def test_github_tools_that_publish_are_refused(tool: str) -> None:

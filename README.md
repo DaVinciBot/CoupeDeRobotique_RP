@@ -16,6 +16,7 @@ Code du robot principal de l'équipe DaVinciBot, pour la Coupe de France de Robo
 | Outil | Pour quoi | Nécessaire pour |
 | --- | --- | --- |
 | [uv](https://docs.astral.sh/uv/getting-started/installation/) | Python et dépendances. uv installe lui-même Python 3.14 (`.python-version`). | Tout le code Python |
+| [git](https://git-scm.com/downloads) 2.54 ou plus récent | Hooks déclarés dans la config git : contrôle des push de Claude Code (ADR 0009) | Claude Code, tests de `tools/review_gate` (sautés hors CI avec un git plus ancien) |
 | [PlatformIO Core](https://docs.platformio.org/en/latest/core/installation/) (`pio`) | Compilation et tests des firmwares Teensy | `firmware/` seulement |
 | [pnpm](https://pnpm.io/installation) | Dépendances et build du dashboard | `dashboard/` seulement |
 

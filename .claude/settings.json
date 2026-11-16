@@ -4,7 +4,7 @@
     "GIT_CONFIG_KEY_0": "hook.dvb-review.event",
     "GIT_CONFIG_VALUE_0": "pre-push",
     "GIT_CONFIG_KEY_1": "hook.dvb-review.command",
-    "GIT_CONFIG_VALUE_1": "test ! -f tools/review_gate/review_gate.py || uv run --no-project --quiet --python 3.14 python tools/review_gate/review_gate.py pre-push"
+    "GIT_CONFIG_VALUE_1": "uv run --no-project --quiet --python 3.14 python tools/review_gate/review_gate.py pre-push"
   },
   "hooks": {
     "PreToolUse": [

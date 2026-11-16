@@ -11,8 +11,9 @@ Usage:
     review_gate.py stamp --report FILE   Runs the checks of the CI on HEAD and records the review
                                          report as the stamp of HEAD.
 
-The pre-push hook sees what git really pushes, whatever the command that runs git. The PreToolUse
-hook refuses a text signed as Claude, a push with `--no-verify`, a push or a pull request while the
+The pre-push hook sees what git really pushes, whatever the command that runs git; a checkout
+without this script cannot run it, so the push is refused. The PreToolUse hook refuses a text
+signed as Claude, a push with `--no-verify`, a push or a pull request while the
 pre-push hook is not active, and the GitHub MCP tools that publish without git push.
 Both guard against forgetting the review, not against a deliberate bypass (CLAUDE.md, section 6).
 """
@@ -74,8 +75,14 @@ HEREDOC = re.compile(
 # A command that looks like a push or a pull request: the pre-push hook must be active for it.
 PUBLISH = re.compile(r"\bgit\b[^\n;&|]*\bpush\b|\bgh\b[^\n;&|]*\bpr\s+(?:create|new)\b")
 TEXT_FILE_OPTIONS = ("-F", "--file", "--body-file")  # git commit, git tag, gh pr, gh issue
+# Subcommands of git and gh that write a text: only their commands are scanned for signatures.
+TEXT_COMMANDS = frozenset(
+    {"comment", "commit", "create", "edit", "merge", "notes", "review", "tag"}
+)
 
-MCP_PUBLISH = re.compile(r"__(?:create_pr|create_pull_request|push_files|create_or_update_file)$")
+MCP_PUBLISH = re.compile(
+    r"__(?:create_pr|create_pull_request|push_files|create_or_update_file|delete_file)$"
+)
 
 REVIEW_MISSING = """Revue manquante : aucun tampon de revue pour {sha} ({ref}).
 Avant de pousser, suivre la skill review-branch (.claude/skills/review-branch/SKILL.md) :
@@ -188,9 +195,10 @@ def pre_push_active(cwd: Path) -> bool:
 def bash_refusal(command: str, cwd: Path) -> str | None:
     """Why the hook refuses the Bash command, or None to let it run."""
     text, words = shell_words(command)
-    for published in (command, *read_texts(cwd, text_files(words))):
-        if hit := find_attribution(published):
-            return SIGNATURE_FOUND.format(where="dans le texte", hit=hit)
+    if TEXT_COMMANDS & set(words):
+        for published in (command, *read_texts(cwd, text_files(words))):
+            if hit := find_attribution(published):
+                return SIGNATURE_FOUND.format(where="dans le texte", hit=hit)
     if {"push", "--no-verify"} <= set(words):
         return NO_VERIFY_REFUSED
     if PUBLISH.search(text) and not pre_push_active(cwd):

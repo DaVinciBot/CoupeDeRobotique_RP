@@ -28,11 +28,11 @@ Les variables `GIT_CONFIG_*` de `env` n'existent que dans les commandes lancées
 - un commit poussé qui n'a pas de tampon `.git/dvb-review/<sha>.md`, quelle que soit la branche ;
 - un commit poussé dont le message met Claude en co-auteur ou en signataire (lignes que Claude Code écrit lui-même, pas le prénom Claude).
 
-La suppression d'une branche distante ne publie rien et passe. Dans un autre dépôt, sans `tools/review_gate/`, le hook ne fait rien.
+La suppression d'une branche distante ne publie rien et passe. Une copie de travail sans `tools/review_gate/` (branche antérieure au dispositif, autre dépôt) ne peut pas lancer le hook, et le push est refusé : merger `dev` dans la branche d'abord ; un autre dépôt se pousse depuis une session ouverte dans ce dépôt-là, ou par une personne.
 
 Le hook `PreToolUse` (même script, sous-commande `hook`) refuse :
 
-- un commit, une PR, une issue ou un commentaire dont le texte (commande, fichiers `-F` et `--body-file`) met Claude en co-auteur ou en signataire ;
+- une commande git ou gh qui écrit un texte (commit, tag, création, édition ou commentaire de PR ou d'issue) dont le texte (commande, fichiers `-F` et `--body-file`) met Claude en co-auteur ou en signataire ;
 - un push avec `--no-verify`, qui sauterait le hook `pre-push` ;
 - un push ou une PR quand le hook `pre-push` n'est pas actif (git trop ancien, session ouverte avant l'ajout des variables) ;
 - un outil MCP GitHub qui publie sans `git push` (création de PR, push de fichiers, écriture de fichier).
@@ -46,7 +46,7 @@ Le dispositif ne concerne que Claude : le terminal d'une personne n'a pas ces va
 ## Alternatives écartées
 
 - **Consignes seules dans le `CLAUDE.md`** : rien ne bloque quand Claude oublie ou abrège la revue.
-- **Hook git `pre-push` dans `.git/hooks`** : il toucherait aussi les personnes, ralentirait chaque push, et ne peut pas savoir si une relecture a eu lieu ; la CI fait déjà les contrôles.
+- **Hook git `pre-push` dans `.git/hooks`** : installé dans le clone, il toucherait aussi les personnes, qui poussent sans tampon.
 - **Hook `PreToolUse` qui lit le texte des commandes shell** (première version de cette branche) : il devait reconnaître chaque forme d'un push (`if`, `"$(…)"`, `xargs`, `bash -c`, `cd`, refspecs…), passait encore à côté des alias, des scripts et de `push.default`, et tournait sur toutes les commandes Bash, qu'il bloquait toutes s'il plantait. Le hook `pre-push` voit ce que git pousse vraiment, en une trentaine de lignes.
 - **Relecture par Claude dans la CI (GitHub Actions)** : clé d'API dans les secrets et coût à chaque PR, et la CI ne connaît pas la demande d'origine, qui est le premier critère de la revue. À reconsidérer si la revue locale ne suffit pas.
 
@@ -57,4 +57,5 @@ Le dispositif ne concerne que Claude : le terminal d'une personne n'a pas ces va
 - `gh pr create` n'est pas contrôlé lui-même : la PR montre ce qui a été poussé, donc ce qui a été relu. Le merge d'une PR reste régi par CONTRIBUTING (une approbation) et par GitHub.
 - `stamp` ne relance que les étapes `uv run` de la CI. Les jobs firmware et dashboard sont lancés à la main par la skill quand ils sont touchés ; un nouveau job `uv run` (scénarios de match, TODO 11.5) fait échouer le test de synchronisation tant qu'il n'est pas ajouté à `stamp`.
 - Il faut Claude Code 2.1.295 ou plus récent (`onFailure` des hooks), git 2.54 ou plus récent et uv avec Python 3.14. Sans uv, les commandes git et gh de Claude sont refusées ; avec un git plus ancien, ses push et ses PR le sont (message du hook `PreToolUse`).
+- Le hook `PreToolUse` juge sur le texte de la commande, et seulement pour les commandes que reconnaît le filtre `if` (`git …`, `gh …`). Il refuse aussi une commande qui écrit un texte en citant une ligne de signature, ou `git commit --no-verify && git push` ; il ne voit pas `bash -c 'git push --no-verify'`, ni, avec un git trop ancien, `bash -c 'git push'`.
 - Le dispositif protège contre l'oubli, pas contre un contournement volontaire : variables `GIT_CONFIG_*` modifiées, `-c hook.dvb-review.enabled=false`, `gh api`, un tampon copié par une commande Bash, un autre outil. Celui-ci est interdit par le `CLAUDE.md`.
