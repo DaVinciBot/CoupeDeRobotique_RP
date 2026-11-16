@@ -1,13 +1,13 @@
 ---
 name: review-branch
-description: Revue détaillée obligatoire avant tout `git push` ou `gh pr create` (le hook review_gate bloque sinon). Vérifie que la branche fait exactement ce qui a été demandé, respecte l'architecture, le règlement et les invariants de sûreté, est testée hors robot et sert de base solide pour la suite ; lance des relectures indépendantes par agents ; enregistre le tampon de revue du commit HEAD. À utiliser avant chaque push, et quand on demande de vérifier ou relire une branche.
+description: Revue détaillée obligatoire avant tout `git push` ou `gh pr create` (le hook review_gate refuse sinon le push). Vérifie que la branche fait exactement ce qui a été demandé, respecte l'architecture, le règlement et les invariants de sûreté, est testée hors robot et sert de base solide pour la suite ; lance des relectures indépendantes par agents ; enregistre le tampon de revue du commit HEAD. À utiliser avant chaque push, et quand on demande de vérifier ou relire une branche.
 ---
 
 # Revue d'une branche avant push
 
 Le but n'est pas que le code « marche maintenant » : il doit faire **exactement** ce qui a été demandé, être cohérent avec le reste du dépôt, être testé, et servir de base aux cases suivantes de `docs/TODO.md` sans être refait. Prendre le temps. Une revue bâclée est pire qu'une revue absente, parce qu'elle donne une fausse assurance.
 
-Le hook `tools/review_gate/review_gate.py` (ADR 0009) refuse `git push` et `gh pr create` tant que HEAD n'a pas de tampon. Le tampon s'écrit uniquement par la commande `stamp` de l'étape 6.
+Le hook git `pre-push` de `tools/review_gate/review_gate.py` (ADR 0009), actif seulement dans les commandes de Claude, refuse de pousser un commit qui n'a pas de tampon. Le tampon s'écrit uniquement par la commande `stamp` de l'étape 6.
 
 ## 0. Préparer
 
@@ -109,12 +109,12 @@ uv run python tools/review_gate/review_gate.py stamp --report <rapport>
 
 ## 7. Pousser et ouvrir la PR
 
-`git push`, puis `gh pr create` vers `dev`, chacun seul dans sa commande, depuis le dossier du dépôt et pour la branche courante : le hook refuse un push combiné à un `cd`, à un `git commit` ou à une autre branche. La description de PR suit `.github/pull_request_template.md` ; sa section « Revue avant push » résume le rapport (agents utilisés, écarts corrigés, points ouverts).
+`git push`, puis `gh pr create` vers `dev`. Le hook refuse de pousser un commit fait après le tampon : tout commiter avant la revue. La description de PR suit `.github/pull_request_template.md` ; sa section « Revue avant push » résume le rapport (agents utilisés, écarts corrigés, points ouverts).
 
 ## Interdits
 
 - Écrire ou copier un tampon autrement que par `stamp`.
-- Contourner le hook (`gh api`, outil MCP GitHub, alias, autre outil).
+- Contourner le hook (`--no-verify`, variables `GIT_CONFIG_*`, `gh api`, outil MCP GitHub, autre outil).
 - Alléger la revue sans le dire dans le rapport.
 - Mettre Claude en co-auteur ou en signataire, où que ce soit.
 

@@ -21,34 +21,40 @@ Le dossier `.claude/` est versionné ([architecture, sections 14.1 et 14.2](../A
 | `skills/review-branch/SKILL.md` | La procédure de revue : contrôles, relecture de tout le diff avec un tableau de traçabilité, relectures indépendantes par agents en parallèle, tri et correction des retours, rapport en six sections, tampon |
 | `agents/dvb-request-reviewer.md` | Agent de relecture du projet : conformité à la demande, à la TODO, au règlement, aux invariants de sûreté ; rien d'inventé sur le matériel |
 | `agents/dvb-architecture-reviewer.md` | Agent de relecture du projet : conformité à l'architecture et aux ADR, simplicité, solidité pour les cases suivantes de la TODO |
-| `settings.json` | Hook `PreToolUse` sur toutes les commandes Bash et sur les outils GitHub des serveurs MCP ; outils Edit et Write interdits sur les tampons ; `attribution` vide |
+| `settings.json` | Hook git `pre-push` déclaré par les variables `GIT_CONFIG_*` de `env` ; hook `PreToolUse` sur les commandes git et gh et sur les outils GitHub des serveurs MCP ; outils Edit et Write interdits sur les tampons ; `attribution` vide |
 
-Le hook `tools/review_gate/review_gate.py` refuse :
+Les variables `GIT_CONFIG_*` de `env` n'existent que dans les commandes lancées par Claude Code. Elles déclarent un hook git `pre-push` (`hook.dvb-review.command`, git 2.54 ou plus récent) qui s'ajoute à ceux de `.git/hooks` et lance `tools/review_gate/review_gate.py pre-push`. Git lui donne ce qu'il va réellement pousser, quelle que soit la commande qui l'a lancé (`cd`, `bash -c`, alias, script, `gh pr create`). Le hook refuse :
 
-- `git push` et `gh pr create` (ou `gh pr new`) tant qu'il n'existe pas de tampon `.git/dvb-review/<sha>.md` pour le commit HEAD ;
-- un push ou une PR sous une forme qu'il ne sait pas suivre : autre dossier (`cd`, `git -C`), autre branche que la branche courante, `--all` ou `--tags`, HEAD déplacé dans la même commande (`git commit … && git push`), syntaxe qu'il ne sait pas lire. Claude lance alors le push seul, depuis le dossier du dépôt ;
-- un outil MCP GitHub qui publie (création de PR, push de fichiers, merge) : ces outils ne passent pas par la revue ;
-- `gh pr merge` : une PR se merge après la relecture d'une autre personne (CONTRIBUTING, « Pull requests ») ;
-- un commit, un push, une PR, une issue ou un commentaire dont le texte met Claude en co-auteur ou en signataire (lignes que Claude Code écrit lui-même, pas le prénom Claude).
+- un commit poussé qui n'a pas de tampon `.git/dvb-review/<sha>.md`, quelle que soit la branche ;
+- un commit poussé dont le message met Claude en co-auteur ou en signataire (lignes que Claude Code écrit lui-même, pas le prénom Claude).
 
-Le hook voit toutes les commandes Bash, parce que le filtre `if` de Claude Code ne reconnaît pas toutes les formes d'un push (`env … git push`, `bash -c …`) : c'est le script qui décide, et ses tests décrivent exactement ce qui est refusé. En cas d'erreur interne, il refuse plutôt que de laisser passer.
+La suppression d'une branche distante ne publie rien et passe. Dans un autre dépôt, sans `tools/review_gate/`, le hook ne fait rien.
+
+Le hook `PreToolUse` (même script, sous-commande `hook`) refuse :
+
+- un commit, une PR, une issue ou un commentaire dont le texte (commande, fichiers `-F` et `--body-file`) met Claude en co-auteur ou en signataire ;
+- un push avec `--no-verify`, qui sauterait le hook `pre-push` ;
+- un push ou une PR quand le hook `pre-push` n'est pas actif (git trop ancien, session ouverte avant l'ajout des variables) ;
+- un outil MCP GitHub qui publie sans `git push` (création de PR, push de fichiers, écriture de fichier).
+
+En cas d'erreur interne, les deux hooks refusent plutôt que de laisser passer.
 
 Le tampon ne s'écrit que par `review_gate.py stamp --report <rapport>`, qui exige un arbre propre, un rapport dont les six sections sont remplies, relance les étapes `uv run` de la CI (un test vérifie que la liste reste celle de `ci.yml`) et vérifie que HEAD n'a pas bougé pendant les contrôles. Les agents voltagent et les skills superpowers sont utilisés quand ils sont installés ; sinon la skill indique un repli (`general-purpose`). Le résumé du rapport va dans la PR (section « Revue avant push » du modèle).
 
-Le hook ne concerne que Claude : un push lancé par une personne depuis son terminal ne passe pas par lui.
+Le dispositif ne concerne que Claude : le terminal d'une personne n'a pas ces variables, et un push lancé depuis lui ne passe par aucun de ces hooks.
 
 ## Alternatives écartées
 
 - **Consignes seules dans le `CLAUDE.md`** : rien ne bloque quand Claude oublie ou abrège la revue.
-- **Hook git `pre-push`** : il toucherait aussi les personnes, ralentirait chaque push, et ne peut pas savoir si une relecture a eu lieu ; la CI fait déjà les contrôles.
-- **Filtre `if` sur `git *` et `gh *`** : plus léger, mais le hook ne se lance pas pour `env X=1 git push` ou `bash -c 'git push'`, et le script ne voit jamais ces formes.
+- **Hook git `pre-push` dans `.git/hooks`** : il toucherait aussi les personnes, ralentirait chaque push, et ne peut pas savoir si une relecture a eu lieu ; la CI fait déjà les contrôles.
+- **Hook `PreToolUse` qui lit le texte des commandes shell** (première version de cette branche) : il devait reconnaître chaque forme d'un push (`if`, `"$(…)"`, `xargs`, `bash -c`, `cd`, refspecs…), passait encore à côté des alias, des scripts et de `push.default`, et tournait sur toutes les commandes Bash, qu'il bloquait toutes s'il plantait. Le hook `pre-push` voit ce que git pousse vraiment, en une trentaine de lignes.
 - **Relecture par Claude dans la CI (GitHub Actions)** : clé d'API dans les secrets et coût à chaque PR, et la CI ne connaît pas la demande d'origine, qui est le premier critère de la revue. À reconsidérer si la revue locale ne suffit pas.
 
 ## Conséquences
 
 - Un push de Claude prend plus de temps et de jetons : la skill adapte le nombre d'agents à ce qui a changé.
-- Chaque commande Bash de Claude dans ce dépôt passe par le hook (environ 50 ms, `uv run --no-project`, bibliothèque standard seulement).
 - Tout commit après le tampon demande une nouvelle revue de ce qui a changé.
+- `gh pr create` n'est pas contrôlé lui-même : la PR montre ce qui a été poussé, donc ce qui a été relu. Le merge d'une PR reste régi par CONTRIBUTING (une approbation) et par GitHub.
 - `stamp` ne relance que les étapes `uv run` de la CI. Les jobs firmware et dashboard sont lancés à la main par la skill quand ils sont touchés ; un nouveau job `uv run` (scénarios de match, TODO 11.5) fait échouer le test de synchronisation tant qu'il n'est pas ajouté à `stamp`.
-- Le hook demande Claude Code 2.1.295 ou plus récent (`onFailure` des hooks) et uv avec Python 3.14.
-- Le hook protège contre l'oubli, pas contre un contournement volontaire : `gh api`, un alias git, une configuration `remote.<nom>.push`, un tampon copié par une commande Bash, un autre outil. Celui-ci est interdit par le `CLAUDE.md`.
+- Il faut Claude Code 2.1.295 ou plus récent (`onFailure` des hooks), git 2.54 ou plus récent et uv avec Python 3.14. Sans uv, les commandes git et gh de Claude sont refusées ; avec un git plus ancien, ses push et ses PR le sont (message du hook `PreToolUse`).
+- Le dispositif protège contre l'oubli, pas contre un contournement volontaire : variables `GIT_CONFIG_*` modifiées, `-c hook.dvb-review.enabled=false`, `gh api`, un tampon copié par une commande Bash, un autre outil. Celui-ci est interdit par le `CLAUDE.md`.
