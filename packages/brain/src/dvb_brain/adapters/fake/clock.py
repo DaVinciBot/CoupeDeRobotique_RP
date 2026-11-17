@@ -1,32 +1,45 @@
-"""Clock of the tests: time only moves when the test calls advance()."""
+"""Clock of the tests: time only moves when the test calls advance().
+
+The time is counted in whole nanoseconds: a task that sleeps 0.05 s in a loop wakes exactly 20
+times a second, where floats would drift (1.0000000000000002 is past 1.0).
+"""
 
 import asyncio
 import heapq
 import itertools
 from collections.abc import Sized
 
+_NS_PER_S = 1_000_000_000
+
 # Loop turns a single settle may take before a task is declared to never block.
 _MAX_SETTLE_TURNS = 10_000
 
 
+def _to_ns(t: float) -> int:
+    return round(t * _NS_PER_S)
+
+
 class FakeClock:
     def __init__(self, start: float = 0.0) -> None:
-        self._now = start
-        self._sleepers: list[tuple[float, int, asyncio.Future[None]]] = []
+        self._now_ns = _to_ns(start)
+        self._sleepers: list[tuple[int, int, asyncio.Future[None]]] = []
         self._order = itertools.count()  # first come, first served at the same deadline
 
     def now(self) -> float:
-        return self._now
+        return self._now_ns / _NS_PER_S
 
     async def sleep(self, dt: float) -> None:
-        await self.sleep_until(self._now + dt)
+        await self._sleep_until_ns(self._now_ns + _to_ns(dt))
 
     async def sleep_until(self, t: float) -> None:
-        if t <= self._now:
+        await self._sleep_until_ns(_to_ns(t))
+
+    async def _sleep_until_ns(self, deadline_ns: int) -> None:
+        if deadline_ns <= self._now_ns:
             await asyncio.sleep(0)
             return
         future: asyncio.Future[None] = asyncio.get_running_loop().create_future()
-        heapq.heappush(self._sleepers, (t, next(self._order), future))
+        heapq.heappush(self._sleepers, (deadline_ns, next(self._order), future))
         await future
 
     async def advance(self, dt: float) -> None:
@@ -37,15 +50,15 @@ class FakeClock:
         """
         if dt < 0:
             raise ValueError(f"cannot go back in time: dt = {dt}")
-        target = self._now + dt
+        target_ns = self._now_ns + _to_ns(dt)
         await _settle()  # a task created just before sleeps from the time before the jump
-        while self._sleepers and self._sleepers[0][0] <= target:
-            deadline, _, future = heapq.heappop(self._sleepers)
-            self._now = deadline
+        while self._sleepers and self._sleepers[0][0] <= target_ns:
+            deadline_ns, _, future = heapq.heappop(self._sleepers)
+            self._now_ns = deadline_ns
             if not future.done():  # a cancelled sleeper leaves a cancelled future
                 future.set_result(None)
             await _settle()
-        self._now = target
+        self._now_ns = target_ns
 
 
 async def _settle() -> None:

@@ -72,13 +72,35 @@ async def test_a_periodic_task_wakes_at_each_period_within_one_advance() -> None
     async def heartbeat() -> None:
         while True:
             await clock.sleep(0.05)
-            ticks.append(round(clock.now(), 9))
+            ticks.append(clock.now())
 
     task = asyncio.create_task(heartbeat())
     await clock.advance(0.2)
 
     assert not task.done()  # asleep until the next period
     assert ticks == [0.05, 0.1, 0.15, 0.2]
+
+
+@pytest.mark.parametrize(("period", "window", "wakes"), [(0.05, 1.0, 20), (0.1, 0.3, 3)])
+async def test_a_periodic_task_does_not_drift_with_rounding(
+    period: float, window: float, wakes: int
+) -> None:
+    clock = FakeClock()
+    ticks: list[float] = []
+
+    async def periodic() -> None:
+        while True:
+            await clock.sleep(period)
+            ticks.append(clock.now())
+
+    task = asyncio.create_task(periodic())
+    await clock.advance(window)
+    await clock.advance(100.0 - window)
+
+    assert not task.done()
+    assert len(ticks) == round(100.0 / period)
+    assert ticks[wakes - 1] == window
+    assert ticks[-1] == 100.0
 
 
 async def test_a_task_created_just_before_advance_sleeps_from_the_time_before_the_jump() -> None:
