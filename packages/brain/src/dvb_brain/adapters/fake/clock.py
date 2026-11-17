@@ -1,7 +1,9 @@
 """Clock of the tests: time only moves when the test calls advance().
 
 The time is counted in whole nanoseconds: a task that sleeps 0.05 s in a loop wakes exactly 20
-times a second, where floats would drift (1.0000000000000002 is past 1.0).
+times a second, where floats would drift (1.0000000000000002 is past 1.0). Durations and
+deadlines are rounded to the nearest nanosecond, so a sleeper may wake up to half a nanosecond
+before a float deadline; a wait for the future always moves the time by at least one.
 """
 
 import asyncio
@@ -36,8 +38,8 @@ class FakeClock:
 
     async def sleep_until(self, t: float) -> None:
         deadline_ns = _to_ns(t)
-        if deadline_ns / _NS_PER_S < t:  # never wake before t, even by a rounding
-            deadline_ns += 1
+        if t > self.now():  # a wait for the future always moves the time, even below a ns
+            deadline_ns = max(deadline_ns, self._now_ns + 1)
         await self._sleep_until_ns(deadline_ns)
 
     async def _sleep_until_ns(self, deadline_ns: int) -> None:

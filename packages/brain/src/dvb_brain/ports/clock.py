@@ -17,5 +17,9 @@ class Clock(Protocol):
         ...
 
     async def sleep_until(self, t: float) -> None:
-        """Wait until now() reaches t; return at once when t is already past."""
+        """Wait until now() reaches t; return at once when t is already past.
+
+        now() may still be a hair below t on return (clock resolution, a nanosecond for the fake
+        clock): a caller compares with a margin, or loops until its deadline is past.
+        """
         ...

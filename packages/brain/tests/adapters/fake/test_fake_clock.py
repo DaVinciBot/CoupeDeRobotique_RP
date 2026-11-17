@@ -148,20 +148,47 @@ async def test_a_long_chain_of_woken_tasks_runs_before_the_next_deadline() -> No
     assert seen_at == [0.1] * len(links) + [0.2]
 
 
-async def test_sleep_until_never_wakes_before_its_time() -> None:
+async def test_sleep_until_wakes_at_the_nanosecond_of_a_float_deadline() -> None:
     clock = FakeClock(start=0.1)
-    t = clock.now() + 0.2  # 0.30000000000000004, between two nanoseconds
-    woken_at: list[float] = []
+    task = asyncio.create_task(clock.sleep_until(clock.now() + 0.2))  # 0.30000000000000004
 
-    async def sleeper() -> None:
-        await clock.sleep_until(t)
-        woken_at.append(clock.now())
+    await clock.advance(0.2)
 
-    task = asyncio.create_task(sleeper())
+    assert task.done()  # a timeout computed with floats fires within the advance that reaches it
+    assert clock.now() == 0.3
+
+
+async def test_a_periodic_task_on_absolute_deadlines_does_not_drift() -> None:
+    clock = FakeClock()
+    ticks: list[float] = []
+
+    async def periodic() -> None:
+        deadline = 0.0
+        while True:
+            deadline += 0.05  # 0.15000000000000002 on the third period
+            await clock.sleep_until(deadline)
+            ticks.append(clock.now())
+
+    task = asyncio.create_task(periodic())
+    await clock.advance(1.0)
+
+    assert not task.done()
+    assert len(ticks) == 20
+    assert ticks[2] == 0.15
+
+
+async def test_a_wait_until_a_deadline_loop_ends() -> None:
+    clock = FakeClock(start=0.1)
+    deadline = clock.now() + 0.2  # 0.30000000000000004, between two nanoseconds
+
+    async def wait_until_deadline() -> None:
+        while deadline - clock.now() > 0:
+            await clock.sleep_until(deadline)
+
+    task = asyncio.create_task(wait_until_deadline())
     await clock.advance(0.3)
 
     assert task.done()
-    assert woken_at[0] >= t  # else "wait while time is left" loops would spin at once
 
 
 async def test_a_positive_sleep_below_one_nanosecond_still_moves_the_time() -> None:
