@@ -178,6 +178,7 @@ Checklist de tout ce qu'il faut faire pour le robot principal, dans l'ordre où 
 ### 3.6 Faux matériel — `adapters/fake/`
 
 - [ ] `FakeMotion` : exécution idéale avec une durée calculée (vitesse, accélération) ; scénarios injectables : blocage après x m, Teensy muette, redémarrage, BAU.
+- [ ] Tests de contrat du `MotionPort` (ADR 0010), communs à `FakeMotion`, `SimMotion` (11.2) et à l'adaptateur Teensy (15.1) : annuler `move()` arrête le robot, second `move()` refusé, `stop()` sans exception même lien mort, `stop(URGENT)` définitif, `reset_pose()` refusé robot en mouvement.
 - [ ] `FakeActuators` : durées fixes, taux d'échec réglable.
 - [ ] `FakeLidar` : pistes scriptées dans le temps.
 - [ ] `FakeStartSwitch` : `pull()` déclenché par le test.
@@ -222,7 +223,7 @@ Checklist de tout ce qu'il faut faire pour le robot principal, dans l'ordre où 
 
 ### 5.3 Chemin → mouvements — `domain/motion_plan.py`
 
-- [ ] `Path` + `MoveMode` + `theta` final optionnel → `ROTATE_TO`, `STRAIGHT`, …, `ROTATE_TO(theta)` (9.4).
+- [ ] `Path` + `MoveMode` + `theta` final optionnel → `RotateTo`, `Straight`, …, `RotateTo(theta)` (9.4, ADR 0010).
 - [ ] Mode `auto` : marche arrière seulement sous `reverse_max_distance` et si le gain de rotation dépasse `reverse_min_gain`.
 - [ ] Vitesse de marche arrière plafonnée (lidar 270°, rien derrière).
 - [ ] Tests par table de cas.
@@ -231,6 +232,7 @@ Checklist de tout ce qu'il faut faire pour le robot principal, dans l'ordre où 
 
 - [ ] `async go_to(target, deadline) -> NavResult` (`ARRIVED`, `BLOCKED_BY_OPPONENT`, `NO_PATH`, `TIMEOUT`, `MOTION_FAULT`).
 - [ ] Envoi des `MoveCommand` un par un, vérification de la tolérance en position et en angle à l'arrivée (9.3).
+- [ ] Attentes bornées sur la `Clock`, jamais par `asyncio.timeout` ni `asyncio.wait_for`, que `FakeClock` ne fait pas avancer : outil commun tiré de `Watch._next` (ADR 0010).
 - [ ] Cible absolue conservée lors d'une replanification.
 - [ ] `push_until_blocked(direction, max_dist)` et `recalibrate(wall)` : `RESET_POSE` avec la coordonnée et l'angle de la bordure, l'autre coordonnée gardée (7.2).
 - [ ] Tests avec `FakeMotion` et `FakeClock`.
@@ -477,7 +479,7 @@ Checklist de tout ce qu'il faut faire pour le robot principal, dans l'ordre où 
 - [ ] Conversion SI ↔ unités du fil dans cet adaptateur et nulle part ailleurs.
 - [ ] `move()` : `move_id` attribué, `Future` résolu par le `MOTION_STATUS` correspondant.
 - [ ] `PRINT` → `brain.log` sous `hardware.teensy`.
-- [ ] Tests contre la Teensy virtuelle sur `pty`, trames abîmées et débranchement compris.
+- [ ] Tests contre la Teensy virtuelle sur `pty`, trames abîmées et débranchement compris ; tests de contrat du `MotionPort` (3.6).
 
 ### 15.2 Teensy actionneurs — `adapters/teensy/actuators.py`
 
@@ -623,7 +625,7 @@ Chaque point bloque les cases indiquées.
 | Types des champs des messages : `float` ou `double` | 3.4, 12 |
 | Variante exacte du CRC-16 | 12 |
 | Comportement d'un `MOVE` reçu pendant un autre, et vitesse max modifiable ou non en cours de mouvement | 3.4, 6.2 |
-| Mouvements côté firmware (ADR 0010) : liste des mouvements, limite de translation dans chaque `MOVE`, signe de `PushUntilBlocked` (sur la distance côté brain, sur la vitesse dans le firmware actuel), confirmation de `RESET_POSE` par le statut | 3.4, 15.1 |
+| Mouvements côté firmware (ADR 0010) : liste des mouvements, limite de translation dans chaque `MOVE`, signe de `PushUntilBlocked` (sur la distance côté brain, sur la vitesse dans le firmware actuel), confirmation de `RESET_POSE` par le statut, `STOP` normal freiné avec la décélération d'arrêt de la config (celle de la zone de sécurité), `STOP` normal sans effet après un `STOP` urgent | 3.4, 15.1 |
 | Empreinte réelle du robot (rayon, polygone, actionneurs rentrés) | 2.4, 5.1, 6.1, 7.4 |
 | Position, orientation et hauteur du lidar sur le robot | 9.1, 16.2 |
 | Séquences des mécanismes (prise de pierres, construction, Graal, lanceur) | 7.1, 14 |
@@ -634,5 +636,5 @@ Chaque point bloque les cases indiquées.
 | Horloge commune container lidar / brain pour l'horodatage des balayages | 16.1, 16.2 |
 | Format UDP des échanges avec le calcul déporté | 17 |
 | Liste exacte des « aires adverses à accès exclusif » (RG H.4) : le règlement 2027 ne la donne pas explicitement, à faire confirmer (FAQ). Le vol de pierres dans le château adverse (RJ E.1) suppose d'approcher ses remparts, que l'on interdit pour l'instant | 2.4, 5.1, 7.2 |
-| Début exact de la phase d'attaque : « entre la 85e seconde et la fin du match » (RJ E.4.b) peut se lire t ≥ 84 s (la 85e seconde commence à 84 s) ou t ≥ 85 s. `scoring.json` dit 85 s pour l'instant ; une action faite avant la phase n'est pas comptée. À faire confirmer (FAQ) | 3.1, 7.2 |
+| Début exact de la phase d'attaque : « entre la 85e seconde et la fin du match » (RJ E.4.b) peut se lire t ≥ 84 s (la 85e seconde commence à 84 s) ou t ≥ 85 s. `scoring.json` dit 85 s pour l'instant ; une action faite avant la phase n'est pas comptée. À faire confirmer (FAQ). `MatchClock` (3.1) lit le début dans `scoring.json` sans trancher | 7.2 |
 | Dates de la pré-coupe et de la CDR 2027 | 21.4 |

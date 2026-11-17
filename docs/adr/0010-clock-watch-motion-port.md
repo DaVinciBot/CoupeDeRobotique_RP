@@ -21,6 +21,7 @@ Les cases 3.1 à 3.3 posent l'horloge, `Watch[T]` et le `MotionPort`. Le faux ma
 
 - **Rangement.** `ports/clock.py` ne contient que le `Protocol` `Clock` : `now()`, `sleep(dt)`, `sleep_until(t)`. `SystemClock` (`time.monotonic`, `asyncio.sleep`) est dans `adapters/clock.py`, `FakeClock` dans `adapters/fake/clock.py`.
 - **`FakeClock.advance(dt)`** réveille les dormeurs par échéance croissante, premier arrivé premier servi à échéance égale. Elle pose `now()` à chaque échéance et laisse les tâches réveillées tourner jusqu'à ce qu'elles se bloquent de nouveau.
+- **Heure exacte.** `FakeClock` compte l'heure en nanosecondes entières. Avec des flottants, une tâche à 20 Hz ne se réveillerait que 19 fois en une seconde, car son 20ᵉ réveil tomberait à 1.0000000000000002 s.
 - **Blocage des tâches.** Pour savoir que les tâches sont de nouveau bloquées, on attend que la file des tâches prêtes de la boucle (`loop._ready`) soit vide. Cet attribut est privé, mais présent depuis Python 3.4. On l'a préféré à un nombre fixe de tours, qui laisserait une longue chaîne de tâches lire une heure déjà dépassée, sans erreur. Si l'attribut disparaît, ou si une tâche ne se bloque jamais, `advance` lève une `RuntimeError`.
 - **`MatchClock`** est dans `domain/match_clock.py`, comme le prévoit l'ADR 0008. C'est une dataclass figée (`t0`, `duration`, `phase_starts`), créée à la tirette par le `MatchManager` : elle n'a pas de méthode `start()`.
 - **Phases et fin.** Une phase dure de son début à la fin du match. `remaining(now)` vaut 0 une fois le match fini.
@@ -43,8 +44,11 @@ Les cases 3.1 à 3.3 posent l'horloge, `Watch[T]` et le `MotionPort`. Le faux ma
   - Le port attribue le `move_id` et rend le statut qui termine le mouvement (`ARRIVED`, `BLOCKED` ou `STOPPED`) : `MotionResult` n'existe pas.
   - Un seul mouvement à la fois : un second `move()` lève `RuntimeError`.
   - Annuler `move()` arrête le robot comme `stop(SMOOTH)` : abandonner l'attente ne le laisse jamais rouler.
+  - `move()` ne détecte pas un lien perdu : l'appelant borne son attente sur la `Clock`.
 - **`stop(mode)`** envoie l'arrêt sans attendre la Teensy et ne lève jamais d'exception. Ainsi, le `SafetyMonitor` et le `finally` de `run_brain` ne restent jamais bloqués sur un lien mort.
-- **`reset_pose(pose)`** exige un robot immobile (`RuntimeError` si un `move()` est en cours). Il ne rend la main qu'une fois qu'un statut montre la nouvelle pose.
+  - **`SMOOTH`** freine avec la décélération d'arrêt de la config, celle qui sert à calculer la zone de sécurité (architecture, section 8.4), quel que soit le `max_accel` du mouvement. Sinon une `Straight` à 0,5 m/s et `max_accel` = 0,5 m/s² freinerait sur 250 mm, alors que la zone a été calculée pour 190 mm.
+  - **`URGENT`** est définitif pour le port : il ne sert que vers un état final (fin de match, `FAULT`, `finally` de `run_brain`). Après lui, plus aucune commande ne part. Un `stop(SMOOTH)` ultérieur et l'arrêt d'un `move()` annulé n'envoient rien, pour que rien n'adoucisse l'arrêt urgent (RG H.3, « plus aucune commande » de la case 8.1). `move()` et `reset_pose()` lèvent alors `RuntimeError`.
+- **`reset_pose(pose)`** exige un robot immobile : `RuntimeError` si un `move()` est en cours, si le dernier statut est `MOVING`, ou après `stop(URGENT)`. Il ne rend la main qu'une fois qu'un statut montre la nouvelle pose, et l'appelant borne cette attente sur la `Clock`.
 - **`link_ok()`** dit seulement si le port est ouvert.
 - **Surveillance.** Le silence de la Teensy, son redémarrage (`boot_id`) et le BAU sont surveillés par le `SafetyMonitor` (8.2), pas par les appelants.
 
@@ -60,12 +64,19 @@ Les cases 3.1 à 3.3 posent l'horloge, `Watch[T]` et le `MotionPort`. Le faux ma
 
 ## Conséquences
 
+- **Attentes bornées sur la `Clock`.**
+  - `FakeClock` ne fait avancer que ce qui attend sur la `Clock` (directement ou par un `Watch`). `asyncio.timeout`, `asyncio.wait_for` et `asyncio.sleep` comptent en temps réel : dans un test avec `FakeClock`, ils ne se déclenchent jamais. Les services bornent donc leurs attentes sur la `Clock`.
+  - L'outil commun (une attente avec échéance, tirée de `Watch._next`) sera ajouté en case 5.4, par le premier service qui en a besoin. On décidera alors où il se range, puisque `ports/` ne contient que les `Protocol` et `Watch` (ADR 0008).
+- **Décodage par msgspec.** msgspec ne sait pas décoder `MoveCommand` tel quel (union de plusieurs dataclasses). Si la télémétrie ou les logs doivent transporter une commande, il faudra un tag, à ajouter à ce moment-là.
 - **Question ouverte.** L'évitement (6.2) veut réduire la vitesse max d'un mouvement en cours, mais ce port ne le permet pas : la limite n'existe que dans la commande. La décision dépend du point à valider « vitesse max modifiable ou non en cours de mouvement » (ADR 0003). On ajoutera alors une méthode au port, sans changer les types ci-dessus.
 - **À valider avec le firmware moteur (ADR 0003).**
   - la liste des mouvements ;
   - une limite de translation par `MOVE` ;
   - le signe de `PushUntilBlocked` : sur la distance côté brain, alors que le firmware actuel signe la vitesse ;
-  - la confirmation de `RESET_POSE` par le statut.
+  - la confirmation de `RESET_POSE` par le statut ;
+  - un `STOP` normal freine avec la décélération d'arrêt de la config, pas avec celle du mouvement en cours ;
+  - un `STOP` normal reçu après un `STOP` urgent est sans effet, en plus de la garde côté brain.
 
   La conversion vers le fil reste dans l'adaptateur (15.1).
+- **Tests de contrat.** Le contrat ci-dessus sera vérifié par des tests communs à `FakeMotion` (3.6), au `SimMotion` (11.2) et à l'adaptateur Teensy (15.1).
 - **Dépendance aux internes d'asyncio.** `FakeClock` dépend de `loop._ready`. Si une version de Python le retire, les tests échouent en le disant, et on revient sur ce choix.

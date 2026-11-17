@@ -61,8 +61,8 @@ class MotionState(StrEnum):
 
 
 class StopMode(StrEnum):
-    SMOOTH = auto()  # deceleration by the trapezoid generator
-    URGENT = auto()  # command and integrators to zero at once
+    SMOOTH = auto()  # trapezoid deceleration of the stop, the one of the safety zone
+    URGENT = auto()  # command and integrators to zero at once; final (MotionPort.stop)
 
 
 @dataclass(frozen=True, slots=True)
