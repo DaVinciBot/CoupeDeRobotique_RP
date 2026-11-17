@@ -625,7 +625,7 @@ Chaque point bloque les cases indiquées.
 | Types des champs des messages : `float` ou `double` | 3.4, 12 |
 | Variante exacte du CRC-16 | 12 |
 | Comportement d'un `MOVE` reçu pendant un autre, et vitesse max modifiable ou non en cours de mouvement | 3.4, 6.2 |
-| Mouvements côté firmware (ADR 0010) : liste des mouvements, limite de translation dans chaque `MOVE`, signe de `PushUntilBlocked` (sur la distance côté brain, sur la vitesse dans le firmware actuel) et fin `STOPPED` sans contact, confirmation de `RESET_POSE` par le statut, `STOP` normal freiné avec la décélération d'arrêt de la config (celle de la zone de sécurité), `STOP` normal sans effet après un `STOP` urgent jusqu'au prochain `MOVE` ou réglage | 3.4, 15.1 |
+| Mouvements côté firmware (ADR 0010) : liste des mouvements, limite de translation dans chaque `MOVE`, signe de `PushUntilBlocked` (sur la distance côté brain, sur la vitesse dans le firmware actuel) et fin `STOPPED` sans contact, confirmation de `RESET_POSE` par le statut, `STOP` normal freiné avec la décélération d'arrêt de la config (celle de la zone de sécurité), `STOP` normal sans effet après un `STOP` urgent jusqu'au prochain `MOVE` ou réglage, arrêt du chien de garde (200 ms) sans effet sur un arrêt urgent déjà fait | 3.4, 15.1 |
 | Empreinte réelle du robot (rayon, polygone, actionneurs rentrés) | 2.4, 5.1, 6.1, 7.4 |
 | Position, orientation et hauteur du lidar sur le robot | 9.1, 16.2 |
 | Séquences des mécanismes (prise de pierres, construction, Graal, lanceur) | 7.1, 14 |
