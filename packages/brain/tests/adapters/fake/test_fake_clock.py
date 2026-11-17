@@ -148,6 +148,22 @@ async def test_a_long_chain_of_woken_tasks_runs_before_the_next_deadline() -> No
     assert seen_at == [0.1] * len(links) + [0.2]
 
 
+async def test_sleep_until_never_wakes_before_its_time() -> None:
+    clock = FakeClock(start=0.1)
+    t = clock.now() + 0.2  # 0.30000000000000004, between two nanoseconds
+    woken_at: list[float] = []
+
+    async def sleeper() -> None:
+        await clock.sleep_until(t)
+        woken_at.append(clock.now())
+
+    task = asyncio.create_task(sleeper())
+    await clock.advance(0.3)
+
+    assert task.done()
+    assert woken_at[0] >= t  # else "wait while time is left" loops would spin at once
+
+
 async def test_sleep_until_a_past_time_returns_without_advance() -> None:
     clock = FakeClock(start=5.0)
 

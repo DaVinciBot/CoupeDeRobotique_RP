@@ -32,7 +32,10 @@ class FakeClock:
         await self._sleep_until_ns(self._now_ns + _to_ns(dt))
 
     async def sleep_until(self, t: float) -> None:
-        await self._sleep_until_ns(_to_ns(t))
+        deadline_ns = _to_ns(t)
+        if deadline_ns / _NS_PER_S < t:  # never wake before t, even by a rounding
+            deadline_ns += 1
+        await self._sleep_until_ns(deadline_ns)
 
     async def _sleep_until_ns(self, deadline_ns: int) -> None:
         if deadline_ns <= self._now_ns:
