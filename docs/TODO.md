@@ -143,19 +143,19 @@ Checklist de tout ce qu'il faut faire pour le robot principal, dans l'ordre où 
 
 ### 3.1 Horloge — `ports/clock.py`
 
-- [ ] `Clock` Protocol : `now()` (monotone, s), `async sleep(dt)`, `async sleep_until(t)`.
-- [ ] `SystemClock` (`time.monotonic`, `asyncio.sleep`).
-- [ ] `FakeClock` : `advance(dt)` réveille les `sleep` dans l'ordre.
-- [ ] `MatchClock` (domain, sans lecture d'horloge, ADR 0008) : démarrée à `t0`, `elapsed(now)`, `remaining(now)`, `in_phase(phase_id, now)` d'après `Scoring.phase_starts`. Une seule instance, démarrée à la tirette (RG H.2).
+- [x] `Clock` Protocol : `now()` (monotone, s), `async sleep(dt)`, `async sleep_until(t)`.
+- [x] `SystemClock` dans `adapters/clock.py` (`time.monotonic`, `asyncio.sleep`) : `ports/` ne contient que les `Protocol` et `Watch` (ADR 0008, ADR 0010).
+- [x] `FakeClock` dans `adapters/fake/clock.py` : `advance(dt)` réveille les `sleep` dans l'ordre et laisse les tâches réveillées tourner avant l'échéance suivante (ADR 0010).
+- [x] `MatchClock` (domain, sans lecture d'horloge, ADR 0008) : créée à `t0`, `elapsed(now)`, `remaining(now)`, `in_phase(phase_id, now)` d'après `Scoring.phase_starts`. Une seule instance, créée à la tirette par le `MatchManager` (RG H.2).
 
 ### 3.2 `Watch[T]` — `ports/watch.py`
 
-- [ ] Dernière valeur + notification : `set(v)`, `get() -> T | None`, `async wait_next()`, `async wait_for(predicate, timeout)`.
+- [x] Dernière valeur + notification : `set(v)`, `get() -> T | None`, `async wait_next(timeout)`, `async wait_for(predicate, timeout)`. Timeouts comptés sur la `Clock` (ADR 0010).
 
 ### 3.3 `MotionPort`
 
-- [ ] Types dans `domain/motion.py` (ADR 0008) : `MoveKind` (`ROTATE_BY`, `ROTATE_TO`, `STRAIGHT`, `GOTO`, `PUSH_UNTIL_BLOCKED`), `MoveCommand` (`move_id`, `kind`, paramètres SI, `max_speed`, `max_accel`), `MotionState` (`MOVING`, `ARRIVED`, `BLOCKED`, `STOPPED`), `MotionStatus` (`move_id`, `state`, `pose`, `v`, `omega`, `emergency_stop`, `teensy_time`, `boot_id`), `StopMode` (`SMOOTH`, `URGENT`).
-- [ ] `MotionPort` : `async move(cmd) -> MotionResult`, `async stop(mode)`, `async reset_pose(pose)`, `status() -> Watch[MotionStatus]`, `link_ok()`.
+- [x] Types dans `domain/motion.py` (ADR 0008, ADR 0010) : `MoveCommand`, type somme `RotateBy | RotateTo | Straight | GoToPoint | PushUntilBlocked` en SI, avec `max_speed` et `max_accel` pour les translations seulement ; `MotionState` (`MOVING`, `ARRIVED`, `BLOCKED`, `STOPPED`), `MotionStatus` (`move_id`, `state`, `pose`, `v`, `omega`, `emergency_stop`, `teensy_time`, `boot_id`), `StopMode` (`SMOOTH`, `URGENT`).
+- [x] `MotionPort` : `async move(cmd) -> MotionStatus` (`move_id` attribué par le port), `async stop(mode)`, `async reset_pose(pose)`, `status() -> Watch[MotionStatus]`, `link_ok()`. Contrat dans l'ADR 0010 : un mouvement à la fois, annuler `move()` arrête le robot, `stop` n'attend jamais la Teensy.
 
 ### 3.4 Contrat brain ↔ Teensy moteur — `docs/adr/0003-motion-protocol.md`
 
@@ -311,7 +311,7 @@ Checklist de tout ce qu'il faut faire pour le robot principal, dans l'ordre où 
 - [ ] `INIT` : attente des liens, envoi des réglages d'asservissement (5.6), vérification du profil `match` et de l'absence de ressource simulée (4.5).
 - [ ] `CALIBRATING` : recalage contre deux bordures puis `RESET_POSE`, objectif < 30 s (préparation de 3 min, RG H.1) ; robot entièrement dans la salle du trône ensuite (RJ D.3.b). Un nouveau `CALIBRATE` recommence un recalage raté (ADR 0007).
 - [ ] `ARMED` : tirette en place exigée, anti-rebond 50 ms, seul le front « retirée » compte.
-- [ ] `RUNNING` : `MatchClock.start()` au front, envoi du départ au calcul déporté (× 3), lancement de l'exécuteur et de la fin de match.
+- [ ] `RUNNING` : `MatchClock` créée au front (ADR 0010), envoi du départ au calcul déporté (× 3), lancement de l'exécuteur et de la fin de match.
 - [ ] Minuteur de fin indépendant de la stratégie : à 100 s moins `hard_stop_margin_s`, `stop(URGENT)`, `release_all`, plus aucune commande (RG H.3 ; −50 pts si le robot bouge encore, RG H.4).
 
 ### 8.2 `SafetyMonitor` — `services/safety.py`
@@ -623,6 +623,7 @@ Chaque point bloque les cases indiquées.
 | Types des champs des messages : `float` ou `double` | 3.4, 12 |
 | Variante exacte du CRC-16 | 12 |
 | Comportement d'un `MOVE` reçu pendant un autre, et vitesse max modifiable ou non en cours de mouvement | 3.4, 6.2 |
+| Mouvements côté firmware (ADR 0010) : liste des mouvements, limite de translation dans chaque `MOVE`, signe de `PushUntilBlocked` (sur la distance côté brain, sur la vitesse dans le firmware actuel), confirmation de `RESET_POSE` par le statut | 3.4, 15.1 |
 | Empreinte réelle du robot (rayon, polygone, actionneurs rentrés) | 2.4, 5.1, 6.1, 7.4 |
 | Position, orientation et hauteur du lidar sur le robot | 9.1, 16.2 |
 | Séquences des mécanismes (prise de pierres, construction, Graal, lanceur) | 7.1, 14 |
