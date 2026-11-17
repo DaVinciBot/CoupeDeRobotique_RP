@@ -29,7 +29,10 @@ class FakeClock:
         return self._now_ns / _NS_PER_S
 
     async def sleep(self, dt: float) -> None:
-        await self._sleep_until_ns(self._now_ns + _to_ns(dt))
+        dt_ns = _to_ns(dt)
+        if dt > 0:  # a positive sleep always moves the time, even below a nanosecond
+            dt_ns = max(dt_ns, 1)
+        await self._sleep_until_ns(self._now_ns + dt_ns)
 
     async def sleep_until(self, t: float) -> None:
         deadline_ns = _to_ns(t)
