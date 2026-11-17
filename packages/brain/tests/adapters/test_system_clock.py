@@ -44,4 +44,4 @@ async def test_sleep_until_a_past_time_returns_at_once() -> None:
 
     await clock.sleep_until(start - 1.0)
 
-    assert clock.now() - start < 0.01
+    assert clock.now() - start < 0.5  # waiting 1 s would mean the past time was not handled

@@ -9,7 +9,7 @@ class SystemClock:
         return time.monotonic()
 
     async def sleep(self, dt: float) -> None:
-        await asyncio.sleep(max(0.0, dt))
+        await asyncio.sleep(dt)  # returns at once when dt <= 0
 
     async def sleep_until(self, t: float) -> None:
         await self.sleep(t - self.now())

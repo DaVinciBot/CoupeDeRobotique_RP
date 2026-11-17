@@ -120,6 +120,57 @@ async def test_wait_for_sees_a_matching_value_even_if_overwritten() -> None:
     assert task.result() == 2
 
 
+async def test_wait_for_takes_the_current_value_when_the_waking_one_does_not_match() -> None:
+    clock = FakeClock()
+    watch = Watch[int](clock)
+
+    task = asyncio.create_task(watch.wait_for(is_even, timeout=1.0))
+    await clock.advance(0)
+    watch.set(3)  # wakes the reader, does not match
+    watch.set(4)  # before the reader runs: no further value will come
+    await clock.advance(0)
+
+    assert task.result() == 4
+
+
+async def test_a_zero_timeout_gives_nothing_without_moving_the_time() -> None:
+    clock = FakeClock()
+    watch = Watch[int](clock)
+
+    task = asyncio.create_task(watch.wait_next(timeout=0))
+    await clock.advance(0)
+
+    assert task.result() is None
+
+
+async def test_a_value_that_wakes_a_reader_leaves_no_timer_behind() -> None:
+    clock = FakeClock()
+    watch = Watch[int](clock)
+
+    task = asyncio.create_task(watch.wait_next(timeout=100.0))
+    await clock.advance(0)
+    watch.set(1)
+    await clock.advance(0)
+
+    assert task.result() == 1
+    assert asyncio.all_tasks() == {asyncio.current_task()}
+
+
+async def test_waits_that_end_without_a_value_leave_no_waiter_behind() -> None:
+    clock = FakeClock()
+    watch = Watch[int](clock)
+
+    timed_out = [asyncio.create_task(watch.wait_next(timeout=0.1)) for _ in range(3)]
+    cancelled = asyncio.create_task(watch.wait_for(is_even, timeout=1.0))
+    await clock.advance(0)
+    cancelled.cancel()
+    await clock.advance(0.1)
+
+    assert [task.result() for task in timed_out] == [None, None, None]
+    assert cancelled.cancelled()
+    assert watch._waiters == []  # a reader on a silent stream must not grow memory
+
+
 async def test_wait_for_gives_nothing_once_the_timeout_is_over() -> None:
     clock = FakeClock()
     watch = Watch[int](clock)
