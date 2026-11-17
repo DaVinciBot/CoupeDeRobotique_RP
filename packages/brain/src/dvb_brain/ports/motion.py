@@ -29,9 +29,10 @@ class MotionPort(Protocol):
 
         SMOOTH brakes with the stop deceleration of the config, the one the safety zone is
         computed with (architecture, section 8.4), whatever the max_accel of the move.
-        URGENT is final for this port (end of match, FAULT): no command leaves afterwards, not
-        even a later SMOOTH stop or the stop of a cancelled move(), so that nothing softens it
-        (RG H.3).
+        URGENT is final for this port (end of match, FAULT): no motion command leaves afterwards,
+        not even a later SMOOTH stop or the stop of a cancelled move(), so that nothing softens
+        it (RG H.3). The port records it before its first await. The heartbeat goes on: its
+        loss would make the board brake on its own, softly.
 
         Never raises, even with a dead link: the SafetyMonitor and the end of run_brain must not
         get stuck on it. The running move() returns STOPPED once the board reports it.
@@ -41,9 +42,9 @@ class MotionPort(Protocol):
     async def reset_pose(self, pose: Pose) -> None:
         """Set the absolute pose of the robot, which must be still (start, calibration).
 
-        Raise RuntimeError while a move runs, while the last status is MOVING, or after
-        stop(URGENT). Return once a status shows the new pose; the caller bounds its wait on
-        the Clock.
+        Raise RuntimeError while a move runs, while the last status is MOVING (braking after a
+        cancelled move: wait for another state first), or after stop(URGENT). Return once a
+        status shows the new pose; the caller bounds its wait on the Clock.
         """
         ...
 

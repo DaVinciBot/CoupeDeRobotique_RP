@@ -46,9 +46,12 @@ Les cases 3.1 à 3.3 posent l'horloge, `Watch[T]` et le `MotionPort`. Le faux ma
   - Annuler `move()` arrête le robot comme `stop(SMOOTH)` : abandonner l'attente ne le laisse jamais rouler.
   - `move()` ne détecte pas un lien perdu : l'appelant borne son attente sur la `Clock`.
 - **`stop(mode)`** envoie l'arrêt sans attendre la Teensy et ne lève jamais d'exception. Ainsi, le `SafetyMonitor` et le `finally` de `run_brain` ne restent jamais bloqués sur un lien mort.
-  - **`SMOOTH`** freine avec la décélération d'arrêt de la config, celle qui sert à calculer la zone de sécurité (architecture, section 8.4), quel que soit le `max_accel` du mouvement. Sinon une `Straight` à 0,5 m/s et `max_accel` = 0,5 m/s² freinerait sur 250 mm, alors que la zone a été calculée pour 190 mm.
-  - **`URGENT`** est définitif pour le port : il ne sert que vers un état final (fin de match, `FAULT`, `finally` de `run_brain`). Après lui, plus aucune commande ne part. Un `stop(SMOOTH)` ultérieur et l'arrêt d'un `move()` annulé n'envoient rien, pour que rien n'adoucisse l'arrêt urgent (RG H.3, « plus aucune commande » de la case 8.1). `move()` et `reset_pose()` lèvent alors `RuntimeError`.
-- **`reset_pose(pose)`** exige un robot immobile : `RuntimeError` si un `move()` est en cours, si le dernier statut est `MOVING`, ou après `stop(URGENT)`. Il ne rend la main qu'une fois qu'un statut montre la nouvelle pose, et l'appelant borne cette attente sur la `Clock`.
+  - **`SMOOTH`** freine avec la décélération d'arrêt de la config, celle qui sert à calculer la zone de sécurité (architecture, section 8.4), quel que soit le `max_accel` du mouvement. Sinon une `Straight` à 0,5 m/s et `max_accel` = 0,5 m/s² freinerait sur 250 mm, au lieu des 125 mm comptés par la zone à 1 m/s². Une seule valeur de config doit servir à la zone et être envoyée à la Teensy (9.1, 8.1), pour que les deux ne divergent pas.
+  - **`URGENT`** est définitif pour le port : il ne sert que vers un état final (fin de match, `FAULT`, `finally` de `run_brain`).
+    - Après lui, plus aucune commande de mouvement ne part. Un `stop(SMOOTH)` ultérieur et l'arrêt d'un `move()` annulé n'envoient rien, pour que rien n'adoucisse l'arrêt urgent (RG H.3, « plus aucune commande » de la case 8.1). `move()` et `reset_pose()` lèvent alors `RuntimeError`.
+    - Le port l'enregistre avant son premier `await`, pour qu'un `move()` annulé pendant l'envoi ne glisse pas un arrêt doux derrière.
+    - Le heartbeat (8.2) continue : s'il s'arrêtait, le chien de garde de la Teensy lancerait de lui-même un arrêt doux (13.3).
+- **`reset_pose(pose)`** exige un robot immobile : `RuntimeError` si un `move()` est en cours, si le dernier statut est `MOVING`, ou après `stop(URGENT)`. Juste après un `move()` annulé, le robot freine encore : l'appelant (recalage, 5.4 et 8.1) attend d'abord un statut autre que `MOVING`. `reset_pose` ne rend la main qu'une fois qu'un statut montre la nouvelle pose, et l'appelant borne cette attente sur la `Clock`.
 - **`link_ok()`** dit seulement si le port est ouvert.
 - **Surveillance.** Le silence de la Teensy, son redémarrage (`boot_id`) et le BAU sont surveillés par le `SafetyMonitor` (8.2), pas par les appelants.
 
@@ -66,16 +69,16 @@ Les cases 3.1 à 3.3 posent l'horloge, `Watch[T]` et le `MotionPort`. Le faux ma
 
 - **Attentes bornées sur la `Clock`.**
   - `FakeClock` ne fait avancer que ce qui attend sur la `Clock` (directement ou par un `Watch`). `asyncio.timeout`, `asyncio.wait_for` et `asyncio.sleep` comptent en temps réel : dans un test avec `FakeClock`, ils ne se déclenchent jamais. Les services bornent donc leurs attentes sur la `Clock`.
-  - L'outil commun (une attente avec échéance, tirée de `Watch._next`) sera ajouté en case 5.4, par le premier service qui en a besoin. On décidera alors où il se range, puisque `ports/` ne contient que les `Protocol` et `Watch` (ADR 0008).
+  - L'outil commun (une attente avec échéance, tirée de `Watch._next`) sera ajouté en case 5.4, par le premier service qui en a besoin. Les adaptateurs en auront besoin aussi (`timeout` des actionneurs, 15.2) : comme `adapters` et `services` s'ignorent et que `domain` n'a pas asyncio, il ne pourra se ranger que dans `ports/`, à côté de `Watch`, en amendant l'ADR 0008.
 - **Décodage par msgspec.** msgspec ne sait pas décoder `MoveCommand` tel quel (union de plusieurs dataclasses). Si la télémétrie ou les logs doivent transporter une commande, il faudra un tag, à ajouter à ce moment-là.
 - **Question ouverte.** L'évitement (6.2) veut réduire la vitesse max d'un mouvement en cours, mais ce port ne le permet pas : la limite n'existe que dans la commande. La décision dépend du point à valider « vitesse max modifiable ou non en cours de mouvement » (ADR 0003). On ajoutera alors une méthode au port, sans changer les types ci-dessus.
 - **À valider avec le firmware moteur (ADR 0003).**
   - la liste des mouvements ;
   - une limite de translation par `MOVE` ;
-  - le signe de `PushUntilBlocked` : sur la distance côté brain, alors que le firmware actuel signe la vitesse ;
+  - le signe de `PushUntilBlocked` : sur la distance côté brain, alors que le firmware actuel signe la vitesse ; et sa fin `STOPPED` quand `max_distance` est parcourue sans contact ;
   - la confirmation de `RESET_POSE` par le statut ;
   - un `STOP` normal freine avec la décélération d'arrêt de la config, pas avec celle du mouvement en cours ;
-  - un `STOP` normal reçu après un `STOP` urgent est sans effet, en plus de la garde côté brain.
+  - un `STOP` normal reçu après un `STOP` urgent est sans effet jusqu'au prochain `MOVE` ou réglage reçu, en plus de la garde côté brain. Sans cette borne, un match suivant joué sans redémarrer la Teensy ignorerait les arrêts de l'évitement.
 
   La conversion vers le fil reste dans l'adaptateur (15.1).
 - **Tests de contrat.** Le contrat ci-dessus sera vérifié par des tests communs à `FakeMotion` (3.6), au `SimMotion` (11.2) et à l'adaptateur Teensy (15.1).

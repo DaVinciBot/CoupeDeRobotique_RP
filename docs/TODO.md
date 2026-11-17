@@ -178,7 +178,7 @@ Checklist de tout ce qu'il faut faire pour le robot principal, dans l'ordre où 
 ### 3.6 Faux matériel — `adapters/fake/`
 
 - [ ] `FakeMotion` : exécution idéale avec une durée calculée (vitesse, accélération) ; scénarios injectables : blocage après x m, Teensy muette, redémarrage, BAU.
-- [ ] Tests de contrat du `MotionPort` (ADR 0010), communs à `FakeMotion`, `SimMotion` (11.2) et à l'adaptateur Teensy (15.1) : annuler `move()` arrête le robot, second `move()` refusé, `stop()` sans exception même lien mort, `stop(URGENT)` définitif, `reset_pose()` refusé robot en mouvement.
+- [ ] Tests de contrat du `MotionPort` (ADR 0010), communs à `FakeMotion`, `SimMotion` (11.2) et à l'adaptateur Teensy (15.1) : annuler `move()` arrête le robot, second `move()` refusé, `stop()` sans exception même lien mort, `stop(SMOOTH)` freiné avec la décélération d'arrêt de la config, `stop(URGENT)` définitif (enregistré avant le premier `await`, heartbeat maintenu), `reset_pose()` refusé robot en mouvement.
 - [ ] `FakeActuators` : durées fixes, taux d'échec réglable.
 - [ ] `FakeLidar` : pistes scriptées dans le temps.
 - [ ] `FakeStartSwitch` : `pull()` déclenché par le test.
@@ -234,7 +234,7 @@ Checklist de tout ce qu'il faut faire pour le robot principal, dans l'ordre où 
 - [ ] Envoi des `MoveCommand` un par un, vérification de la tolérance en position et en angle à l'arrivée (9.3).
 - [ ] Attentes bornées sur la `Clock`, jamais par `asyncio.timeout` ni `asyncio.wait_for`, que `FakeClock` ne fait pas avancer : outil commun tiré de `Watch._next` (ADR 0010).
 - [ ] Cible absolue conservée lors d'une replanification.
-- [ ] `push_until_blocked(direction, max_dist)` et `recalibrate(wall)` : `RESET_POSE` avec la coordonnée et l'angle de la bordure, l'autre coordonnée gardée (7.2).
+- [ ] `push_until_blocked(direction, max_dist)` et `recalibrate(wall)` : `RESET_POSE` avec la coordonnée et l'angle de la bordure, l'autre coordonnée gardée (7.2) ; attendre un statut autre que `MOVING` avant `reset_pose` (ADR 0010).
 - [ ] Tests avec `FakeMotion` et `FakeClock`.
 
 ---
@@ -625,7 +625,7 @@ Chaque point bloque les cases indiquées.
 | Types des champs des messages : `float` ou `double` | 3.4, 12 |
 | Variante exacte du CRC-16 | 12 |
 | Comportement d'un `MOVE` reçu pendant un autre, et vitesse max modifiable ou non en cours de mouvement | 3.4, 6.2 |
-| Mouvements côté firmware (ADR 0010) : liste des mouvements, limite de translation dans chaque `MOVE`, signe de `PushUntilBlocked` (sur la distance côté brain, sur la vitesse dans le firmware actuel), confirmation de `RESET_POSE` par le statut, `STOP` normal freiné avec la décélération d'arrêt de la config (celle de la zone de sécurité), `STOP` normal sans effet après un `STOP` urgent | 3.4, 15.1 |
+| Mouvements côté firmware (ADR 0010) : liste des mouvements, limite de translation dans chaque `MOVE`, signe de `PushUntilBlocked` (sur la distance côté brain, sur la vitesse dans le firmware actuel) et fin `STOPPED` sans contact, confirmation de `RESET_POSE` par le statut, `STOP` normal freiné avec la décélération d'arrêt de la config (celle de la zone de sécurité), `STOP` normal sans effet après un `STOP` urgent jusqu'au prochain `MOVE` ou réglage | 3.4, 15.1 |
 | Empreinte réelle du robot (rayon, polygone, actionneurs rentrés) | 2.4, 5.1, 6.1, 7.4 |
 | Position, orientation et hauteur du lidar sur le robot | 9.1, 16.2 |
 | Séquences des mécanismes (prise de pierres, construction, Graal, lanceur) | 7.1, 14 |
