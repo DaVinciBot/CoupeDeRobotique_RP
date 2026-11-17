@@ -31,7 +31,7 @@ class MotionPort(Protocol):
         computed with (architecture, section 8.4), whatever the max_accel of the move.
         URGENT is final for this port (end of match, FAULT): no motion command leaves afterwards,
         not even a later SMOOTH stop or the stop of a cancelled move(), so that nothing softens
-        it (RG H.3). The port records it before its first await. The heartbeat goes on: its
+        it (RG H.3). The port records it before its first await. heartbeat() goes on: its
         loss would make the board brake on its own, softly.
 
         Never raises, even with a dead link: the SafetyMonitor and the end of run_brain must not
@@ -39,11 +39,21 @@ class MotionPort(Protocol):
         """
         ...
 
+    async def heartbeat(self) -> None:
+        """Send one heartbeat and return without waiting for the board.
+
+        The SafetyMonitor calls it at the rate of the board contract (ADR 0003), after
+        stop(URGENT) too: without it, the board stops on its own after 200 ms. Never raises,
+        even with a dead link.
+        """
+        ...
+
     async def reset_pose(self, pose: Pose) -> None:
         """Set the absolute pose of the robot, which must be still (start, calibration).
 
         Raise RuntimeError while a move runs, while the last status is MOVING (braking after a
-        cancelled move: wait for another state first), or after stop(URGENT). Return once a
+        cancelled move: wait for another state first, the board reports MOVING until the robot
+        is still), or after stop(URGENT). Return once a
         status shows the new pose; the caller bounds its wait on the Clock.
         """
         ...

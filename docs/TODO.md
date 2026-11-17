@@ -155,13 +155,14 @@ Checklist de tout ce qu'il faut faire pour le robot principal, dans l'ordre où 
 ### 3.3 `MotionPort`
 
 - [x] Types dans `domain/motion.py` (ADR 0008, ADR 0010) : `MoveCommand`, type somme `RotateBy | RotateTo | Straight | GoToPoint | PushUntilBlocked` en SI, avec `max_speed` et `max_accel` pour les translations seulement ; `MotionState` (`MOVING`, `ARRIVED`, `BLOCKED`, `STOPPED`), `MotionStatus` (`move_id`, `state`, `pose`, `v`, `omega`, `emergency_stop`, `teensy_time`, `boot_id`), `StopMode` (`SMOOTH`, `URGENT`).
-- [x] `MotionPort` : `async move(cmd) -> MotionStatus` (`move_id` attribué par le port), `async stop(mode)`, `async reset_pose(pose)`, `status() -> Watch[MotionStatus]`, `link_ok()`. Contrat dans l'ADR 0010 : un mouvement à la fois, annuler `move()` arrête le robot, `stop` n'attend jamais la Teensy.
+- [x] `MotionPort` : `async move(cmd) -> MotionStatus` (`move_id` attribué par le port), `async stop(mode)`, `async heartbeat()`, `async reset_pose(pose)`, `status() -> Watch[MotionStatus]`, `link_ok()`. Contrat dans l'ADR 0010 : un mouvement à la fois, annuler `move()` arrête le robot, `stop` n'attend jamais la Teensy.
 
 ### 3.4 Contrat brain ↔ Teensy moteur — `docs/adr/0003-motion-protocol.md`
 
 - [ ] Contenu exact de `HEARTBEAT`, `MOVE`, `STOP`, `RESET_POSE`, `MOTION_STATUS`, `SET_CONTROL_PARAMS`, `START_TRACE`, `TRACE_SAMPLE`, `TRACE_END` (6.2) : champs, types, unités, IDs.
 - [ ] Fréquences : heartbeat 20 Hz, statut ≥ 10 Hz à cadence fixe, arrêt de la Teensy après 200 ms sans heartbeat.
 - [ ] Sémantique d'un `MOVE` reçu pendant un autre, et de la vitesse max modifiée en cours de mouvement.
+- [ ] Décélération d'arrêt du `STOP` normal envoyée avec les réglages, même valeur que `avoidance.decel` de la zone de sécurité (21.1, ADR 0010).
 - [ ] Redémarrage de la Teensy détectable (`boot_id`) ; Teensy inerte tant qu'elle n'a pas reçu ses réglages.
 - [ ] ADR relu et approuvé par les auteurs du firmware moteur et du brain avant de coder les deux côtés.
 
@@ -178,7 +179,7 @@ Checklist de tout ce qu'il faut faire pour le robot principal, dans l'ordre où 
 ### 3.6 Faux matériel — `adapters/fake/`
 
 - [ ] `FakeMotion` : exécution idéale avec une durée calculée (vitesse, accélération) ; scénarios injectables : blocage après x m, Teensy muette, redémarrage, BAU.
-- [ ] Tests de contrat du `MotionPort` (ADR 0010), communs à `FakeMotion`, `SimMotion` (11.2) et à l'adaptateur Teensy (15.1) : annuler `move()` arrête le robot, second `move()` refusé, `stop()` sans exception même lien mort, `stop(SMOOTH)` freiné avec la décélération d'arrêt de la config, `stop(URGENT)` définitif (enregistré avant le premier `await`, heartbeat maintenu), `reset_pose()` refusé robot en mouvement.
+- [ ] Tests de contrat du `MotionPort` (ADR 0010), communs à `FakeMotion`, `SimMotion` (11.2) et à l'adaptateur Teensy (15.1) : annuler `move()` arrête le robot, second `move()` refusé, `stop()` et `heartbeat()` sans exception même lien mort, `stop(SMOOTH)` freiné avec la décélération d'arrêt de la config, `stop(URGENT)` définitif (enregistré avant le premier `await`, heartbeat maintenu), `reset_pose()` refusé robot en mouvement.
 - [ ] `FakeActuators` : durées fixes, taux d'échec réglable.
 - [ ] `FakeLidar` : pistes scriptées dans le temps.
 - [ ] `FakeStartSwitch` : `pull()` déclenché par le test.
@@ -318,7 +319,7 @@ Checklist de tout ce qu'il faut faire pour le robot principal, dans l'ordre où 
 
 ### 8.2 `SafetyMonitor` — `services/safety.py`
 
-- [ ] Première tâche du `TaskGroup` (5.3), heartbeat 20 Hz vers la Teensy moteur.
+- [ ] Première tâche du `TaskGroup` (5.3), heartbeat 20 Hz vers la Teensy moteur par `MotionPort.heartbeat()`, maintenu après `stop(URGENT)` (ADR 0010).
 - [ ] Surveillance : statut absent depuis 300 ms, `boot_id` changé, port série en erreur, BAU, boucle asyncio en retard de plus de 100 ms.
 - [ ] Réaction unique : `stop(URGENT)`, posture par défaut, `FAULT(reason)` ; jamais de relance automatique d'un match.
 - [ ] `run_brain` avec `finally` qui tente `stop(URGENT)` même si le port est mort.
@@ -625,7 +626,7 @@ Chaque point bloque les cases indiquées.
 | Types des champs des messages : `float` ou `double` | 3.4, 12 |
 | Variante exacte du CRC-16 | 12 |
 | Comportement d'un `MOVE` reçu pendant un autre, et vitesse max modifiable ou non en cours de mouvement | 3.4, 6.2 |
-| Mouvements côté firmware (ADR 0010) : liste des mouvements, limite de translation dans chaque `MOVE`, signe de `PushUntilBlocked` (sur la distance côté brain, sur la vitesse dans le firmware actuel) et fin `STOPPED` sans contact, confirmation de `RESET_POSE` par le statut, `STOP` normal freiné avec la décélération d'arrêt de la config (celle de la zone de sécurité), `STOP` normal sans effet après un `STOP` urgent jusqu'au prochain `MOVE` ou réglage, arrêt du chien de garde (200 ms) sans effet sur un arrêt urgent déjà fait | 3.4, 15.1 |
+| Mouvements côté firmware (ADR 0010) : liste des mouvements, limite de translation dans chaque `MOVE`, signe de `PushUntilBlocked` (sur la distance côté brain, sur la vitesse dans le firmware actuel) et fin `STOPPED` sans contact, confirmation de `RESET_POSE` par le statut, état `MOVING` jusqu'à l'arrêt complet (`ARRIVED`, `BLOCKED`, `STOPPED` seulement robot immobile), `STOP` normal freiné avec la décélération d'arrêt de la config (celle de la zone de sécurité), `STOP` normal sans effet après un `STOP` urgent jusqu'au prochain `MOVE` ou réglage, arrêt du chien de garde (200 ms) sans effet sur un arrêt urgent déjà fait | 3.4, 15.1 |
 | Empreinte réelle du robot (rayon, polygone, actionneurs rentrés) | 2.4, 5.1, 6.1, 7.4 |
 | Position, orientation et hauteur du lidar sur le robot | 9.1, 16.2 |
 | Séquences des mécanismes (prise de pierres, construction, Graal, lanceur) | 7.1, 14 |
