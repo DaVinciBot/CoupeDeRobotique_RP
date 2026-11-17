@@ -143,25 +143,26 @@ Checklist de tout ce qu'il faut faire pour le robot principal, dans l'ordre où 
 
 ### 3.1 Horloge — `ports/clock.py`
 
-- [ ] `Clock` Protocol : `now()` (monotone, s), `async sleep(dt)`, `async sleep_until(t)`.
-- [ ] `SystemClock` (`time.monotonic`, `asyncio.sleep`).
-- [ ] `FakeClock` : `advance(dt)` réveille les `sleep` dans l'ordre.
-- [ ] `MatchClock` (domain, sans lecture d'horloge, ADR 0008) : démarrée à `t0`, `elapsed(now)`, `remaining(now)`, `in_phase(phase_id, now)` d'après `Scoring.phase_starts`. Une seule instance, démarrée à la tirette (RG H.2).
+- [x] `Clock` Protocol : `now()` (monotone, s), `async sleep(dt)`, `async sleep_until(t)`.
+- [x] `SystemClock` dans `adapters/clock.py` (`time.monotonic`, `asyncio.sleep`) : `ports/` ne contient que les `Protocol` et `Watch` (ADR 0008, ADR 0010).
+- [x] `FakeClock` dans `adapters/fake/clock.py` : `advance(dt)` réveille les `sleep` dans l'ordre et laisse les tâches réveillées tourner avant l'échéance suivante (ADR 0010).
+- [x] `MatchClock` (domain, sans lecture d'horloge, ADR 0008) : créée à `t0`, `elapsed(now)`, `remaining(now)`, `in_phase(phase_id, now)` d'après `Scoring.phase_starts`. Une seule instance, créée à la tirette par le `MatchManager` (RG H.2).
 
 ### 3.2 `Watch[T]` — `ports/watch.py`
 
-- [ ] Dernière valeur + notification : `set(v)`, `get() -> T | None`, `async wait_next()`, `async wait_for(predicate, timeout)`.
+- [x] Dernière valeur + notification : `set(v)`, `get() -> T | None`, `async wait_next(timeout)`, `async wait_for(predicate, timeout)`. Timeouts comptés sur la `Clock` (ADR 0010).
 
 ### 3.3 `MotionPort`
 
-- [ ] Types dans `domain/motion.py` (ADR 0008) : `MoveKind` (`ROTATE_BY`, `ROTATE_TO`, `STRAIGHT`, `GOTO`, `PUSH_UNTIL_BLOCKED`), `MoveCommand` (`move_id`, `kind`, paramètres SI, `max_speed`, `max_accel`), `MotionState` (`MOVING`, `ARRIVED`, `BLOCKED`, `STOPPED`), `MotionStatus` (`move_id`, `state`, `pose`, `v`, `omega`, `emergency_stop`, `teensy_time`, `boot_id`), `StopMode` (`SMOOTH`, `URGENT`).
-- [ ] `MotionPort` : `async move(cmd) -> MotionResult`, `async stop(mode)`, `async reset_pose(pose)`, `status() -> Watch[MotionStatus]`, `link_ok()`.
+- [x] Types dans `domain/motion.py` (ADR 0008, ADR 0010) : `MoveCommand`, type somme `RotateBy | RotateTo | Straight | GoToPoint | PushUntilBlocked` en SI, avec `max_speed` et `max_accel` pour les translations seulement ; `MotionState` (`MOVING`, `ARRIVED`, `BLOCKED`, `STOPPED`), `MotionStatus` (`move_id`, `state`, `pose`, `v`, `omega`, `emergency_stop`, `teensy_time`, `boot_id`), `StopMode` (`SMOOTH`, `URGENT`).
+- [x] `MotionPort` : `async move(cmd) -> MotionStatus` (`move_id` attribué par le port), `async stop(mode)`, `async heartbeat()`, `async reset_pose(pose)`, `status() -> Watch[MotionStatus]`, `link_ok()`. Contrat dans l'ADR 0010 : un mouvement à la fois, annuler `move()` arrête le robot, `stop` n'attend jamais la Teensy.
 
 ### 3.4 Contrat brain ↔ Teensy moteur — `docs/adr/0003-motion-protocol.md`
 
 - [ ] Contenu exact de `HEARTBEAT`, `MOVE`, `STOP`, `RESET_POSE`, `MOTION_STATUS`, `SET_CONTROL_PARAMS`, `START_TRACE`, `TRACE_SAMPLE`, `TRACE_END` (6.2) : champs, types, unités, IDs.
 - [ ] Fréquences : heartbeat 20 Hz, statut ≥ 10 Hz à cadence fixe, arrêt de la Teensy après 200 ms sans heartbeat.
 - [ ] Sémantique d'un `MOVE` reçu pendant un autre, et de la vitesse max modifiée en cours de mouvement.
+- [ ] Décélération d'arrêt du `STOP` normal envoyée avec les réglages, même valeur que `avoidance.decel` de la zone de sécurité (21.1, ADR 0010).
 - [ ] Redémarrage de la Teensy détectable (`boot_id`) ; Teensy inerte tant qu'elle n'a pas reçu ses réglages.
 - [ ] ADR relu et approuvé par les auteurs du firmware moteur et du brain avant de coder les deux côtés.
 
@@ -178,6 +179,7 @@ Checklist de tout ce qu'il faut faire pour le robot principal, dans l'ordre où 
 ### 3.6 Faux matériel — `adapters/fake/`
 
 - [ ] `FakeMotion` : exécution idéale avec une durée calculée (vitesse, accélération) ; scénarios injectables : blocage après x m, Teensy muette, redémarrage, BAU.
+- [ ] Tests de contrat du `MotionPort` (ADR 0010), communs à `FakeMotion`, `SimMotion` (11.2) et à l'adaptateur Teensy (15.1) : annuler `move()` arrête le robot, second `move()` refusé, `stop()` et `heartbeat()` sans exception même lien mort, `stop(SMOOTH)` freiné avec la décélération d'arrêt de la config, `stop(URGENT)` définitif (enregistré avant le premier `await`, heartbeat maintenu), `reset_pose()` refusé robot en mouvement.
 - [ ] `FakeActuators` : durées fixes, taux d'échec réglable.
 - [ ] `FakeLidar` : pistes scriptées dans le temps.
 - [ ] `FakeStartSwitch` : `pull()` déclenché par le test.
@@ -222,7 +224,7 @@ Checklist de tout ce qu'il faut faire pour le robot principal, dans l'ordre où 
 
 ### 5.3 Chemin → mouvements — `domain/motion_plan.py`
 
-- [ ] `Path` + `MoveMode` + `theta` final optionnel → `ROTATE_TO`, `STRAIGHT`, …, `ROTATE_TO(theta)` (9.4).
+- [ ] `Path` + `MoveMode` + `theta` final optionnel → `RotateTo`, `Straight`, …, `RotateTo(theta)` (9.4, ADR 0010).
 - [ ] Mode `auto` : marche arrière seulement sous `reverse_max_distance` et si le gain de rotation dépasse `reverse_min_gain`.
 - [ ] Vitesse de marche arrière plafonnée (lidar 270°, rien derrière).
 - [ ] Tests par table de cas.
@@ -231,8 +233,9 @@ Checklist de tout ce qu'il faut faire pour le robot principal, dans l'ordre où 
 
 - [ ] `async go_to(target, deadline) -> NavResult` (`ARRIVED`, `BLOCKED_BY_OPPONENT`, `NO_PATH`, `TIMEOUT`, `MOTION_FAULT`).
 - [ ] Envoi des `MoveCommand` un par un, vérification de la tolérance en position et en angle à l'arrivée (9.3).
+- [ ] Attentes bornées sur la `Clock`, jamais par `asyncio.timeout` ni `asyncio.wait_for`, que `FakeClock` ne fait pas avancer : outil commun tiré de `Watch._next` (ADR 0010).
 - [ ] Cible absolue conservée lors d'une replanification.
-- [ ] `push_until_blocked(direction, max_dist)` et `recalibrate(wall)` : `RESET_POSE` avec la coordonnée et l'angle de la bordure, l'autre coordonnée gardée (7.2).
+- [ ] `push_until_blocked(direction, max_dist)` et `recalibrate(wall)` : `RESET_POSE` avec la coordonnée et l'angle de la bordure, l'autre coordonnée gardée (7.2) ; attendre un statut autre que `MOVING` avant `reset_pose` (ADR 0010).
 - [ ] Tests avec `FakeMotion` et `FakeClock`.
 
 ---
@@ -311,12 +314,12 @@ Checklist de tout ce qu'il faut faire pour le robot principal, dans l'ordre où 
 - [ ] `INIT` : attente des liens, envoi des réglages d'asservissement (5.6), vérification du profil `match` et de l'absence de ressource simulée (4.5).
 - [ ] `CALIBRATING` : recalage contre deux bordures puis `RESET_POSE`, objectif < 30 s (préparation de 3 min, RG H.1) ; robot entièrement dans la salle du trône ensuite (RJ D.3.b). Un nouveau `CALIBRATE` recommence un recalage raté (ADR 0007).
 - [ ] `ARMED` : tirette en place exigée, anti-rebond 50 ms, seul le front « retirée » compte.
-- [ ] `RUNNING` : `MatchClock.start()` au front, envoi du départ au calcul déporté (× 3), lancement de l'exécuteur et de la fin de match.
+- [ ] `RUNNING` : `MatchClock` créée au front (ADR 0010), envoi du départ au calcul déporté (× 3), lancement de l'exécuteur et de la fin de match.
 - [ ] Minuteur de fin indépendant de la stratégie : à 100 s moins `hard_stop_margin_s`, `stop(URGENT)`, `release_all`, plus aucune commande (RG H.3 ; −50 pts si le robot bouge encore, RG H.4).
 
 ### 8.2 `SafetyMonitor` — `services/safety.py`
 
-- [ ] Première tâche du `TaskGroup` (5.3), heartbeat 20 Hz vers la Teensy moteur.
+- [ ] Première tâche du `TaskGroup` (5.3), heartbeat 20 Hz vers la Teensy moteur par `MotionPort.heartbeat()`, maintenu après `stop(URGENT)` (ADR 0010).
 - [ ] Surveillance : statut absent depuis 300 ms, `boot_id` changé, port série en erreur, BAU, boucle asyncio en retard de plus de 100 ms.
 - [ ] Réaction unique : `stop(URGENT)`, posture par défaut, `FAULT(reason)` ; jamais de relance automatique d'un match.
 - [ ] `run_brain` avec `finally` qui tente `stop(URGENT)` même si le port est mort.
@@ -477,7 +480,7 @@ Checklist de tout ce qu'il faut faire pour le robot principal, dans l'ordre où 
 - [ ] Conversion SI ↔ unités du fil dans cet adaptateur et nulle part ailleurs.
 - [ ] `move()` : `move_id` attribué, `Future` résolu par le `MOTION_STATUS` correspondant.
 - [ ] `PRINT` → `brain.log` sous `hardware.teensy`.
-- [ ] Tests contre la Teensy virtuelle sur `pty`, trames abîmées et débranchement compris.
+- [ ] Tests contre la Teensy virtuelle sur `pty`, trames abîmées et débranchement compris ; tests de contrat du `MotionPort` (3.6).
 
 ### 15.2 Teensy actionneurs — `adapters/teensy/actuators.py`
 
@@ -623,6 +626,7 @@ Chaque point bloque les cases indiquées.
 | Types des champs des messages : `float` ou `double` | 3.4, 12 |
 | Variante exacte du CRC-16 | 12 |
 | Comportement d'un `MOVE` reçu pendant un autre, et vitesse max modifiable ou non en cours de mouvement | 3.4, 6.2 |
+| Mouvements côté firmware (ADR 0010) : liste des mouvements, limite de translation dans chaque `MOVE`, signe de `PushUntilBlocked` (sur la distance côté brain, sur la vitesse dans le firmware actuel) et fin `STOPPED` sans contact, confirmation de `RESET_POSE` par le statut, état `MOVING` jusqu'à l'arrêt complet (`ARRIVED`, `BLOCKED`, `STOPPED` seulement robot immobile), `STOP` normal freiné avec la décélération d'arrêt de la config (celle de la zone de sécurité), `STOP` normal sans effet après un `STOP` urgent jusqu'au prochain `MOVE` ou réglage, arrêt du chien de garde (200 ms) sans effet sur un arrêt urgent déjà fait | 3.4, 15.1 |
 | Empreinte réelle du robot (rayon, polygone, actionneurs rentrés) | 2.4, 5.1, 6.1, 7.4 |
 | Position, orientation et hauteur du lidar sur le robot | 9.1, 16.2 |
 | Séquences des mécanismes (prise de pierres, construction, Graal, lanceur) | 7.1, 14 |
@@ -633,5 +637,5 @@ Chaque point bloque les cases indiquées.
 | Horloge commune container lidar / brain pour l'horodatage des balayages | 16.1, 16.2 |
 | Format UDP des échanges avec le calcul déporté | 17 |
 | Liste exacte des « aires adverses à accès exclusif » (RG H.4) : le règlement 2027 ne la donne pas explicitement, à faire confirmer (FAQ). Le vol de pierres dans le château adverse (RJ E.1) suppose d'approcher ses remparts, que l'on interdit pour l'instant | 2.4, 5.1, 7.2 |
-| Début exact de la phase d'attaque : « entre la 85e seconde et la fin du match » (RJ E.4.b) peut se lire t ≥ 84 s (la 85e seconde commence à 84 s) ou t ≥ 85 s. `scoring.json` dit 85 s pour l'instant ; une action faite avant la phase n'est pas comptée. À faire confirmer (FAQ) | 3.1, 7.2 |
+| Début exact de la phase d'attaque : « entre la 85e seconde et la fin du match » (RJ E.4.b) peut se lire t ≥ 84 s (la 85e seconde commence à 84 s) ou t ≥ 85 s. `scoring.json` dit 85 s pour l'instant ; une action faite avant la phase n'est pas comptée. À faire confirmer (FAQ). `MatchClock` (3.1) lit le début dans `scoring.json` sans trancher | 7.2 |
 | Dates de la pré-coupe et de la CDR 2027 | 21.4 |
