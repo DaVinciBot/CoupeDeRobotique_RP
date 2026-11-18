@@ -41,7 +41,7 @@ Les cases 3.1 à 3.3 posent l'horloge, `Watch[T]` et le `MotionPort`. Le faux ma
 - **Limites de vitesse.** Seules les translations (`Straight`, `GoToPoint`, `PushUntilBlocked`) portent `max_speed` (m/s) et `max_accel` (m/s²). Les rotations utilisent les réglages envoyés à la Teensy au démarrage (architecture, section 7.1).
 - **`PushUntilBlocked`.** Le mouvement finit `BLOCKED` au contact, et `STOPPED` si `max_distance` est parcourue sans contact.
 
-**Contrat de `MotionPort`** (`ports/motion.py`). Il vaut pour tous les adaptateurs, quel que soit le protocole avec la Teensy (ADR 0003, à écrire en [case 3.4](../TODO.md#34-contrat-brain--teensy-moteur--docsadr0003-motion-protocolmd)).
+**Contrat de `MotionPort`** (`ports/motion.py`). Il vaut pour tous les adaptateurs, quel que soit le protocole avec la Teensy (ADR 0003, à écrire en [case 12.1](../TODO.md#121-contrat-brain--teensy-moteur--docsadr0003-motion-protocolmd)).
 
 - **`move(cmd) -> MotionStatus`**
   - Le port attribue le `move_id` et rend le statut qui termine le mouvement (`ARRIVED`, `BLOCKED` ou `STOPPED`) : `MotionResult` n'existe pas.
