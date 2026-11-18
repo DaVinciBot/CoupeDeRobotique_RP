@@ -23,7 +23,7 @@ Elles se rejoignent dans les adaptateurs des cartes Teensy (15.1, 15.2), puis su
 | A — Brain testable | Sections 1 (hors firmware) à 4 faites : `uv run pytest` couvre domain, ports et modèle du monde |
 | B — Match sur faux matériel | Sections 5 à 10 faites : la stratégie `homologation` se joue de bout en bout sur le faux matériel |
 | C — Match simulé en CI | Section 11 faite : la matrice de scénarios passe en CI |
-| D — Brain sur la vraie base | Sections 12.1, 12.3, 13 et 15.1 faites : la stratégie `homologation` roule sur la table |
+| D — Brain sur la vraie base | Sections 12.1, 12.3 (hors messages actionneurs), 13 et 15.1 faites : la stratégie `homologation` roule sur la table |
 | E — Homologable | Section 21.2 faite, à la pré-coupe au plus tard |
 
 Les jalons A à C ne demandent aucune carte Teensy, et les sections 12 à 14 ne demandent pas le brain : D les réunit.
@@ -32,8 +32,8 @@ Les jalons A à C ne demandent aucune carte Teensy, et les sections 12 à 14 ne 
 
 | Point de rencontre | Case | Nécessaire à | En attendant |
 | --- | --- | --- | --- |
-| Contrat brain ↔ Teensy moteur | 12.1 | 12.3, 13.4, 15.1 ; détails de 6.2, 8.1, 8.3 et 19.2 | Le brain code contre `MotionPort` (case 3.3, ADR 0010) avec `FakeMotion` (case 3.6) et `SimMotion` (case 11.2) |
-| Contrat brain ↔ Teensy actionneurs | 12.2 | 12.3, 14, 15.2 | Le brain code contre `ActuatorPort` (case 3.5) avec `FakeActuators` (case 3.6) |
+| Contrat brain ↔ Teensy moteur | 12.1 | 12.3 (messages moteur), 13.4, 15.1 ; détails de 6.2, 8.1, 8.3 et 19.2 | Le brain code contre `MotionPort` (case 3.3, ADR 0010) avec `FakeMotion` (case 3.6) et `SimMotion` (case 11.2) |
+| Contrat brain ↔ Teensy actionneurs | 12.2 | 12.3 (messages actionneurs), 14, 15.2 | Le brain code contre `ActuatorPort` (case 3.5) avec `FakeActuators` (case 3.6) |
 | usb_com v2 | 12.3 | 13.4, 13.5, 15.1, 15.2 | Le brain n'utilise pas usb_com avant la section 15 |
 | Teensy virtuelle | 13.5 | 15.1 | `SimMotion` (case 11.2) pour les scénarios de match |
 | Format UDP du lidar | 16.1 | 11.3 (sortie UDP du lidar simulé), 16.2 | `SimLidarTracks` (case 11.3) |
@@ -176,7 +176,7 @@ Les jalons A à C ne demandent aucune carte Teensy, et les sections 12 à 14 ne 
 
 ### 3.4 Contrat brain ↔ Teensy moteur
 
-Déplacé en case 12.1 : le brain code contre `MotionPort` (3.3, ADR 0010) et n'a besoin du protocole qu'en 15.1.
+Déplacé en case 12.1 : le brain code contre `MotionPort` (case 3.3, ADR 0010). Seules les cases marquées « (attend 12.1) » attendent ce contrat, et le protocole lui-même ne sert qu'en 15.1.
 
 ### 3.5 Autres ports
 
@@ -431,13 +431,15 @@ Déplacé en case 12.1 : le brain code contre `MotionPort` (3.3, ADR 0010) et n'
 - [ ] Sémantique d'un `MOVE` reçu pendant un autre, et de la vitesse max modifiée en cours de mouvement.
 - [ ] Décélération d'arrêt du `STOP` normal envoyée avec les réglages, même valeur que `avoidance.decel` de la zone de sécurité (21.1, ADR 0010).
 - [ ] Redémarrage de la Teensy détectable (`boot_id`) ; Teensy inerte tant qu'elle n'a pas reçu ses réglages.
-- [ ] ADR relu et approuvé côté firmware et côté brain avant l'adaptateur Teensy (15.1).
+- [ ] ADR relu et approuvé côté firmware et côté brain avant d'en coder les messages (cases 12.3 et 13.4).
 
 ### 12.2 Contrat brain ↔ Teensy actionneurs — ADR dans `docs/adr/`
 
+Écrit à partir des attentes du brain : `ActuatorPort` tel que le décrit la case 3.5, et l'architecture (10).
+
 - [ ] Messages des commandes génériques (10) : servo à un angle, pas-à-pas à une position, sortie tout-ou-rien, lecture de capteur, à partir des messages actionneurs existants (6.2) ; réponses « fini », « bloqué », « timeout ».
 - [ ] État et fins de course à 20 Hz, heartbeat et `boot_id` comme la Teensy moteur, posture par défaut sur perte du heartbeat.
-- [ ] ADR relu et approuvé côté firmware et côté brain avant l'adaptateur actionneurs (15.2).
+- [ ] ADR relu et approuvé côté firmware et côté brain avant d'en coder les messages (cases 12.3 et 14).
 
 ### 12.3 usb_com v2 (C++ et Python)
 
@@ -447,7 +449,8 @@ Déplacé en case 12.1 : le brain code contre `MotionPort` (3.3, ADR 0010) et n'
 - [ ] Index de réception sur 16 bits, contrôle de la taille avant copie.
 - [ ] Un seul écrivain côté Python (file asyncio).
 - [ ] Plages d'ID inchangées : 0–127 Pi → Teensy, 128–255 Teensy → Pi, 127 = NACK.
-- [ ] Nouveaux messages des contrats (12.1, 12.2), dans `messages.h` et `messages.py`.
+- [ ] Nouveaux messages du contrat moteur (case 12.1), dans `messages.h` et `messages.py`.
+- [ ] Nouveaux messages du contrat actionneurs (case 12.2), dans `messages.h` et `messages.py`.
 - [ ] Teensy reconnue par son numéro de série.
 - [ ] CI : vérification que `messages.h` et `messages.py` ont les mêmes ID et tailles.
 - [ ] Tests aller-retour Python ↔ C++ (codec compilé sur PC), avec trames abîmées, tronquées et concaténées.
@@ -490,7 +493,7 @@ Déplacé en case 12.1 : le brain code contre `MotionPort` (3.3, ADR 0010) et n'
 ### 13.5 Teensy virtuelle
 
 - [ ] Bibliothèque de contrôle (case 13.1) compilée en `native`, sur un pseudo-terminal (`pty`), avec le vrai protocole (case 12.3) et le watchdog (12.1).
-- [ ] Option « débrancher » la Teensy virtuelle en plein match.
+- [ ] Option « débrancher » : couper le pseudo-terminal à la demande, pour tester la perte du lien (case 15.1).
 
 ---
 
@@ -516,7 +519,7 @@ Déplacé en case 12.1 : le brain code contre `MotionPort` (3.3, ADR 0010) et n'
 - [ ] Conversion SI ↔ unités du fil dans cet adaptateur et nulle part ailleurs.
 - [ ] `move()` : `move_id` attribué, `Future` résolu par le `MOTION_STATUS` correspondant.
 - [ ] `PRINT` → `brain.log` sous `hardware.teensy`.
-- [ ] Tests contre la Teensy virtuelle sur `pty` (13.5), trames abîmées et débranchement compris ; tests de contrat du `MotionPort` (3.6).
+- [ ] Tests contre la Teensy virtuelle sur `pty` (case 13.5), trames abîmées et débranchement compris ; tests de contrat du `MotionPort` (3.6).
 
 ### 15.2 Teensy actionneurs — `adapters/teensy/actuators.py`
 
