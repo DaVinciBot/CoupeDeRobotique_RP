@@ -52,7 +52,7 @@ Le niveau le plus haut atteint par un fichier du diff l'emporte. Le noter dans l
 | --- | --- | --- |
 | 0 | Du Markdown seulement, hors ADR, architecture, `CLAUDE.md` et `.claude/` : case cochée, README, guide | Aucun agent : l'auto-relecture de l'étape 2 suffit |
 | 1 | Tout le reste | `dvb-reviewer` |
-| 2 | Un invariant de sûreté du CLAUDE.md (arrêt, fin de match, tirette, évitement, 350 mm, heartbeat), le contrat d'un port, `firmware/`, `packages/usb_com/`, `tools/review_gate/`, `packages/supervisor/`, `packages/net/`, `dashboard/`, `deploy/`, ou plus de 400 lignes de code hors tests | `dvb-reviewer` et **un** spécialiste, celui qui couvre le risque principal (tableau de l'étape 4) |
+| 2 | Un invariant de sûreté du CLAUDE.md (arrêt, fin de match, tirette, évitement, 350 mm, heartbeat), le contrat d'un port, `firmware/`, `packages/usb_com/`, `tools/review_gate/`, `.claude/settings.json`, `packages/supervisor/`, `packages/net/`, `dashboard/`, `deploy/`, ou plus de 400 lignes de code hors tests | `dvb-reviewer` et **un** spécialiste, celui qui couvre le risque principal (tableau de l'étape 4) |
 
 Dans le doute entre deux niveaux, prendre le plus haut.
 
@@ -127,9 +127,16 @@ uv run python tools/review_gate/review_gate.py stamp --report <rapport>
 
 ## Revue de complément
 
-Pour les commits faits après un tampon (retours de la PR, oubli, merge de `dev`) :
+Pour les commits faits après un tampon en réponse à des retours (relecture de la PR, oubli signalé) ou pour un merge de `dev`. Du travail nouveau, qui n'est ni l'un ni l'autre, demande une revue normale.
 
-1. Repérer le dernier commit tamponné de la branche (`ls .git/dvb-review/`) et relire seulement `git diff <tamponné>..HEAD`.
+1. Repérer le dernier commit tamponné de la branche, en remontant les premiers parents (un merge de `dev` n'y mêle pas les tampons des autres branches ; marche aussi dans un worktree) :
+
+   ```bash
+   dir="$(git rev-parse --git-common-dir)/dvb-review"
+   for sha in $(git rev-list --first-parent HEAD); do [ -f "$dir/$sha.md" ] && { echo "$sha"; break; }; done
+   ```
+
+   Puis relire seulement `git diff <tamponné>..HEAD`.
 2. Un merge de `dev` sans conflit ni autre changement : les contrôles de l'étape 1 seuls, sans auto-relecture ni agent (`dev` est déjà relu), puis le point 4.
 3. Sinon : étapes 1 et 2 sur ce diff, puis le niveau de l'étape 3 calculé **sur ce diff** ; un agent ne tourne que si le complément est de niveau 2, avec le dossier de l'étape 4 limité au complément.
 4. Un rapport aux six sections, appliqué au complément : la « Demande » contient les retours ou la demande à l'origine des commits, mot pour mot. Puis `stamp`.

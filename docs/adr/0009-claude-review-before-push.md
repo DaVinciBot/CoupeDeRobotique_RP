@@ -71,11 +71,11 @@ La revue coûtait trop de jetons pour ce qu'elle trouvait en plus. Sur la PR #18
 - **Trois niveaux selon le diff** (skill, étape 3) :
   - niveau 0, du Markdown sans décision (ni ADR, ni architecture, ni `CLAUDE.md`, ni `.claude/`) : aucun agent ;
   - niveau 1, par défaut : `dvb-reviewer` ;
-  - niveau 2, sûreté, contrat d'un port, firmware, usb_com, `review_gate`, superviseur, réseau, dashboard, déploiement ou plus de 400 lignes de code : `dvb-reviewer` et un spécialiste.
+  - niveau 2, sûreté, contrat d'un port, firmware, usb_com, `review_gate` et `.claude/settings.json`, superviseur, réseau, dashboard, déploiement ou plus de 400 lignes de code : `dvb-reviewer` et un spécialiste.
 
   `qa-expert` n'est plus lancé par défaut : les tests font partie de la checklist de `dvb-reviewer`.
 - **Une seule re-relecture, ciblée.** Elle n'a lieu que si la correction d'un retour bloquant n'est pas triviale. L'agent vérifie alors ces corrections, sans refaire la revue. Les retours importants et mineurs ne relancent jamais d'agent. S'il reste un bloquant, Claude s'arrête et demande à la personne.
-- **Revue de complément** pour les commits faits après un tampon : seul le diff depuis le dernier commit tamponné est relu, et le niveau se calcule sur ce diff. Un merge de `dev` sans conflit ne demande que les contrôles. Le rapport garde ses six sections. Le hook `pre-push` ne vérifie que le tampon du commit poussé : `review_gate.py` ne change pas.
+- **Revue de complément** pour les commits faits après un tampon en réponse à des retours, ou pour un merge de `dev` (du travail nouveau demande une revue normale) : seul le diff depuis le dernier commit tamponné est relu, et le niveau se calcule sur ce diff ; un agent ne tourne que si ce diff est de niveau 2. Un merge de `dev` sans conflit ne demande que les contrôles. Le rapport garde ses six sections. Le hook `pre-push` ne vérifie que le tampon du commit poussé : `review_gate.py` ne change pas.
 
 ### Alternatives écartées
 
