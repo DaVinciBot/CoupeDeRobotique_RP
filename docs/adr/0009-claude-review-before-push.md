@@ -18,9 +18,8 @@ Le dossier `.claude/` est versionné ([architecture, sections 14.1 et 14.2](../A
 
 | Fichier | Rôle |
 | --- | --- |
-| `skills/review-branch/SKILL.md` | La procédure de revue : contrôles, relecture de tout le diff avec un tableau de traçabilité, relectures indépendantes par agents en parallèle, tri et correction des retours, rapport en six sections, tampon |
-| `agents/dvb-request-reviewer.md` | Agent de relecture du projet : conformité à la demande, à la TODO, au règlement, aux invariants de sûreté ; rien d'inventé sur le matériel |
-| `agents/dvb-architecture-reviewer.md` | Agent de relecture du projet : conformité à l'architecture et aux ADR, simplicité, solidité pour les cases suivantes de la TODO |
+| `skills/review-branch/SKILL.md` | La procédure de revue : contrôles, relecture de tout le diff avec un tableau de traçabilité, relectures indépendantes par agents proportionnées au diff, tri et correction des retours, rapport en six sections, tampon, revue de complément (révision ci-dessous) |
+| `agents/dvb-reviewer.md` | Agent de relecture du projet : conformité à la demande, à la TODO, au règlement, aux invariants de sûreté, à l'architecture et aux ADR ; rien d'inventé sur le matériel ; bugs ; simplicité et solidité pour les cases suivantes de la TODO |
 | `settings.json` | Hook git `pre-push` déclaré par les variables `GIT_CONFIG_*` de `env` ; hook `PreToolUse` sur les commandes git et gh et sur les outils GitHub des serveurs MCP ; outils Edit et Write interdits sur les tampons ; `attribution` vide |
 
 Les variables `GIT_CONFIG_*` de `env` n'existent que dans les commandes lancées par Claude Code. Elles déclarent un hook git `pre-push` (`hook.dvb-review.command`, git 2.54 ou plus récent) qui s'ajoute à ceux de `.git/hooks` et lance `tools/review_gate/review_gate.py pre-push`. Git lui donne ce qu'il va réellement pousser, quelle que soit la commande qui l'a lancé (`cd`, `bash -c`, alias, script, `gh pr create`). Le hook refuse :
@@ -59,3 +58,33 @@ Le dispositif ne concerne que Claude : le terminal d'une personne n'a pas ces va
 - Il faut Claude Code 2.1.295 ou plus récent (`onFailure` des hooks), git 2.54 ou plus récent et uv avec Python 3.14. Sans uv, les commandes git et gh de Claude sont refusées ; avec un git plus ancien, ses push et ses PR le sont (message du hook `PreToolUse`).
 - Le hook `PreToolUse` juge sur le texte de la commande, et seulement pour les commandes que reconnaît le filtre `if` (`git …`, `gh …`). Il refuse aussi une commande qui écrit un texte en citant une ligne de signature, ou `git commit --no-verify && git push` ; il ne voit pas `bash -c 'git push --no-verify'`, ni, avec un git trop ancien, `bash -c 'git push'`.
 - Le dispositif protège contre l'oubli, pas contre un contournement volontaire : variables `GIT_CONFIG_*` modifiées, `-c hook.dvb-review.enabled=false`, `gh api`, un tampon copié par une commande Bash, un autre outil. Celui-ci est interdit par le `CLAUDE.md`.
+
+## Révision du 2026-11-18 : revue proportionnée
+
+### Contexte
+
+La revue coûtait trop de jetons pour ce qu'elle trouvait en plus. Sur la PR #18 (TODO 3.1 à 3.3), elle a fait trois tours : quatre agents au premier, deux au deuxième, un au troisième. Elle a ensuite atteint la limite des trois tours sans converger, et la personne a relu elle-même le dernier diff. Chaque agent relisait le `CLAUDE.md`, toute l'architecture, les ADR et tout le diff, puis relançait pytest, pyright et lint-imports, que la session et `stamp` lancent déjà. La boucle ne convergeait pas : chaque tour relisait les corrections du tour précédent, et un retour important ou mineur suffisait à relancer un tour.
+
+### Décision
+
+- **Un seul agent du projet, `dvb-reviewer`**, qui fusionne `dvb-request-reviewer` et `dvb-architecture-reviewer`. Les deux lisaient les mêmes documents et le même diff. Sa checklist ajoute la recherche de bugs. Il lit seulement les sections et ADR que cite le dossier, ne relance pas les contrôles et rend au plus dix retours.
+- **Trois niveaux selon le diff** (skill, étape 3) :
+  - niveau 0, du Markdown sans décision (ni ADR, ni architecture, ni `CLAUDE.md`, ni `.claude/`) : aucun agent ;
+  - niveau 1, par défaut : `dvb-reviewer` ;
+  - niveau 2, sûreté, contrat d'un port, firmware, usb_com, `review_gate`, superviseur, réseau, dashboard, déploiement ou plus de 400 lignes de code : `dvb-reviewer` et un spécialiste.
+
+  `qa-expert` n'est plus lancé par défaut : les tests font partie de la checklist de `dvb-reviewer`.
+- **Une seule re-relecture, ciblée.** Elle n'a lieu que si la correction d'un retour bloquant n'est pas triviale. L'agent vérifie alors ces corrections, sans refaire la revue. Les retours importants et mineurs ne relancent jamais d'agent. S'il reste un bloquant, Claude s'arrête et demande à la personne.
+- **Revue de complément** pour les commits faits après un tampon : seul le diff depuis le dernier commit tamponné est relu, et le niveau se calcule sur ce diff. Un merge de `dev` sans conflit ne demande que les contrôles. Le rapport garde ses six sections. Le hook `pre-push` ne vérifie que le tampon du commit poussé : `review_gate.py` ne change pas.
+
+### Alternatives écartées
+
+- **Garder deux agents à chaque revue, en coupant seulement les tours** : ils relisent les mêmes documents et le même diff, ce qui double le coût de lecture pour deux checklists qui tiennent en une.
+- **Revue minimale (jamais plus d'un agent, aucune re-relecture)** : un diff qui touche la sûreté ou le firmware mérite un second regard spécialisé, et une correction bloquante non triviale mérite d'être revérifiée.
+- **Agents de relecture sur un modèle moins cher** : écarté pour l'instant, la qualité des retours passe avant. À reconsidérer si le coût reste trop haut.
+
+### Conséquences
+
+- Une revue de niveau 1 lance un agent au lieu de quatre, et la boucle s'arrête au plus après une re-relecture ciblée.
+- Le niveau est noté dans le rapport (section « Relectures ») et dans la PR. Une revue sous le niveau de l'étape 3 reste interdite sans le dire.
+- Les règles qui déclenchent le niveau 2 sont à ajuster si des défauts passent à travers des revues de niveau 1.
