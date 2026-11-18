@@ -6,7 +6,7 @@
 
 ## Contexte
 
-Les cases 3.1 à 3.3 posent l'horloge, `Watch[T]` et le `MotionPort`. Le faux matériel (3.6), le `Navigator` (5.4), l'évitement (6.2), le `MatchManager` (8.1) et le `SafetyMonitor` (8.2) en dépendent. La TODO laissait ouverts ou contradictoires plusieurs points :
+Les cases 3.1 à 3.3 posent l'horloge, `Watch[T]` et le `MotionPort`. Le faux matériel (3.5), le `Navigator` (5.4), l'évitement (6.2), le `MatchManager` (8.1) et le `SafetyMonitor` (8.2) en dépendent. La TODO laissait ouverts ou contradictoires plusieurs points :
 
 - elle range `SystemClock` et `FakeClock` dans `ports/clock.py`, alors que l'[ADR 0008](0008-brain-layers.md) réserve `ports/` aux `Protocol` et à `Watch` ;
 - un timeout asyncio compte en temps réel : avec une horloge simulée, un `Watch.wait_for(…, timeout)` ne serait plus reproductible ;
@@ -41,7 +41,7 @@ Les cases 3.1 à 3.3 posent l'horloge, `Watch[T]` et le `MotionPort`. Le faux ma
 - **Limites de vitesse.** Seules les translations (`Straight`, `GoToPoint`, `PushUntilBlocked`) portent `max_speed` (m/s) et `max_accel` (m/s²). Les rotations utilisent les réglages envoyés à la Teensy au démarrage (architecture, section 7.1).
 - **`PushUntilBlocked`.** Le mouvement finit `BLOCKED` au contact, et `STOPPED` si `max_distance` est parcourue sans contact.
 
-**Contrat de `MotionPort`** (`ports/motion.py`). Il vaut pour tous les adaptateurs, quel que soit le protocole avec la Teensy (ADR 0003, à écrire en [case 3.4](../TODO.md#34-contrat-brain--teensy-moteur--docsadr0003-motion-protocolmd)).
+**Contrat de `MotionPort`** (`ports/motion.py`). Il vaut pour tous les adaptateurs, quel que soit le protocole avec la Teensy (ADR 0003, à écrire en [case 12.1](../TODO.md#121-contrat-brain--teensy-moteur--docsadr0003-motion-protocolmd)).
 
 - **`move(cmd) -> MotionStatus`**
   - Le port attribue le `move_id` et rend le statut qui termine le mouvement (`ARRIVED`, `BLOCKED` ou `STOPPED`) : `MotionResult` n'existe pas.
@@ -87,5 +87,5 @@ Les cases 3.1 à 3.3 posent l'horloge, `Watch[T]` et le `MotionPort`. Le faux ma
   - l'arrêt du chien de garde (200 ms sans heartbeat) n'adoucit pas non plus un arrêt urgent déjà fait.
 
   La conversion vers le fil reste dans l'adaptateur (15.1).
-- **Tests de contrat.** Le contrat ci-dessus sera vérifié par des tests communs à `FakeMotion` (3.6), au `SimMotion` (11.2) et à l'adaptateur Teensy (15.1).
+- **Tests de contrat.** Le contrat ci-dessus sera vérifié par des tests communs à `FakeMotion` (3.5), au `SimMotion` (11.2) et à l'adaptateur Teensy (15.1).
 - **Dépendance aux internes d'asyncio.** `FakeClock` dépend de `loop._ready`. Si une version de Python le retire, les tests échouent en le disant, et on revient sur ce choix.

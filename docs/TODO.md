@@ -2,7 +2,12 @@
 
 Checklist de tout ce qu'il faut faire pour le robot principal, dans l'ordre où le faire. Elle suit le document d'architecture (`docs/ARCHITECTURE RP 2027.md`) ; les numéros entre parenthèses renvoient à ses sections.
 
-**Ordre de travail.** Le socle du dépôt d'abord, puis le brain sans matériel (sections 2 à 10), puis la simulation. Les sections 12 à 14 (usb_com, firmware) avancent en parallèle : leur seul point de rencontre avec le brain est le contrat de la section 3, à figer tôt.
+**Ordre de travail.** Le socle du dépôt d'abord (section 1). Ensuite, deux parties avancent en même temps, chacune dans son ordre, sans attendre l'autre :
+
+- le brain et la Pi : sections 2 à 11, 15.3, 15.4, puis 16 à 20, testées sur le faux matériel et le simulateur, sans carte Teensy ;
+- les cartes Teensy : sections 12 à 14, contrats d'abord, testées en `native` et sur la Teensy virtuelle, sans le brain.
+
+Elles se rejoignent dans les adaptateurs des cartes Teensy (15.1, 15.2), puis sur la table (section 21). Les points de rencontre sont dans le tableau ci-dessous. Une case qui attend une case de l'autre partie, ou placée plus loin dans la sienne, le dit : « (attend 12.1) ». Sans cette mention, une case ne dépend que des cases au-dessus d'elle dans sa partie.
 
 **Règles pour cocher une case.**
 
@@ -15,11 +20,23 @@ Checklist de tout ce qu'il faut faire pour le robot principal, dans l'ordre où 
 
 | Jalon | Critère |
 | --- | --- |
-| A — Brain testable | Sections 1 à 4 faites : `uv run pytest` couvre domain, ports et modèle du monde |
+| A — Brain testable | Sections 1 (hors firmware) à 4 faites : `uv run pytest` couvre domain, ports et modèle du monde |
 | B — Match sur faux matériel | Sections 5 à 10 faites : la stratégie `homologation` se joue de bout en bout sur le faux matériel |
 | C — Match simulé en CI | Section 11 faite : la matrice de scénarios passe en CI |
-| D — Brain sur la vraie base | Sections 12, 13 et 15.1 faites : la stratégie `homologation` roule sur la table |
+| D — Brain sur la vraie base | Sections 12.1, 12.3 (hors messages actionneurs), 13 et 15.1 faites : la stratégie `homologation` roule sur la table |
 | E — Homologable | Section 21.2 faite, à la pré-coupe au plus tard |
+
+Les jalons A à C ne demandent aucune carte Teensy, et les sections 12 à 14 ne demandent pas le brain : D les réunit.
+
+**Points de rencontre.** Les cases dont dépendent des cases d'une autre partie, ou placées avant elles, et ce qui permet d'avancer sans les attendre.
+
+| Point de rencontre | Case | Nécessaire à | En attendant |
+| --- | --- | --- | --- |
+| Contrat brain ↔ Teensy moteur | 12.1 | 12.3 (messages moteur), 13.4, 15.1 ; détails de 6.2, 8.1, 8.3 et 19.2 | Le brain code contre `MotionPort` (case 3.3, ADR 0010) avec `FakeMotion` (case 3.5) et `SimMotion` (case 11.2) |
+| Contrat brain ↔ Teensy actionneurs | 12.2 | 12.3 (messages actionneurs), 14, 15.2 | Le brain code contre `ActuatorPort` (case 3.4) avec `FakeActuators` (case 3.5) |
+| usb_com v2 | 12.3 | 13.4, 13.5, 15.1, 15.2 | Le brain n'utilise pas usb_com avant la section 15 |
+| Teensy virtuelle | 13.5 | 15.1 | `SimMotion` (case 11.2) pour les scénarios de match |
+| Format UDP du lidar | 16.1 | 11.3 (sortie UDP du lidar simulé), 16.2 | `SimLidarTracks` (case 11.3) |
 
 ---
 
@@ -139,7 +156,7 @@ Checklist de tout ce qu'il faut faire pour le robot principal, dans l'ordre où 
 
 ---
 
-## 3. Brain — ports, faux matériel et contrat moteur
+## 3. Brain — ports et faux matériel
 
 ### 3.1 Horloge — `ports/clock.py`
 
@@ -157,16 +174,7 @@ Checklist de tout ce qu'il faut faire pour le robot principal, dans l'ordre où 
 - [x] Types dans `domain/motion.py` (ADR 0008, ADR 0010) : `MoveCommand`, type somme `RotateBy | RotateTo | Straight | GoToPoint | PushUntilBlocked` en SI, avec `max_speed` et `max_accel` pour les translations seulement ; `MotionState` (`MOVING`, `ARRIVED`, `BLOCKED`, `STOPPED`), `MotionStatus` (`move_id`, `state`, `pose`, `v`, `omega`, `emergency_stop`, `teensy_time`, `boot_id`), `StopMode` (`SMOOTH`, `URGENT`).
 - [x] `MotionPort` : `async move(cmd) -> MotionStatus` (`move_id` attribué par le port), `async stop(mode)`, `async heartbeat()`, `async reset_pose(pose)`, `status() -> Watch[MotionStatus]`, `link_ok()`. Contrat dans l'ADR 0010 : un mouvement à la fois, annuler `move()` arrête le robot, `stop` n'attend jamais la Teensy.
 
-### 3.4 Contrat brain ↔ Teensy moteur — `docs/adr/0003-motion-protocol.md`
-
-- [ ] Contenu exact de `HEARTBEAT`, `MOVE`, `STOP`, `RESET_POSE`, `MOTION_STATUS`, `SET_CONTROL_PARAMS`, `START_TRACE`, `TRACE_SAMPLE`, `TRACE_END` (6.2) : champs, types, unités, IDs.
-- [ ] Fréquences : heartbeat 20 Hz, statut ≥ 10 Hz à cadence fixe, arrêt de la Teensy après 200 ms sans heartbeat.
-- [ ] Sémantique d'un `MOVE` reçu pendant un autre, et de la vitesse max modifiée en cours de mouvement.
-- [ ] Décélération d'arrêt du `STOP` normal envoyée avec les réglages, même valeur que `avoidance.decel` de la zone de sécurité (21.1, ADR 0010).
-- [ ] Redémarrage de la Teensy détectable (`boot_id`) ; Teensy inerte tant qu'elle n'a pas reçu ses réglages.
-- [ ] ADR relu et approuvé par les auteurs du firmware moteur et du brain avant de coder les deux côtés.
-
-### 3.5 Autres ports
+### 3.4 Autres ports
 
 - [ ] `ActuatorPort` : `async command(actuator_id, position_name, timeout) -> ActuatorResult` (`DONE`, `BLOCKED`, `TIMEOUT`), `async release_all()`, `state(actuator_id)`, `sensor(name) -> Watch[bool]`.
 - [ ] `LidarPort` : `tracks() -> Watch[TrackSet]` ; `Track(id, center, radius, velocity, confirmed)` et `TrackSet` dans `domain/world.py` (ADR 0008).
@@ -176,7 +184,7 @@ Checklist de tout ce qu'il faut faire pour le robot principal, dans l'ordre où 
 - [ ] BAU lu via `MotionStatus.emergency_stop`, pas de port séparé.
 - [ ] `Ports` : dataclass qui regroupe tous les ports.
 
-### 3.6 Faux matériel — `adapters/fake/`
+### 3.5 Faux matériel — `adapters/fake/`
 
 - [ ] `FakeMotion` : exécution idéale avec une durée calculée (vitesse, accélération) ; scénarios injectables : blocage après x m, Teensy muette, redémarrage, BAU.
 - [ ] Tests de contrat du `MotionPort` (ADR 0010), communs à `FakeMotion`, `SimMotion` (11.2) et à l'adaptateur Teensy (15.1) : annuler `move()` arrête le robot, second `move()` refusé, `stop()` et `heartbeat()` sans exception même lien mort, `stop(SMOOTH)` freiné avec la décélération d'arrêt de la config, `stop(URGENT)` définitif (enregistré avant le premier `await`, heartbeat maintenu), `reset_pose()` refusé robot en mouvement.
@@ -255,7 +263,7 @@ Checklist de tout ce qu'il faut faire pour le robot principal, dans l'ordre où 
 
 - [ ] Tâche à la fréquence des pistes, lecture du snapshot.
 - [ ] Obstacle dans la zone → `stop(SMOOTH)` immédiat + événement `ObstacleStop`.
-- [ ] Obstacle plus loin sur la trajectoire → vitesse max réduite.
+- [ ] Obstacle plus loin sur la trajectoire → vitesse max réduite (attend 12.1 : vitesse d'un mouvement en cours, question ouverte de l'ADR 0010).
 - [ ] Lidar muet depuis 300 ms → arrêt et aucun départ tant qu'il ne revient pas (8.5).
 - [ ] En profil `match`, la config refuse toute désactivation de l'évitement (désactivation volontaire = forfait, RG H.4).
 
@@ -311,7 +319,8 @@ Checklist de tout ce qu'il faut faire pour le robot principal, dans l'ordre où 
 
 ### 8.1 `MatchManager` — `services/match_manager.py`
 
-- [ ] `INIT` : attente des liens, envoi des réglages d'asservissement (5.6), vérification du profil `match` et de l'absence de ressource simulée (4.5).
+- [ ] `INIT` : attente des liens, vérification du profil `match` et de l'absence de ressource simulée (4.5).
+- [ ] `INIT` : envoi des réglages d'asservissement (5.6) à la Teensy moteur (attend 12.1).
 - [ ] `CALIBRATING` : recalage contre deux bordures puis `RESET_POSE`, objectif < 30 s (préparation de 3 min, RG H.1) ; robot entièrement dans la salle du trône ensuite (RJ D.3.b). Un nouveau `CALIBRATE` recommence un recalage raté (ADR 0007).
 - [ ] `ARMED` : tirette en place exigée, anti-rebond 50 ms, seul le front « retirée » compte.
 - [ ] `RUNNING` : `MatchClock` créée au front (ADR 0010), envoi du départ au calcul déporté (× 3), lancement de l'exécuteur et de la fin de match.
@@ -328,7 +337,7 @@ Checklist de tout ce qu'il faut faire pour le robot principal, dans l'ordre où 
 
 ### 8.3 Vérifications avant d'armer
 
-- [ ] Checks : Teensy moteur, actionneurs, lidar frais, pose recalée, côté choisi, stratégie valide pour ce côté, tirette en place, V_bat au-dessus du seuil, aucune ressource simulée.
+- [ ] Checks : Teensy moteur, actionneurs, lidar frais, pose recalée, côté choisi, stratégie valide pour ce côté, tirette en place, V_bat au-dessus du seuil (attend 12.1), aucune ressource simulée.
 - [ ] Refus d'armer si un check échoue, raison en clair.
 
 ---
@@ -345,7 +354,7 @@ Checklist de tout ce qu'il faut faire pour le robot principal, dans l'ordre où 
 
 ### 9.2 Composition — `app/main.py`
 
-- [ ] `build_ports(cfg) -> Ports` selon le profil (`match`, `test`, `sim`, `replay`) : seul endroit qui sait quel adaptateur est branché.
+- [ ] `build_ports(cfg) -> Ports` selon le profil (`match`, `test`, `sim`, `replay`) : seul endroit qui sait quel adaptateur est branché. Les adaptateurs réels s'y ajoutent avec la section 15.
 - [ ] `run_brain(ports, cfg)` avec `asyncio.TaskGroup`.
 - [ ] Édition chargée au lancement par `load_edition(cfg.edition)`, ses actions enregistrées ; les services reçoivent ses morceaux, jamais l'`Edition` (ADR 0006).
 - [ ] Commande `dvb-brain --config --profile --strategy --side`.
@@ -385,14 +394,12 @@ Checklist de tout ce qu'il faut faire pour le robot principal, dans l'ordre où 
 ### 11.2 Base roulante simulée
 
 - [ ] `SimMotion` Python implémentant `MotionPort` : trapèze avec les paramètres d'asservissement, bruit d'odométrie, glissement, blocage contre un obstacle, pannes injectables.
-- [ ] Teensy virtuelle : le code de contrôle du firmware compilé en `native`, sur un pseudo-terminal (`pty`), avec le vrai protocole et le watchdog (12.1).
-- [ ] Option « débrancher » la Teensy virtuelle en plein match.
 
 ### 11.3 Lidar simulé
 
-- [ ] Lancer de rayons 270°, fréquence et résolution du TiM561, bruit, trous, coupures.
-- [ ] Sortie dans le même format UDP que le container lidar.
 - [ ] Raccourci `SimLidarTracks` (pistes vraies + bruit) tant que `dvb-lidar` n'existe pas.
+- [ ] Lancer de rayons 270°, fréquence et résolution du TiM561, bruit, trous, coupures.
+- [ ] Sortie dans le même format UDP que le container lidar (attend 16.1).
 
 ### 11.4 Adversaires et actionneurs
 
@@ -408,7 +415,28 @@ Checklist de tout ce qu'il faut faire pour le robot principal, dans l'ordre où 
 
 ---
 
-## 12. usb_com v2 (C++ et Python)
+## 12. Contrats Teensy et usb_com v2
+
+### 12.1 Contrat brain ↔ Teensy moteur — `docs/adr/0003-motion-protocol.md`
+
+Écrit à partir du firmware moteur actuel et des attentes du brain : contrat de `MotionPort` et points à valider de l'ADR 0010.
+
+- [ ] Contenu exact de `HEARTBEAT`, `MOVE`, `STOP`, `RESET_POSE`, `MOTION_STATUS`, `SET_CONTROL_PARAMS`, `START_TRACE`, `TRACE_SAMPLE`, `TRACE_END` (6.2) : champs, types, unités, IDs.
+- [ ] Fréquences : heartbeat 20 Hz, statut ≥ 10 Hz à cadence fixe, arrêt de la Teensy après 200 ms sans heartbeat.
+- [ ] Sémantique d'un `MOVE` reçu pendant un autre, et de la vitesse max modifiée en cours de mouvement.
+- [ ] Décélération d'arrêt du `STOP` normal envoyée avec les réglages, même valeur que `avoidance.decel` de la zone de sécurité (21.1, ADR 0010).
+- [ ] Redémarrage de la Teensy détectable (`boot_id`) ; Teensy inerte tant qu'elle n'a pas reçu ses réglages.
+- [ ] ADR relu et approuvé côté firmware et côté brain avant d'en coder les messages (cases 12.3 et 13.4).
+
+### 12.2 Contrat brain ↔ Teensy actionneurs — ADR dans `docs/adr/`
+
+Écrit à partir des attentes du brain : `ActuatorPort` tel que le décrit la case 3.4, et l'architecture (10).
+
+- [ ] Messages des commandes génériques (10) : servo à un angle, pas-à-pas à une position, sortie tout-ou-rien, lecture de capteur, à partir des messages actionneurs existants (6.2) ; réponses « fini », « bloqué », « timeout ».
+- [ ] État et fins de course à 20 Hz, heartbeat et `boot_id` comme la Teensy moteur, posture par défaut sur perte du heartbeat.
+- [ ] ADR relu et approuvé côté firmware et côté brain avant d'en coder les messages (cases 12.3 et 14).
+
+### 12.3 usb_com v2 (C++ et Python)
 
 - [ ] Découpage COBS (`0x00` en fin de message) à la place de la signature de 4 octets (6.2).
 - [ ] CRC-16 à la place du CRC-8, même variante des deux côtés, documentée.
@@ -416,7 +444,8 @@ Checklist de tout ce qu'il faut faire pour le robot principal, dans l'ordre où 
 - [ ] Index de réception sur 16 bits, contrôle de la taille avant copie.
 - [ ] Un seul écrivain côté Python (file asyncio).
 - [ ] Plages d'ID inchangées : 0–127 Pi → Teensy, 128–255 Teensy → Pi, 127 = NACK.
-- [ ] Nouveaux messages du contrat (case 3.4 ci-dessus), dans `messages.h` et `messages.py`.
+- [ ] Nouveaux messages du contrat moteur (case 12.1), dans `messages.h` et `messages.py`.
+- [ ] Nouveaux messages du contrat actionneurs (case 12.2), dans `messages.h` et `messages.py`.
 - [ ] Teensy reconnue par son numéro de série.
 - [ ] CI : vérification que `messages.h` et `messages.py` ont les mêmes ID et tailles.
 - [ ] Tests aller-retour Python ↔ C++ (codec compilé sur PC), avec trames abîmées, tronquées et concaténées.
@@ -456,6 +485,11 @@ Checklist de tout ce qu'il faut faire pour le robot principal, dans l'ordre où 
 - [ ] `START_TRACE` (échelon de tension en boucle ouverte ou de consigne en boucle fermée), `TRACE_SAMPLE`, `TRACE_END` avec les réglages réellement utilisés.
 - [ ] Messages `PRINT` réservés au debug, désactivables.
 
+### 13.5 Teensy virtuelle
+
+- [ ] Bibliothèque de contrôle (case 13.1) compilée en `native`, sur un pseudo-terminal (`pty`), avec le vrai protocole (case 12.3) et le watchdog (12.1).
+- [ ] Option « débrancher » : couper le pseudo-terminal à la demande, pour tester la perte du lien (case 15.1).
+
 ---
 
 ## 14. Firmware Teensy actionneurs — `firmware/teensy_actuators`
@@ -480,7 +514,7 @@ Checklist de tout ce qu'il faut faire pour le robot principal, dans l'ordre où 
 - [ ] Conversion SI ↔ unités du fil dans cet adaptateur et nulle part ailleurs.
 - [ ] `move()` : `move_id` attribué, `Future` résolu par le `MOTION_STATUS` correspondant.
 - [ ] `PRINT` → `brain.log` sous `hardware.teensy`.
-- [ ] Tests contre la Teensy virtuelle sur `pty`, trames abîmées et débranchement compris ; tests de contrat du `MotionPort` (3.6).
+- [ ] Tests contre la Teensy virtuelle sur `pty` (case 13.5), trames abîmées et débranchement compris ; tests de contrat du `MotionPort` (3.5).
 
 ### 15.2 Teensy actionneurs — `adapters/teensy/actuators.py`
 
@@ -564,7 +598,7 @@ Checklist de tout ce qu'il faut faire pour le robot principal, dans l'ordre où 
 - [ ] Logs : direct, filtres, liste des lancements, téléchargement, suppression.
 - [ ] Santé : appareils (dernier message, latence, version firmware), processus et container (CPU, mémoire, latence de boucle), température, disque, Wi-Fi, commit installé.
 - [ ] Test / téléop : commandes unitaires, enchaînements, pavé directionnel « maintenir pour bouger ».
-- [ ] Asservissement : courbes uPlot consigne / mesure, lancement d'essais, gains à chaud puis sauvegardés, export CSV.
+- [ ] Asservissement : courbes uPlot consigne / mesure, lancement d'essais, gains à chaud puis sauvegardés, export CSV (attend 12.1).
 - [ ] Configuration : édition validée côté serveur, réel / simulé / désactivé.
 - [ ] Maintenance : flasher les Teensy (`teensy_loader_cli`), redémarrer les services, éteindre la Pi.
 - [ ] Stratégies (9.6) : édition sur carte, trajet par le vrai planificateur, alertes, frise 100 s avec 85 s et réserve, symétrie, simulation accélérée, « jouer à partir de cette étape », enregistrement validé.
@@ -622,11 +656,11 @@ Chaque point bloque les cases indiquées.
 
 | Point à valider | Cases bloquées |
 | --- | --- |
-| Unités sur le fil USB : SI (m, rad, m/s) ou unités Teensy (cm, cm/s) avec conversion dans l'adaptateur | 3.4, 12, 15.1 |
-| Types des champs des messages : `float` ou `double` | 3.4, 12 |
-| Variante exacte du CRC-16 | 12 |
-| Comportement d'un `MOVE` reçu pendant un autre, et vitesse max modifiable ou non en cours de mouvement | 3.4, 6.2 |
-| Mouvements côté firmware (ADR 0010) : liste des mouvements, limite de translation dans chaque `MOVE`, signe de `PushUntilBlocked` (sur la distance côté brain, sur la vitesse dans le firmware actuel) et fin `STOPPED` sans contact, confirmation de `RESET_POSE` par le statut, état `MOVING` jusqu'à l'arrêt complet (`ARRIVED`, `BLOCKED`, `STOPPED` seulement robot immobile), `STOP` normal freiné avec la décélération d'arrêt de la config (celle de la zone de sécurité), `STOP` normal sans effet après un `STOP` urgent jusqu'au prochain `MOVE` ou réglage, arrêt du chien de garde (200 ms) sans effet sur un arrêt urgent déjà fait | 3.4, 15.1 |
+| Unités sur le fil USB : SI (m, rad, m/s) ou unités Teensy (cm, cm/s) avec conversion dans l'adaptateur | 12.1, 12.3, 15.1 |
+| Types des champs des messages : `float` ou `double` | 12.1, 12.3 |
+| Variante exacte du CRC-16 | 12.3 |
+| Comportement d'un `MOVE` reçu pendant un autre, et vitesse max modifiable ou non en cours de mouvement | 12.1, 6.2 |
+| Mouvements côté firmware (ADR 0010) : liste des mouvements, limite de translation dans chaque `MOVE`, signe de `PushUntilBlocked` (sur la distance côté brain, sur la vitesse dans le firmware actuel) et fin `STOPPED` sans contact, confirmation de `RESET_POSE` par le statut, état `MOVING` jusqu'à l'arrêt complet (`ARRIVED`, `BLOCKED`, `STOPPED` seulement robot immobile), `STOP` normal freiné avec la décélération d'arrêt de la config (celle de la zone de sécurité), `STOP` normal sans effet après un `STOP` urgent jusqu'au prochain `MOVE` ou réglage, arrêt du chien de garde (200 ms) sans effet sur un arrêt urgent déjà fait | 12.1, 15.1 |
 | Empreinte réelle du robot (rayon, polygone, actionneurs rentrés) | 2.4, 5.1, 6.1, 7.4 |
 | Position, orientation et hauteur du lidar sur le robot | 9.1, 16.2 |
 | Séquences des mécanismes (prise de pierres, construction, Graal, lanceur) | 7.1, 14 |

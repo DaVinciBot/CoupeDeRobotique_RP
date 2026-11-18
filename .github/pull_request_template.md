@@ -31,7 +31,7 @@
 
 ## Revue avant push
 
-<!-- PR préparée avec Claude Code : résumé du rapport de la skill review-branch (agents utilisés, écarts trouvés et corrigés, points ouverts). Sinon, supprimer cette section. -->
+<!-- PR préparée avec Claude Code : résumé du rapport de la skill review-branch (niveau de revue, agents utilisés, écarts trouvés et corrigés, points ouverts). Sinon, supprimer cette section. -->
 
 ## Checklist
 

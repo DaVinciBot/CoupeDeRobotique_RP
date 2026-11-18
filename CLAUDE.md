@@ -114,7 +114,7 @@ En début de tâche, regarder les skills et agents de la session et utiliser ceu
 
 | Moment | Si disponible | Repli |
 | --- | --- | --- |
-| Concevoir une fonctionnalité ou un changement non trivial | `superpowers:brainstorming`, `superpowers:writing-plans` ; confronter le plan à l'architecture avec `dvb-architecture-reviewer` | agent `Plan` |
+| Concevoir une fonctionnalité ou un changement non trivial | `superpowers:brainstorming`, `superpowers:writing-plans` ; confronter le plan à l'architecture avec `dvb-reviewer` | agent `Plan` |
 | Écrire le code | `superpowers:test-driven-development`, `andrej-karpathy-skills:karpathy-guidelines` | le test d'abord, à la main |
 | Bug, test qui échoue, comportement inattendu | `superpowers:systematic-debugging`, `voltagent-qa-sec:debugger` | reproduire par un test avant de corriger |
 | Firmware, usb_com, contrat brain ↔ Teensy | `voltagent-domains:embedded-systems` | `general-purpose` |
@@ -128,7 +128,7 @@ Un agent de relecture reçoit la demande mot pour mot et le diff, jamais ses pro
 
 **Ce qui part sur GitHub est vérifié, cohérent et testé, pas seulement « ça marche maintenant ».**
 
-- Avant tout `git push` et toute `gh pr create`, suivre la skill `review-branch` : contrôles, relecture de tout le diff, relectures indépendantes par agents, corrections, rapport, tampon. Un hook git `pre-push` actif seulement dans les commandes de Claude (`.claude/settings.json`, `tools/review_gate/`, ADR 0009) refuse de pousser un commit qui n'a pas de tampon.
+- Avant tout `git push` et toute `gh pr create`, suivre la skill `review-branch` : contrôles, relecture de tout le diff, relectures indépendantes par agents proportionnées au diff, corrections, rapport, tampon. Un hook git `pre-push` actif seulement dans les commandes de Claude (`.claude/settings.json`, `tools/review_gate/`, ADR 0009) refuse de pousser un commit qui n'a pas de tampon.
 - Pousser par `git push`, jamais avec `--no-verify`, et ouvrir la PR par `gh pr create`. Jamais par un outil MCP GitHub ni `gh api`.
 - La revue répond à quatre questions. La branche fait-elle exactement la demande, rien de plus ? Est-elle cohérente avec l'architecture, les ADR, le règlement et les invariants de sûreté ? Est-elle testée hors robot ? Les cases suivantes de `docs/TODO.md` pourront-elles s'appuyer dessus sans la réécrire ?
 - Le résumé du rapport va dans la section « Revue avant push » de la PR.
