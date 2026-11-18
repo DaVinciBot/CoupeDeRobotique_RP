@@ -32,8 +32,8 @@ Les jalons A à C ne demandent aucune carte Teensy, et les sections 12 à 14 ne 
 
 | Point de rencontre | Case | Nécessaire à | En attendant |
 | --- | --- | --- | --- |
-| Contrat brain ↔ Teensy moteur | 12.1 | 12.3 (messages moteur), 13.4, 15.1 ; détails de 6.2, 8.1, 8.3 et 19.2 | Le brain code contre `MotionPort` (case 3.3, ADR 0010) avec `FakeMotion` (case 3.6) et `SimMotion` (case 11.2) |
-| Contrat brain ↔ Teensy actionneurs | 12.2 | 12.3 (messages actionneurs), 14, 15.2 | Le brain code contre `ActuatorPort` (case 3.5) avec `FakeActuators` (case 3.6) |
+| Contrat brain ↔ Teensy moteur | 12.1 | 12.3 (messages moteur), 13.4, 15.1 ; détails de 6.2, 8.1, 8.3 et 19.2 | Le brain code contre `MotionPort` (case 3.3, ADR 0010) avec `FakeMotion` (case 3.5) et `SimMotion` (case 11.2) |
+| Contrat brain ↔ Teensy actionneurs | 12.2 | 12.3 (messages actionneurs), 14, 15.2 | Le brain code contre `ActuatorPort` (case 3.4) avec `FakeActuators` (case 3.5) |
 | usb_com v2 | 12.3 | 13.4, 13.5, 15.1, 15.2 | Le brain n'utilise pas usb_com avant la section 15 |
 | Teensy virtuelle | 13.5 | 15.1 | `SimMotion` (case 11.2) pour les scénarios de match |
 | Format UDP du lidar | 16.1 | 11.3 (sortie UDP du lidar simulé), 16.2 | `SimLidarTracks` (case 11.3) |
@@ -174,11 +174,7 @@ Les jalons A à C ne demandent aucune carte Teensy, et les sections 12 à 14 ne 
 - [x] Types dans `domain/motion.py` (ADR 0008, ADR 0010) : `MoveCommand`, type somme `RotateBy | RotateTo | Straight | GoToPoint | PushUntilBlocked` en SI, avec `max_speed` et `max_accel` pour les translations seulement ; `MotionState` (`MOVING`, `ARRIVED`, `BLOCKED`, `STOPPED`), `MotionStatus` (`move_id`, `state`, `pose`, `v`, `omega`, `emergency_stop`, `teensy_time`, `boot_id`), `StopMode` (`SMOOTH`, `URGENT`).
 - [x] `MotionPort` : `async move(cmd) -> MotionStatus` (`move_id` attribué par le port), `async stop(mode)`, `async heartbeat()`, `async reset_pose(pose)`, `status() -> Watch[MotionStatus]`, `link_ok()`. Contrat dans l'ADR 0010 : un mouvement à la fois, annuler `move()` arrête le robot, `stop` n'attend jamais la Teensy.
 
-### 3.4 Contrat brain ↔ Teensy moteur
-
-Déplacé en case 12.1 : le brain code contre `MotionPort` (case 3.3, ADR 0010). Seules les cases marquées « (attend 12.1) » attendent ce contrat, et le protocole lui-même ne sert qu'en 15.1.
-
-### 3.5 Autres ports
+### 3.4 Autres ports
 
 - [ ] `ActuatorPort` : `async command(actuator_id, position_name, timeout) -> ActuatorResult` (`DONE`, `BLOCKED`, `TIMEOUT`), `async release_all()`, `state(actuator_id)`, `sensor(name) -> Watch[bool]`.
 - [ ] `LidarPort` : `tracks() -> Watch[TrackSet]` ; `Track(id, center, radius, velocity, confirmed)` et `TrackSet` dans `domain/world.py` (ADR 0008).
@@ -188,7 +184,7 @@ Déplacé en case 12.1 : le brain code contre `MotionPort` (case 3.3, ADR 0010).
 - [ ] BAU lu via `MotionStatus.emergency_stop`, pas de port séparé.
 - [ ] `Ports` : dataclass qui regroupe tous les ports.
 
-### 3.6 Faux matériel — `adapters/fake/`
+### 3.5 Faux matériel — `adapters/fake/`
 
 - [ ] `FakeMotion` : exécution idéale avec une durée calculée (vitesse, accélération) ; scénarios injectables : blocage après x m, Teensy muette, redémarrage, BAU.
 - [ ] Tests de contrat du `MotionPort` (ADR 0010), communs à `FakeMotion`, `SimMotion` (11.2) et à l'adaptateur Teensy (15.1) : annuler `move()` arrête le robot, second `move()` refusé, `stop()` et `heartbeat()` sans exception même lien mort, `stop(SMOOTH)` freiné avec la décélération d'arrêt de la config, `stop(URGENT)` définitif (enregistré avant le premier `await`, heartbeat maintenu), `reset_pose()` refusé robot en mouvement.
@@ -398,7 +394,6 @@ Déplacé en case 12.1 : le brain code contre `MotionPort` (case 3.3, ADR 0010).
 ### 11.2 Base roulante simulée
 
 - [ ] `SimMotion` Python implémentant `MotionPort` : trapèze avec les paramètres d'asservissement, bruit d'odométrie, glissement, blocage contre un obstacle, pannes injectables.
-- La Teensy virtuelle, qui fait tourner le code du firmware, est en 13.5 ; les scénarios de match n'en ont pas besoin.
 
 ### 11.3 Lidar simulé
 
@@ -435,7 +430,7 @@ Déplacé en case 12.1 : le brain code contre `MotionPort` (case 3.3, ADR 0010).
 
 ### 12.2 Contrat brain ↔ Teensy actionneurs — ADR dans `docs/adr/`
 
-Écrit à partir des attentes du brain : `ActuatorPort` tel que le décrit la case 3.5, et l'architecture (10).
+Écrit à partir des attentes du brain : `ActuatorPort` tel que le décrit la case 3.4, et l'architecture (10).
 
 - [ ] Messages des commandes génériques (10) : servo à un angle, pas-à-pas à une position, sortie tout-ou-rien, lecture de capteur, à partir des messages actionneurs existants (6.2) ; réponses « fini », « bloqué », « timeout ».
 - [ ] État et fins de course à 20 Hz, heartbeat et `boot_id` comme la Teensy moteur, posture par défaut sur perte du heartbeat.
@@ -519,7 +514,7 @@ Déplacé en case 12.1 : le brain code contre `MotionPort` (case 3.3, ADR 0010).
 - [ ] Conversion SI ↔ unités du fil dans cet adaptateur et nulle part ailleurs.
 - [ ] `move()` : `move_id` attribué, `Future` résolu par le `MOTION_STATUS` correspondant.
 - [ ] `PRINT` → `brain.log` sous `hardware.teensy`.
-- [ ] Tests contre la Teensy virtuelle sur `pty` (case 13.5), trames abîmées et débranchement compris ; tests de contrat du `MotionPort` (3.6).
+- [ ] Tests contre la Teensy virtuelle sur `pty` (case 13.5), trames abîmées et débranchement compris ; tests de contrat du `MotionPort` (3.5).
 
 ### 15.2 Teensy actionneurs — `adapters/teensy/actuators.py`
 

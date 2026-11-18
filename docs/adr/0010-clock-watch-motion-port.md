@@ -6,7 +6,7 @@
 
 ## Contexte
 
-Les cases 3.1 à 3.3 posent l'horloge, `Watch[T]` et le `MotionPort`. Le faux matériel (3.6), le `Navigator` (5.4), l'évitement (6.2), le `MatchManager` (8.1) et le `SafetyMonitor` (8.2) en dépendent. La TODO laissait ouverts ou contradictoires plusieurs points :
+Les cases 3.1 à 3.3 posent l'horloge, `Watch[T]` et le `MotionPort`. Le faux matériel (3.5), le `Navigator` (5.4), l'évitement (6.2), le `MatchManager` (8.1) et le `SafetyMonitor` (8.2) en dépendent. La TODO laissait ouverts ou contradictoires plusieurs points :
 
 - elle range `SystemClock` et `FakeClock` dans `ports/clock.py`, alors que l'[ADR 0008](0008-brain-layers.md) réserve `ports/` aux `Protocol` et à `Watch` ;
 - un timeout asyncio compte en temps réel : avec une horloge simulée, un `Watch.wait_for(…, timeout)` ne serait plus reproductible ;
@@ -87,5 +87,5 @@ Les cases 3.1 à 3.3 posent l'horloge, `Watch[T]` et le `MotionPort`. Le faux ma
   - l'arrêt du chien de garde (200 ms sans heartbeat) n'adoucit pas non plus un arrêt urgent déjà fait.
 
   La conversion vers le fil reste dans l'adaptateur (15.1).
-- **Tests de contrat.** Le contrat ci-dessus sera vérifié par des tests communs à `FakeMotion` (3.6), au `SimMotion` (11.2) et à l'adaptateur Teensy (15.1).
+- **Tests de contrat.** Le contrat ci-dessus sera vérifié par des tests communs à `FakeMotion` (3.5), au `SimMotion` (11.2) et à l'adaptateur Teensy (15.1).
 - **Dépendance aux internes d'asyncio.** `FakeClock` dépend de `loop._ready`. Si une version de Python le retire, les tests échouent en le disant, et on revient sur ce choix.
