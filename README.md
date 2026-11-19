@@ -18,6 +18,7 @@ Code du robot principal de l'équipe DaVinciBot, pour la Coupe de France de Robo
 | [uv](https://docs.astral.sh/uv/getting-started/installation/) | Python et dépendances. uv installe lui-même Python 3.14 (`.python-version`). | Tout le code Python |
 | [PlatformIO Core](https://docs.platformio.org/en/latest/core/installation/) (`pio`) | Compilation et tests des firmwares Teensy | `firmware/` seulement |
 | [pnpm](https://pnpm.io/installation) | Dépendances et build du dashboard | `dashboard/` seulement |
+| g++ | Tests du protocole usb_com (C++ compilé sur PC), tests `native` du firmware et simulation de la base roulante | Sans lui, les tests C++ d'usb_com sont sautés sur PC ; ils sont obligatoires en CI |
 
 Pour travailler sur le brain, uv suffit.
 
@@ -51,6 +52,12 @@ pio run -e teensy41           # compilation
 pio test -e native            # tests sur PC
 ```
 
+Simulation de la base roulante (courbes dans `firmware/teensy_motor/simulation/tmp/`) :
+
+```bash
+powershell -ExecutionPolicy Bypass -File firmware/teensy_motor/simulation/run.ps1
+```
+
 Dashboard, dans `dashboard/` :
 
 ```bash
@@ -58,7 +65,7 @@ pnpm install --frozen-lockfile
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
 ```
 
-Les firmwares et le dashboard n'ont pas encore rejoint `dev` : leurs commandes sont celles que la CI lancera dès qu'ils seront là.
+Le firmware actionneurs et le dashboard n'ont pas encore rejoint `dev` : leurs commandes sont celles que la CI lancera dès qu'ils seront là.
 
 ## Structure du dépôt
 

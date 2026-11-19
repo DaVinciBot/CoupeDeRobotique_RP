@@ -401,16 +401,16 @@ Checklist de tout ce qu'il faut faire pour le robot principal, dans l'ordre où 
 
 ## 12. usb_com v2 (C++ et Python)
 
-- [ ] Découpage COBS (`0x00` en fin de message) à la place de la signature de 4 octets (6.2).
-- [ ] CRC-16 à la place du CRC-8, même variante des deux côtés, documentée.
-- [ ] Trame : `[msg_id u8][payload N][len u8][crc16 u16]` puis COBS puis `0x00`.
-- [ ] Index de réception sur 16 bits, contrôle de la taille avant copie.
+- [x] Découpage COBS (`0x00` en fin de message) à la place de la signature de 4 octets (6.2).
+- [x] CRC-16 à la place du CRC-8, même variante des deux côtés, documentée.
+- [x] Trame : `[msg_id u8][payload N][len u8][crc16 u16]` puis COBS puis `0x00`.
+- [x] Index de réception sur 16 bits, contrôle de la taille avant copie.
 - [ ] Un seul écrivain côté Python (file asyncio).
-- [ ] Plages d'ID inchangées : 0–127 Pi → Teensy, 128–255 Teensy → Pi, 127 = NACK.
-- [ ] Nouveaux messages du contrat (case 3.4 ci-dessus), dans `messages.h` et `messages.py`.
+- [x] Plages d'ID inchangées : 0–127 Pi → Teensy, 128–255 Teensy → Pi, 127 = NACK.
+- [x] Nouveaux messages du contrat (case 3.4 ci-dessus), dans `messages.h` et `messages.py`.
 - [ ] Teensy reconnue par son numéro de série.
-- [ ] CI : vérification que `messages.h` et `messages.py` ont les mêmes ID et tailles.
-- [ ] Tests aller-retour Python ↔ C++ (codec compilé sur PC), avec trames abîmées, tronquées et concaténées.
+- [x] CI : vérification que `messages.h` et `messages.py` ont les mêmes ID et tailles.
+- [x] Tests aller-retour Python ↔ C++ (codec compilé sur PC), avec trames abîmées, tronquées et concaténées.
 
 ---
 
@@ -418,34 +418,34 @@ Checklist de tout ce qu'il faut faire pour le robot principal, dans l'ordre où 
 
 ### 13.1 Bibliothèque de contrôle portable
 
-- [ ] Correcteurs, générateur, odométrie et détection de blocage sans accès matériel, compilés en `teensy41` et `native` (7.1).
-- [ ] Tests `pio test -e native` de chaque brique.
+- [x] Correcteurs, générateur, odométrie et détection de blocage sans accès matériel, compilés en `teensy41` et `native` (7.1).
+- [x] Tests `pio test -e native` de chaque brique.
 
 ### 13.2 Mesure et commande
 
 - [ ] Lecture des roues codeuses AMT102-V par les décodeurs de quadrature de la Teensy.
 - [ ] Commande PWM + DIR à 30–40 kHz, en tension, compensée par V_bat mesurée.
-- [ ] Deux PI de vitesse de roue.
-- [ ] P + anticipation sur distance et angle, répartition sur les roues.
-- [ ] Générateur de trapèze pour chaque mouvement.
-- [ ] Deux positions : parcours depuis le début du mouvement (boucles) et position absolue (recalée par `RESET_POSE`, éventuellement `CORRECT_POSE` plus tard).
-- [ ] Détection de blocage remontée dans le statut.
-- [ ] Mouvements : tourner (angle ou cap), avancer / reculer, aller à un point, pousser jusqu'au blocage, avec identifiant et statut.
+- [x] Deux PI de vitesse de roue.
+- [x] P + anticipation sur distance et angle, répartition sur les roues.
+- [x] Générateur de trapèze pour chaque mouvement.
+- [x] Deux positions : parcours depuis le début du mouvement (boucles) et position absolue (recalée par `RESET_POSE`, éventuellement `CORRECT_POSE` plus tard).
+- [x] Détection de blocage remontée dans le statut.
+- [x] Mouvements : tourner (angle ou cap), avancer / reculer, aller à un point, pousser jusqu'au blocage, avec identifiant et statut.
 
 ### 13.3 Sûreté
 
-- [ ] Arrêt (décélération) après 200 ms sans `HEARTBEAT`.
-- [ ] `STOP` normal par le générateur, `STOP` urgent : commande et intégrateurs à zéro.
+- [x] Arrêt (décélération) après 200 ms sans `HEARTBEAT`.
+- [x] `STOP` normal par le générateur, `STOP` urgent : commande et intégrateurs à zéro.
 - [ ] Robot inerte tant que les réglages n'ont pas été reçus ; drivers à l'arrêt tant que le programme n'a pas démarré (R8).
 - [ ] Détection du BAU (R2), commande et intégrateurs à zéro, état remonté dans `MOTION_STATUS`.
-- [ ] Identifiant de démarrage (`boot_id`) dans le statut.
+- [x] Identifiant de démarrage (`boot_id`) dans le statut.
 
 ### 13.4 Communication et réglage
 
-- [ ] `MOTION_STATUS` à fréquence fixe (≥ 10 Hz), indépendante des tours de `loop()`.
-- [ ] `SET_CONTROL_PARAMS` : gains et paramètres du générateur à chaud.
-- [ ] `START_TRACE` (échelon de tension en boucle ouverte ou de consigne en boucle fermée), `TRACE_SAMPLE`, `TRACE_END` avec les réglages réellement utilisés.
-- [ ] Messages `PRINT` réservés au debug, désactivables.
+- [x] `MOTION_STATUS` à fréquence fixe (≥ 10 Hz), indépendante des tours de `loop()`.
+- [x] `SET_CONTROL_PARAMS` : gains et paramètres du générateur à chaud.
+- [x] `START_TRACE` (échelon de tension en boucle ouverte ou de consigne en boucle fermée), `TRACE_SAMPLE`, `TRACE_END` avec les réglages réellement utilisés.
+- [x] Messages `PRINT` réservés au debug, désactivables.
 
 ---
 
@@ -613,15 +613,21 @@ Chaque point bloque les cases indiquées.
 
 | Point à valider | Cases bloquées |
 | --- | --- |
-| Unités sur le fil USB : SI (m, rad, m/s) ou unités Teensy (cm, cm/s) avec conversion dans l'adaptateur | 3.4, 12, 15.1 |
-| Types des champs des messages : `float` ou `double` | 3.4, 12 |
-| Variante exacte du CRC-16 | 12 |
-| Comportement d'un `MOVE` reçu pendant un autre, et vitesse max modifiable ou non en cours de mouvement | 3.4, 6.2 |
+| Unités sur le fil USB : SI (m, rad, m/s) ou unités Teensy (cm, cm/s) avec conversion dans l'adaptateur. Proposé : SI (ADR 0003, à approuver) | 3.4, 12, 15.1 |
+| Types des champs des messages : `float` ou `double`. Proposé : `float` (ADR 0003, à approuver) | 3.4, 12 |
+| Variante exacte du CRC-16. Proposé : CRC-16/CCITT-FALSE (ADR 0003, à approuver) | 12 |
+| Comportement d'un `MOVE` reçu pendant un autre, et vitesse max modifiable ou non en cours de mouvement. Proposé dans l'ADR 0003, à approuver | 3.4, 6.2 |
 | Empreinte réelle du robot (rayon, polygone, actionneurs rentrés) | 5.1, 6.1, 7.4 |
 | Position, orientation et hauteur du lidar sur le robot | 9.1, 16.2 |
 | Séquences des mécanismes (prise de pierres, construction, Graal, lanceur) | 7.1, 14 |
 | GPIO, pull-up et niveau logique de la tirette | 15.3 |
 | Câblage du BAU conforme à R1, R2 et R8 du document d'asservissement | 13.3, 8.2 |
+| Broche et niveau de la détection du BAU sur la Teensy moteur (R2) : `ESTOP_PIN` à renseigner dans `config.h` ; d'ici là, le statut signale `ESTOP_SENSOR_MISSING` | 13.3, 8.3 |
+| Broche et rapport du pont diviseur de V_bat (R7) : `VBAT_PIN` et `VBAT_DIVIDER_RATIO` à renseigner ; d'ici là, 14,8 V par défaut et `VBAT_MISSING` dans le statut | 13.2, 8.3 |
+| Codeurs sur des broches des décodeurs de quadrature matériels (R5) : les broches actuelles (11 à 14) passent par des interruptions | 13.2 |
+| Roues codeuses : réglage du DIP switch des AMT102-V, diamètre et entraxe mesurés (`config.h`) | 13.2 |
+| Distance entre l'axe des roues et la face qui pousse contre la bordure, et face utilisée pour le recalage | 8.1, 5.4 |
+| Tension de poussée contre la bordure (`PUSH_VOLTAGE`) : force acceptable pour le robot et la table | 8.1 |
 | Variante ROS 2 et pilote du TiM561, résolution angulaire réelle | 11.3, 16.1 |
 | Horloge commune container lidar / brain pour l'horodatage des balayages | 16.1, 16.2 |
 | Format UDP des échanges avec le calcul déporté | 17 |
