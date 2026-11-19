@@ -44,17 +44,20 @@ void PID::reset() {
     this->_integral = 0.0;
 }
 
-double PID::compute(double error) {
+double PID::compute(double error, double limit) {
+    double max_output = fmin(this->_maxOutput, limit);
+    double min_output = fmax(this->_minOutput, -limit);
+
     // correction immédiate + correction accumulée
     double output = this->_kp * error + this->_integral;
 
     // sortie saturée : on renvoie la borne sans intégrer, pour que l'intégrale
     // ne grossisse pas sans fin si une roue est bloquée
-    if (output > this->_maxOutput) {
-        return this->_maxOutput;
+    if (output > max_output) {
+        return max_output;
     }
-    if (output < this->_minOutput) {
-        return this->_minOutput;
+    if (output < min_output) {
+        return min_output;
     }
 
     // hors saturation : l'erreur s'accumule pour la période suivante

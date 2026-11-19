@@ -47,13 +47,15 @@ class PID {
      * @brief Calcule la commande à partir de l'erreur
      *
      * La sortie vaut kp * error + intégrale, bornée entre minOutput et
-     * maxOutput. L'intégrale avance seulement si la sortie n'est pas saturée.
+     * maxOutput, et aussi entre -limit et limit. L'intégrale avance seulement
+     * si la sortie n'est pas saturée.
      * A appeler une seule fois par période.
      *
      * @param error  Erreur (consigne - mesure)
-     * @return Commande bornée entre minOutput et maxOutput
+     * @param limit  Borne supplémentaire de la sortie, pour cet appel
+     * @return Commande bornée
      */
-    double compute(double error);
+    double compute(double error, double limit = INFINITY);
 
     /**
      * @brief Remet l'intégrale à zéro

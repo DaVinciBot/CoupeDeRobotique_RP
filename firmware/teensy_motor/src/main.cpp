@@ -209,10 +209,11 @@ void loop() {
     if (counter++ > 4096)  // 4096 = 2^12
     {
         msg_update_rolling_basis rolling_basis_msg;
-        // Rolling Basis position
-        rolling_basis_msg.x = rolling_basis_ptr->X;
-        rolling_basis_msg.y = rolling_basis_ptr->Y;
-        rolling_basis_msg.theta = rolling_basis_ptr->THETA;
+        // lecture atomique : x, y et theta viennent de la même période
+        Point position = rolling_basis_ptr->get_current_position();
+        rolling_basis_msg.x = position.x;
+        rolling_basis_msg.y = position.y;
+        rolling_basis_msg.theta = position.theta;
         rolling_basis_msg.status = (byte)rolling_basis_ptr->get_status();
 
         com->send_msg((byte*)&rolling_basis_msg,

@@ -301,14 +301,12 @@ void Rolling_Basis::set_speed_targets(double v_left, double v_right) {
  * @param u_limit Tension max appliquée, en V (bornée ensuite à u_max)
  */
 void Rolling_Basis::apply_speed_targets(double u_limit) {
-    // erreur = vitesse cible - vitesse mesurée, en cm/s
-    double u_left = this->left_speed_pid.compute(this->v_left_target -
-                                                 this->left_motor->speed);
-    double u_right = this->right_speed_pid.compute(this->v_right_target -
-                                                   this->right_motor->speed);
-
-    u_left = fmax(fmin(u_left, u_limit), -u_limit);
-    u_right = fmax(fmin(u_right, u_limit), -u_limit);
+    // erreur = vitesse cible - vitesse mesurée, en cm/s. La borne est donnée
+    // au PI, pour qu'il arrête d'intégrer quand il l'atteint
+    double u_left = this->left_speed_pid.compute(
+        this->v_left_target - this->left_motor->speed, u_limit);
+    double u_right = this->right_speed_pid.compute(
+        this->v_right_target - this->right_motor->speed, u_limit);
 
     // set_voltage() convertit ces tensions en PWM + DIR
     this->left_motor->set_voltage(u_left, this->vbat);
