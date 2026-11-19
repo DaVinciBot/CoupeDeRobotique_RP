@@ -40,6 +40,10 @@ void PID::setOutputLimits(double minOutput, double maxOutput) {
     this->_maxOutput = maxOutput;
 }
 
+void PID::setPeriod(double ts) {
+    this->_ts = ts;
+}
+
 void PID::reset() {
     this->_integral = 0.0;
 }

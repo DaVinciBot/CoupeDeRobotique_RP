@@ -44,6 +44,11 @@ class PID {
     void setOutputLimits(double minOutput, double maxOutput);
 
     /**
+     * @brief Change la période de la boucle, en s
+     */
+    void setPeriod(double ts);
+
+    /**
      * @brief Calcule la commande à partir de l'erreur
      *
      * La sortie vaut kp * error + intégrale, bornée entre minOutput et
