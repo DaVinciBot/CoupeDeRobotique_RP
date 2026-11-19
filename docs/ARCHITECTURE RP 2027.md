@@ -354,7 +354,7 @@ Tout passe par le brain, sauf le calcul déporté qui diffuse ses observations. 
 
 | De → vers | Comment | Quoi | Rythme | Si le lien tombe |
 | --- | --- | --- | --- | --- |
-| Brain ↔ Teensy moteur | USB (`/dev/dvb-motor`, par numéro de série), usb_com | Mouvements, `RESET_POSE`, heartbeat ↔ statut (position, vitesses, BAU) | Heartbeat 20 Hz / statut ≥ 10 Hz | Teensy arrêtée après 200 ms ; brain en `FAULT` |
+| Brain ↔ Teensy moteur | USB (`/dev/dvb-motor`, par numéro de série), usb_com | Réglages, mouvements, `RESET_POSE`, heartbeat ↔ statut (position, vitesses, V_bat, BAU) | Heartbeat 20 Hz / statut 20 Hz | Teensy arrêtée après 200 ms ; brain en `FAULT` |
 | Brain ↔ Teensy actionneurs | USB (`/dev/dvb-act`), usb_com | Commandes par nom ↔ état, fins de course | À la demande / 20 Hz | Actionneurs en posture par défaut ; actions abandonnées |
 | Teensy ↔ matériel | PWM + DIR vers les drivers ; roues codeuses en quadrature ; V_bat en analogique ; I2C seulement pour des capteurs proches | — | — | Capteur manquant signalé dans le statut |
 | Lidar → container → `dvb-lidar` | Ethernet (TiM561, 15 Hz), puis UDP local (format à voir avec Anthony) | Balayages | 10–15 Hz | Docker relance le container |
@@ -382,24 +382,24 @@ Tout passe par le brain, sauf le calcul déporté qui diffuse ses observations. 
 
 `messages.h` et `messages.py` restent écrits à la main ; la CI vérifie qu'ils ont les mêmes ID et tailles, et teste l'aller-retour Python ↔ C++ (compilé sur PC) avec des trames abîmées. On peut potentiellement passer sur du rdt 2.2 si trop de pertes.
 
-**Messages existants** : `SET_TARGET_POSITION` (0), `SET_PID` (1), `SET_ODOMETRIE` (2), actionneurs (3–8), `RESET_TEENSY` (126), `NACK` (127), `UPDATE_ROLLING_BASIS` (128), `SWITCH_STATE_RETURN` (129), `PRINT` (254), `UNKNOWN_MSG_TYPE` (255).
+**Messages existants** : `SET_TARGET_POSITION` (0), `SET_PID` (1), `SET_ODOMETRIE` (2), actionneurs (3–8), `RESET_TEENSY` (126), `NACK` (127), `UPDATE_ROLLING_BASIS` (128), `SWITCH_STATE_RETURN` (129), `PRINT` (254), `UNKNOWN_MSG_TYPE` (255). Ceux de la base roulante disparaissent ; les actionneurs, `RESET_TEENSY`, `NACK`, `PRINT` et `UNKNOWN_MSG_TYPE` restent.
 
-**Messages à ajouter** (ID libres dans les mêmes plages) :
+**Messages de la Teensy moteur**, dans les mêmes plages. Leurs ID et leur contenu exact sont dans l'[ADR 0003](adr/0003-motion-protocol.md), en unités SI et en `float` :
 
-| Nom | Sens | Contenu | Rôle |
-| --- | --- | --- | --- |
-| `HEARTBEAT` | ↔ | Compteur | La Teensy s'arrête après 200 ms sans heartbeat ; la Pi voit une Teensy muette |
-| `MOVE` | → | Identifiant, type (rotation, ligne droite, aller à un point, pousser jusqu'au blocage), paramètres, vitesse max | Mouvement pour le générateur de la Teensy. Remplace `SET_TARGET_POSITION` |
-| `STOP` | → | Urgent ou non | Normal : décélération par le générateur. Urgent : commande et intégrateurs à zéro tout de suite |
-| `RESET_POSE` | → | X, Y, θ | Imposer la position absolue, robot à l'arrêt (départ, calage). Remplace `SET_ODOMETRIE` |
-| `CORRECT_POSE` (éventuel) | → | t_m, X, Y, θ, k | Correction partielle de la position pendant le match, si on la met en place (section 7.2) |
-| `MOTION_STATUS` | ← | ID du mouvement, statut (en mouvement, arrivé, bloqué, arrêté), position, vitesses, BAU, heure de la Teensy | Statut toutes les ≤ 100 ms. Peut reprendre l'ID 128 |
-| `SET_CONTROL_PARAMS` | → | Correcteur (`leftSpeed`, `rightSpeed`, `distance`, `heading`) et gains, ou paramètres du générateur | Réglage à chaud. Remplace `SET_PID` |
-| `START_TRACE` | → | Type d'essai (échelon de tension en boucle ouverte, ou de consigne en boucle fermée), boucle, amplitude, durée | Essai lancé depuis le dashboard |
-| `TRACE_SAMPLE` | ← | Instant, consigne, mesure, tension, V_bat | Points de l'essai |
-| `TRACE_END` | ← | Nombre de points, réglages utilisés | Fin de l'essai et réglages réellement appliqués |
+| Nom | ID | Sens | Contenu | Rôle |
+| --- | --- | --- | --- | --- |
+| `HEARTBEAT` | 125 | → | Compteur, renvoyé dans `MOTION_STATUS` | Envoyé à 20 Hz, commun aux deux Teensy. La Teensy s'arrête après 200 ms sans heartbeat ; la Pi voit une Teensy muette à l'absence de statut |
+| `MOVE` | 0 | → | Identifiant, type (`ROTATE_BY`, `ROTATE_TO`, `STRAIGHT`, `GOTO`, `PUSH_UNTIL_BLOCKED`), marche arrière et cap final d'un `GOTO`, point, cap, distance, vitesse et accélération max | Mouvement pour le générateur de la Teensy. Un `MOVE` pendant un autre le remplace. Remplace `SET_TARGET_POSITION` |
+| `STOP` | 9 | → | Urgent ou non | Normal : décélération par le générateur, à l'accélération max réglée. Urgent : commande et intégrateurs à zéro tout de suite, moteurs libres |
+| `RESET_POSE` | 2 | → | X, Y, θ | Imposer la position absolue, robot à l'arrêt (départ, calage). Remplace `SET_ODOMETRIE` |
+| `CORRECT_POSE` (éventuel) | — | → | t_m, X, Y, θ, k | Correction partielle de la position pendant le match, si on la met en place (section 7.2) |
+| `MOTION_STATUS` | 128 | ← | ID du mouvement, statut (en mouvement, arrivé, bloqué, arrêté), drapeaux (réglée, BAU, heartbeat perdu, capteur de V_bat ou du BAU absent, essai en cours), position, vitesses, V_bat, heure de la Teensy, `boot_id`, dernier heartbeat | Statut toutes les 50 ms |
+| `SET_CONTROL_PARAMS` | 1 | → | Un réglage par message : gains des quatre correcteurs, limites, tolérances, seuils de blocage et de poussée, période de boucle | Les 17 réglages sont envoyés à chaque démarrage : sans eux, la Teensy ignore les mouvements. Réglage à chaud. Remplace `SET_PID` |
+| `START_TRACE` | 10 | → | Type d'essai (échelon de tension en boucle ouverte, ou de consigne en boucle fermée), boucle, amplitude, durée | Essai lancé depuis le dashboard |
+| `TRACE_SAMPLE` | 130 | ← | Instant, consigne, mesure, tension, V_bat | Points de l'essai |
+| `TRACE_END` | 131 | ← | Nombre de points, réglages utilisés | Fin de l'essai et réglages réellement appliqués |
 
-Le contenu exact des messages de mouvement et de statut est à définir. Le BAU est détecté par la Teensy (tension après le BAU, R2) et remonte dans `MOTION_STATUS`.
+Le BAU est détecté par la Teensy (tension après le BAU, R2) et remonte dans `MOTION_STATUS`.
 
 **Tirette** : câblée sur un GPIO de la Pi et lue directement par le brain (gpiozero, anti-rebond), qui démarre le chrono sur son front. À confirmer avec l'élec.
 
@@ -420,10 +420,10 @@ Le contenu exact des messages de mouvement et de statut est à définir. Le BAU 
 - **PWM + DIR à 30–40 kHz**, limitation de courant par le driver. V_bat mesurée par la Teensy pour compenser la commande.
 - **Deux positions dans la Teensy** : le parcours depuis le début du mouvement (pour les boucles) et la position absolue (la seule que le brain recale).
 - **Détection de blocage** remontée dans le statut : un mouvement raté, ou voulu lors d'un calage contre une bordure.
-- **Période de boucle, gains, accélération et vitesse max** dans la config, renvoyés à la Teensy au démarrage.
+- **Période de boucle, gains, accélération et vitesse max** dans la config, renvoyés à la Teensy au démarrage : ses 17 réglages, sans lesquels elle ignore les mouvements ([ADR 0003](adr/0003-motion-protocol.md)).
 - **Code de contrôle portable** : correcteurs, générateur, odométrie et détection de blocage forment une bibliothèque C++ sans accès matériel, compilée en `teensy41` (robot) et en `native` (tests `pio test -e native` et Teensy virtuelle). Robot et simulation exécutent le même code.
 
-**Mouvements demandés par le brain**, transformés en trapèze par la Teensy : tourner (d'un angle ou vers un cap), avancer/reculer d'une distance, aller à un point (tourner puis avancer), pousser jusqu'au blocage. Chacun a un identifiant et un statut (en cours, arrivé, bloqué, arrêté). Les modes de la stratégie s'y traduisent directement (section 9.4).
+**Mouvements demandés par le brain**, transformés en trapèze par la Teensy : tourner (d'un angle ou vers un cap), avancer/reculer d'une distance, aller à un point (tourner, avancer ou reculer, puis tourner vers un cap s'il est donné), pousser jusqu'au blocage. Chacun a un identifiant et un statut (en cours, arrivé, bloqué, arrêté). Les modes de la stratégie s'y traduisent directement (section 9.4).
 
 ### 7.2 Localisation
 
@@ -466,8 +466,8 @@ La décision de s'arrêter reste dans le brain.
 
 | Niveau | Quand | Réaction |
 | --- | --- | --- |
-| Zone de sécurité | Obstacle dans le rectangle devant le robot (sens de marche), de longueur distance d'arrêt + marge, recalculée selon la vitesse | `STOP` non urgent (décélération du générateur, celle qui sert à calculer la taille de la zone) |
-| Ralentissement | Obstacle plus loin sur la trajectoire | Vitesse max réduite |
+| Zone de sécurité | Obstacle dans le rectangle devant le robot (sens de marche), de longueur distance d'arrêt + marge, recalculée selon la vitesse | `STOP` non urgent (décélération du générateur à l'accélération max réglée, `MAX_ACCEL`, celle qui sert à calculer la taille de la zone) |
+| Ralentissement | Obstacle plus loin sur la trajectoire | Vitesse max réduite : le brain renvoie le `GOTO` en cours avec une autre vitesse max, et la Teensy ralentit sans s'arrêter pendant la ligne droite ([ADR 0003](adr/0003-motion-protocol.md)) |
 | Attente | Arrêté par un obstacle | Attente jusqu'à `wait_s` (1,5 s par défaut) |
 | Nouveau chemin | Toujours bloqué | Replanification avec l'adversaire comme obstacle |
 | Abandon | Pas de chemin, ou 3 essais ratés | L'action échoue, la stratégie continue (section 9) |
@@ -586,7 +586,7 @@ La stratégie dit **quoi faire et dans quel ordre**, sans condition ni brancheme
 
 ### 9.4 Modes et timeouts
 
-L'asservissement est polaire : chaque déplacement est **une rotation sur place vers la cible, puis une ligne droite**, puis une rotation vers `theta_deg` s'il est donné. Le mode choisit seulement le sens de la ligne droite :
+L'asservissement est polaire : chaque déplacement est **une rotation sur place vers la cible, puis une ligne droite**, puis une rotation vers `theta_deg` s'il est donné. C'est un `GOTO` de la Teensy, avec le drapeau `HAS_HEADING` quand `theta_deg` est donné ([ADR 0003](adr/0003-motion-protocol.md)). Le mode choisit seulement le sens de la ligne droite, et le brain résout `auto` avant d'envoyer le `GOTO`, avec ou sans le drapeau `REVERSE` :
 
 | `move.mode` | Comportement |
 | --- | --- |
@@ -659,9 +659,9 @@ Depuis `ARMED`, seul « Désarmer » est possible (retour à `READY`). Seule la 
 | Problème | Détection | Réaction |
 | --- | --- | --- |
 | Exception non gérée dans le brain | `TaskGroup` annulé | `finally` : `STOP` + actionneurs relâchés pour de bon ([ADR 0011](adr/0011-ports-and-fake-hardware.md)), `FAULT`. systemd ne relance **pas** un match |
-| Brain figé ou Pi plantée | Plus de heartbeat depuis 200 ms | La Teensy freine et s'arrête, actionneurs en posture par défaut |
-| Câble USB débranché | Port en erreur ou 3 statuts manqués | `FAULT` ; le lien se reconnecte tout seul, mais le match ne reprend pas (relance manuelle) |
-| Teensy redémarrée | Compteur de heartbeat ou de démarrage revenu à zéro | `FAULT` définitif : pose perdue |
+| Brain figé ou Pi plantée | Plus de heartbeat depuis 200 ms | La Teensy freine, s'arrête puis coupe ses moteurs ; actionneurs en posture par défaut |
+| Câble USB débranché | Port en erreur ou plus de statut depuis 300 ms | `FAULT` ; le lien se reconnecte tout seul, mais le match ne reprend pas (relance manuelle) |
+| Teensy redémarrée | `boot_id` du statut changé | `FAULT` définitif : pose perdue |
 | Lidar, container ou `dvb-lidar` muet | Plus de pistes depuis 300 ms | Arrêt (section 8.5) ; systemd ou Docker relance |
 | `dvb-net` planté | Plus de heartbeat sur le bus | Données extérieures ignorées ; systemd relance |
 | BAU | Puissance des drivers coupée (R1), détectée par la Teensy (R2) ; commande et intégrateurs à zéro | `FAULT` ; BAU de l'arbitre = fin du match (RG F.4.c) |
