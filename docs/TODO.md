@@ -197,15 +197,15 @@ Les jalons A à C ne demandent aucune carte Teensy, et les sections 12 à 14 ne 
 
 ## 4. Brain — modèle du monde
 
-- [ ] `Source(StrEnum)` : `ODOMETRY`, `LIDAR`, `REMOTE`, `STRATEGY`, `CONFIG`.
-- [ ] `Observed[T]` (5.5) : `value`, `stamp`, `source`, `age(now)`, `is_fresh(now, ttl)`.
-- [ ] `ElementState` générique : `present`, `taken`, `placed_at`, `carried_by_us`, `confidence`, `tags`.
-- [ ] `WorldSnapshot` (`domain/world.py`, comme tout le modèle du monde, ADR 0008) : `t`, `robot_pose`, `robot_velocity`, `opponents`, `elements`, `our_constructions`, `carrying`, `lidar_alive`, `remote_alive`.
-- [ ] `WorldModel`, seul à écrire : `update_odometry`, `update_tracks`, `update_remote`, `mark_element`, `add_construction`, `snapshot()` en O(1). Pas de lecture d'horloge : chaque mise à jour porte sa date. Un snapshot n'est jamais modifié après coup (nouvelles collections à chaque mise à jour).
-- [ ] Durées de vie dans `robot.json` (pistes lidar 0,3 s, calcul déporté 0,3 s, éléments vus 2 s).
-- [ ] Règles de fusion explicites : lidar pour l'évitement, calcul déporté pour identifier les robots et l'état des éléments.
-- [ ] Historique d'odométrie sur 2 s, `pose_at(t)` par interpolation (8.3).
-- [ ] Tests : vieillissement, snapshot non modifié après une mise à jour, interpolation.
+- [x] `Source(StrEnum)` : `ODOMETRY`, `LIDAR`, `REMOTE`, `STRATEGY`, `CONFIG`.
+- [x] `Observed[T]` (5.5) : `value`, `stamp`, `source`, `age(now)`, `is_fresh(now, ttl)`.
+- [x] `ElementState` générique : `present`, `taken`, `placed_at`, `carried_by_us`, `confidence`, `tags` (ADR 0012).
+- [x] `WorldSnapshot` (`domain/world.py`, comme tout le modèle du monde, ADR 0008) : `t`, `robot_pose`, `robot_velocity`, `opponents`, `our_elements` et `seen_elements` lus par `element(id)`, `our_constructions`, `carrying`, `remote`, `lidar_alive`, `remote_alive` (ADR 0012).
+- [x] `WorldModel`, seul à écrire : `update_odometry`, `update_tracks`, `update_remote`, `mark_element`, `add_construction`, `snapshot(now)` en O(1). Pas de lecture d'horloge : chaque mise à jour porte sa date, le snapshot reçoit l'heure. Un snapshot n'est jamais modifié après coup (nouvelles collections à chaque mise à jour).
+- [x] Durées de vie dans `robot.json` (pistes lidar 0,3 s, calcul déporté 0,3 s, éléments vus 2 s, historique d'odométrie 2 s) : section `world`, décodée par `app/config.py` (ADR 0012).
+- [x] Règles de fusion explicites : lidar pour l'évitement, calcul déporté pour identifier les robots (`Track.confirmed`, 16.2) et l'état des éléments (vue fraîche et plus récente que notre état, ADR 0012). Lien tag → élément : voir les Points à valider.
+- [x] Historique d'odométrie sur 2 s, `pose_at(t)` par interpolation (8.3), sans extrapolation : `PoseHistory`, réutilisable par `dvb-lidar`.
+- [x] Tests : vieillissement, snapshot non modifié après une mise à jour, interpolation.
 
 ---
 
@@ -346,7 +346,7 @@ Les jalons A à C ne demandent aucune carte Teensy, et les sections 12 à 14 ne 
 
 ### 9.1 Configuration — `app/config.py`, `config/robot.json`
 
-- [ ] Schéma msgspec (5.6) : `edition`, `profile`, géométrie du robot (rayon, empreinte, position et hauteur du lidar), numéros de série des Teensy, navigation, évitement, durées de vie, asservissement, actionneurs, réel / simulé / désactivé par sous-système. Décodé vers des dataclasses SI de `domain/`, que reçoivent les services (ADR 0008).
+- [ ] Schéma msgspec (5.6), qui étend celui de la case 4 (section `world`) : `edition`, `profile`, géométrie du robot (rayon, empreinte, position et hauteur du lidar), numéros de série des Teensy, navigation, évitement, durées de vie, asservissement, actionneurs, réel / simulé / désactivé par sous-système. Décodé vers des dataclasses SI de `domain/`, que reçoivent les services (ADR 0008).
 - [ ] Chargement au lancement, jamais à l'import.
 - [ ] Validations croisées : profil `match` ⇒ tout réel sauf le calcul déporté, évitement actif.
 - [ ] Hauteur de chaque position nommée d'actionneur, déclarée dans la config (l'angle d'un servo ne la donne pas) : au-dessus de la hauteur max de `config/match.json` (RG F.3), la config est refusée ; une hauteur inconnue est marquée et refusée en profil `match` (ADR 0011).
@@ -670,7 +670,7 @@ Chaque point bloque les cases indiquées.
 | Câblage du BAU conforme à R1, R2 et R8 du document d'asservissement | 13.3, 8.2 |
 | Variante ROS 2 et pilote du TiM561, résolution angulaire réelle | 11.3, 16.1 |
 | Horloge commune container lidar / brain pour l'horodatage des balayages | 16.1, 16.2 |
-| Format UDP des échanges avec le calcul déporté, et contenu des observations (tags vus, pose sur la table, instant de l'image ; types provisoires de l'ADR 0011) | 4, 17 |
+| Format UDP des échanges avec le calcul déporté, et contenu des observations (tags vus, pose sur la table, instant de l'image ; types provisoires de l'ADR 0011). Le modèle du monde les garde telles quelles ; leur lien avec les éléments (quel tag sur quel élément) en dépend (ADR 0012) | 17 |
 | Liste exacte des « aires adverses à accès exclusif » (RG H.4) : le règlement 2027 ne la donne pas explicitement, à faire confirmer (FAQ). Le vol de pierres dans le château adverse (RJ E.1) suppose d'approcher ses remparts, que l'on interdit pour l'instant | 2.4, 5.1, 7.2 |
 | Début exact de la phase d'attaque : « entre la 85e seconde et la fin du match » (RJ E.4.b) peut se lire t ≥ 84 s (la 85e seconde commence à 84 s) ou t ≥ 85 s. `scoring.json` dit 85 s pour l'instant ; une action faite avant la phase n'est pas comptée. À faire confirmer (FAQ). `MatchClock` (3.1) lit le début dans `scoring.json` sans trancher | 7.2 |
 | Dates de la pré-coupe et de la CDR 2027 | 21.4 |
