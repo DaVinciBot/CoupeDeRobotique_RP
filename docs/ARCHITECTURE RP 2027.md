@@ -335,6 +335,8 @@ class WorldSnapshot:
     elements: Mapping[str, Observed[ElementState]]
 ```
 
+Détail du modèle et écarts avec ce schéma (snapshot daté, deux états par élément) : [ADR 0012](adr/0012-world-model.md).
+
 ### 5.6 Configuration
 
 Toute la config du robot est dans **`config/robot.json`** : géométrie, numéros de série des Teensy, actionneurs et positions nommées, navigation et évitement, durées de vie du modèle du monde, réglages d'asservissement, choix réel / simulé / désactivé. La table est dans `editions/cdr_2027/arena.json`.

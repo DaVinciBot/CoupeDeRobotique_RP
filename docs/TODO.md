@@ -357,6 +357,7 @@ Les jalons A à C ne demandent aucune carte Teensy, et les sections 12 à 14 ne 
 
 - [ ] `build_ports(cfg) -> Ports` selon le profil (`match`, `test`, `sim`, `replay`) : seul endroit qui sait quel adaptateur est branché. Les adaptateurs réels s'y ajoutent avec la section 15.
 - [ ] `run_brain(ports, cfg)` avec `asyncio.TaskGroup`.
+- [ ] Tâche qui remplit le `WorldModel` depuis les ports : statuts de `MotionPort.status()` datés sur la `Clock` du brain, pistes du lidar, observations du calcul déporté (ADR 0012).
 - [ ] Édition chargée au lancement par `load_edition(cfg.edition)`, ses actions enregistrées ; les services reçoivent ses morceaux, jamais l'`Edition` (ADR 0006).
 - [ ] Commande `dvb-brain --config --profile --strategy --side`.
 - [ ] Tirette virtuelle en profil `test` uniquement (4.5).
@@ -565,6 +566,7 @@ Les jalons A à C ne demandent aucune carte Teensy, et les sections 12 à 14 ne 
 - [ ] Réception UDP broadcast des observations ArUco datées, rejet des paquets trop vieux ou désordonnés (`seq`).
 - [ ] Envoi UDP : couleur, départ du match (× 3), pose estimée à 10 Hz.
 - [ ] Publication sur le bus.
+- [ ] Observations → `WorldModel.mark_element(..., REMOTE)` : quel tag sur quel élément, une fois le format validé (ADR 0012).
 - [ ] chrony sur la Pi, serveur NTP pour le calcul déporté.
 - [ ] Format des messages documenté dans un ADR commun aux deux dépôts.
 
