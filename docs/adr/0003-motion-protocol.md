@@ -1,8 +1,8 @@
 # ADR 0003 — Contrat brain ↔ Teensy moteur
 
-- **Statut** : proposé (à relire par les auteurs du firmware moteur et du brain, TODO 3.4)
+- **Statut** : proposé (à relire par les auteurs du firmware moteur et du brain, TODO 12.1)
 - **Date** : 2026-11-19
-- **Cases** : [TODO 3.4](../TODO.md#34-contrat-brain--teensy-moteur--docsadr0003-motion-protocolmd), [TODO 12](../TODO.md#12-usb_com-v2-c-et-python), [TODO 13](../TODO.md#13-firmware-teensy-moteur--firmwareteensy_motor)
+- **Cases** : [TODO 12.1](../TODO.md#121-contrat-brain--teensy-moteur--docsadr0003-motion-protocolmd), [TODO 12.3](../TODO.md#123-usb_com-v2-c-et-python), [TODO 13](../TODO.md#13-firmware-teensy-moteur--firmwareteensy_motor)
 
 ## Contexte
 

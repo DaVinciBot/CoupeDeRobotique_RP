@@ -114,7 +114,7 @@ L'ADR 0003 a fixé ensuite les messages avec la Teensy moteur. Cet ADR a été r
      - un `STOP` normal reçu moteurs libres (après un `STOP` urgent, un BAU ou la perte du heartbeat) ne fait rien jusqu'au prochain `MOVE` : rien n'adoucit l'arrêt urgent ;
      - le statut reste `MOVING` pendant le freinage d'un `STOP` normal et passe à `STOPPED` une fois la consigne arrêtée : `reset_pose` et le recalage attendent ce statut ;
      - un `MOVE` reçu pendant ce freinage est lancé une fois le robot arrêté, comme le fait `FakeMotion` (ADR 0011).
-  3. L'ADR 0003 renvoie aux anciennes cases de la TODO (3.4, 12 et 13). Ce sont maintenant 12.1, 12.3 et 13.
+  3. L'ADR 0003 renvoyait aux anciennes cases de la TODO (3.4, 12 et 13). Corrigé à la mise à jour de `feat/asservissement-v1` depuis `dev` : 12.1, 12.3 et 13.
   4. Proposition plutôt qu'écart, à trancher avant l'évitement (6.2) : la Teensy pourrait ignorer un `MOVE` qui reprend le `move_id` d'un mouvement déjà fini. Un `set_max_speed` qui croise un `BLOCKED` ne relancerait plus le robot contre ce qui l'a bloqué.
   5. Proposition aussi, à trancher avant l'évitement : chaque `MOVE` accepté remet à zéro le compteur de blocage (`blocked_count`), même quand il continue le mouvement en cours. La Teensy pourrait le garder dans ce cas, pour qu'un ralentissement ne retarde pas la détection d'un blocage.
 - **Tests de contrat.** Le contrat ci-dessus est vérifié par des tests communs à `FakeMotion` (3.5), au `SimMotion` (11.2) et à l'adaptateur Teensy (15.1).
