@@ -432,8 +432,8 @@ Les jalons A à C ne demandent aucune carte Teensy, et les sections 12 à 14 ne 
 
 Écrit à partir des attentes du brain : `ActuatorPort` tel que le décrit la case 3.4, et l'architecture (10).
 
-- [ ] Messages des commandes génériques (10) : servo à un angle, pas-à-pas à une position, sortie tout-ou-rien, lecture de capteur, à partir des messages actionneurs existants (6.2) ; réponses « fini », « bloqué », « timeout ».
-- [ ] État et fins de course à 20 Hz, heartbeat et `boot_id` comme la Teensy moteur, posture par défaut sur perte du heartbeat.
+- [ ] Messages des commandes génériques (10) : servo à un angle, pas-à-pas à une position, sortie tout-ou-rien, lecture de capteur, à partir des messages actionneurs existants (6.2) ; réponses « fini », « bloqué », « timeout » ; sur un timeout, l'actionneur s'arrête où il est (ADR 0011).
+- [ ] État et fins de course à 20 Hz, heartbeat et `boot_id` comme la Teensy moteur, posture par défaut sur perte du heartbeat, sauf après un relâchement final : tout reste relâché (ADR 0011).
 - [ ] ADR relu et approuvé côté firmware et côté brain avant d'en coder les messages (cases 12.3 et 14).
 
 ### 12.3 usb_com v2 (C++ et Python)
@@ -498,7 +498,7 @@ Les jalons A à C ne demandent aucune carte Teensy, et les sections 12 à 14 ne 
 - [ ] Servos avec rampes, pas-à-pas non bloquants (AccelStepper ou TeensyStep), aucun `delay()` dans les callbacks.
 - [ ] Prise d'origine au démarrage et après un BAU.
 - [ ] Butées logicielles, dont la hauteur de 350 mm (RG F.3).
-- [ ] Posture par défaut sur perte du heartbeat (`hold` ou `release` par actionneur).
+- [ ] Posture par défaut sur perte du heartbeat (`hold` ou `release` par actionneur), sauf après un relâchement final : tout reste relâché (ADR 0011).
 - [ ] État et fins de course remontés à 20 Hz.
 - [ ] Heartbeat et `boot_id` comme la Teensy moteur.
 - [ ] Tests `native` de la logique de séquencement.
@@ -666,7 +666,6 @@ Chaque point bloque les cases indiquées.
 | Séquences des mécanismes (prise de pierres, construction, Graal, lanceur) | 7.1, 14 |
 | Poses d'approche de la stratégie `homologation` (carrière `quarry_front_4`, tour `blue_tower_front_outer`), selon l'empreinte du robot et les mécanismes ; sens de `element_id` pour `pick_stones` (une pierre ou toute la carrière) | 7.1, 21.2 |
 | GPIO, pull-up et niveau logique de la tirette | 15.3 |
-| Carte actionneurs (ADR 0011) : ce qu'elle fait sur un timeout (s'arrête-t-elle ?), et après un relâchement final, pas de retour à la posture `hold` à la perte du heartbeat (même piège que le chien de garde moteur après un arrêt urgent, ADR 0010) | 12.2, 14 |
 | Câblage du BAU conforme à R1, R2 et R8 du document d'asservissement | 13.3, 8.2 |
 | Variante ROS 2 et pilote du TiM561, résolution angulaire réelle | 11.3, 16.1 |
 | Horloge commune container lidar / brain pour l'horodatage des balayages | 16.1, 16.2 |

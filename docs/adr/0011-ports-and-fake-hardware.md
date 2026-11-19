@@ -77,5 +77,5 @@ L'[ADR 0010](0010-clock-watch-motion-port.md) a posé l'horloge, `Watch` et le c
 
 - Les cases 4 (modèle du monde), 6.2 (évitement), 7.4 (fin de match), 8.1 (match) et 8.2 (sûreté) codent contre ces ports et se testent avec ces faux et la `FakeClock`.
 - La TODO est corrigée : signature de `wait_pulled()` (3.4), anti-rebond renvoyé à l'adaptateur (8.1 → 15.3), vérification de la hauteur renvoyée à la config et aux règles (15.2 → 9.1, 7.2), `release_all(final=False)` en fin de match anticipée (7.4) et `release_all(final=True)` au minuteur de fin (8.1).
-- **À valider avec la carte actionneurs (12.2, 14)** : ce que fait la carte sur un timeout (s'arrête-t-elle ?), et qu'elle ne reprenne pas sa posture `hold` à la perte du heartbeat après un relâchement final. C'est le même piège que le chien de garde moteur après un arrêt urgent (ADR 0010).
+- **Carte actionneurs (12.2, 14)**, validé avec Clément : sur un timeout, l'actionneur s'arrête où il est ; après un relâchement final, la carte ne reprend pas sa posture `hold` à la perte du heartbeat, tout reste relâché. Sinon, l'arrêt du brain après la fin du match ferait reprendre une pièce, comme le chien de garde moteur adoucirait un arrêt urgent (ADR 0010).
 - **À valider avec le calcul déporté (17)** : le contenu des observations (tags vus, pose sur la table, instant de l'image).
