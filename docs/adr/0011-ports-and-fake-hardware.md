@@ -61,7 +61,7 @@ L'[ADR 0010](0010-clock-watch-motion-port.md) a posé l'horloge, `Watch` et le c
   - `move()` attend le statut qui termine son `move_id`, comme le fera l'adaptateur Teensy (15.1).
   - Un `move()` reçu pendant le freinage d'un `move()` annulé part une fois le robot arrêté, sans que sa vitesse tombe à zéro d'un coup, comme le firmware de l'ADR 0003, qui doit encore l'écrire (écart 2 de l'ADR 0010).
   - `stop(SMOOTH)` freine à `MAX_ACCEL` (à `MAX_ANGULAR_ACCEL` pendant une rotation) et coupe tout de suite une poussée, comme le dit l'ADR 0003.
-  - Scénarios : blocage après x m, carte muette (plus de statut, commandes perdues), redémarrage (nouveau `boot_id`, pose perdue), BAU. Pendant le BAU, le faux ignore les `MOVE`, comme la Teensy : `move_id` ne change pas et `move()` attend.
+  - Scénarios : blocage après x m, carte muette (plus de statut, commandes perdues), redémarrage (nouveau `boot_id`, pose perdue), BAU. Pendant le BAU, le faux ignore les `MOVE`, comme la Teensy : `move_id` ne change pas et `move()` attend. Il ignore de même un `MOVE` invalide (valeur non finie, poussée de distance nulle).
   - Le faux garde les heartbeats et les arrêts reçus, que le `SafetyMonitor` (8.2) devra prouver même carte muette.
   - Il n'a pas de chien de garde : c'est la Teensy virtuelle qui l'aura (13.5).
 - **`FakeActuators`.** Durée fixe par actionneur, taux d'échec réglable et graine fixée. L'état se calcule depuis la `Clock`, si bien qu'une attente abandonnée laisse l'actionneur finir. Le faux ne connaît pas les noms de position : c'est l'adaptateur réel qui les lira dans `robot.json` (15.2).
