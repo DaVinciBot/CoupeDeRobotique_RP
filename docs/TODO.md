@@ -263,7 +263,8 @@ Les jalons A à C ne demandent aucune carte Teensy, et les sections 12 à 14 ne 
 
 - [ ] Tâche à la fréquence des pistes, lecture du snapshot.
 - [ ] Obstacle dans la zone → `stop(SMOOTH)` immédiat + événement `ObstacleStop`.
-- [ ] Obstacle plus loin sur la trajectoire → vitesse max réduite par `MotionPort.set_max_speed` (renvoi du `GOTO` en cours, ADR 0003, ADR 0010), seulement quand la vitesse plafond change : chaque renvoi remet à zéro la détection de blocage de la Teensy.
+- [ ] Obstacle plus loin sur la trajectoire → vitesse max réduite par `MotionPort.set_max_speed` (renvoi du `GOTO` en cours, ADR 0003, ADR 0010), seulement quand la vitesse plafond change, et deux renvois espacés de plus de `BLOCK_TIME` : chaque renvoi remet à zéro la détection de blocage de la Teensy.
+- [ ] Zone surveillée d'après le statut de la Teensy (`MOVING`, vitesse mesurée), pas d'après le `move()` en cours : un `GOTO` relancé par un renvoi qui croise un `BLOCKED` reste surveillé (ADR 0003, ADR 0010).
 - [ ] Lidar muet depuis 300 ms → arrêt et aucun départ tant qu'il ne revient pas (8.5).
 - [ ] En profil `match`, la config refuse toute désactivation de l'évitement (désactivation volontaire = forfait, RG H.4).
 
@@ -627,7 +628,7 @@ Les jalons A à C ne demandent aucune carte Teensy, et les sections 12 à 14 ne 
 
 ### 21.1 Mesures sur table
 
-- [ ] Décélération réelle de la base → `avoidance.decel`.
+- [ ] Décélération réelle de la base, sans glissement des roues ni chute de la charge transportée → `MAX_ACCEL` et `avoidance.decel` : le `STOP` normal et la perte du heartbeat freinent toujours à `MAX_ACCEL`, même pendant un mouvement lent (ADR 0003).
 - [ ] Dérive d'odométrie sur un parcours de 100 s → décision sur les recalages en cours de match (ADR).
 - [ ] Temps de planification et CPU par processus sur la Pi (< 50 % au total, aucun cœur > 80 %).
 - [ ] Temps du recalage automatique (< 30 s).
