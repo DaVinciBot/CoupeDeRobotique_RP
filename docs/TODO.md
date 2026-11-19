@@ -263,7 +263,7 @@ Les jalons A à C ne demandent aucune carte Teensy, et les sections 12 à 14 ne 
 
 - [ ] Tâche à la fréquence des pistes, lecture du snapshot.
 - [ ] Obstacle dans la zone → `stop(SMOOTH)` immédiat + événement `ObstacleStop`.
-- [ ] Obstacle plus loin sur la trajectoire → vitesse max réduite par `MotionPort.set_max_speed` (renvoi du `GOTO` en cours, ADR 0003, ADR 0010), seulement quand la vitesse plafond change, et deux renvois espacés de plus de `BLOCK_TIME` : chaque renvoi remet à zéro la détection de blocage de la Teensy.
+- [ ] Obstacle plus loin sur la trajectoire → vitesse max réduite par `MotionPort.set_max_speed` (renvoi du `GOTO` en cours, ADR 0003, ADR 0010), seulement quand la vitesse plafond change, et deux renvois espacés d'au moins deux fois `BLOCK_TIME` (jamais un `stop()`) : chaque renvoi remet à zéro la détection de blocage de la Teensy.
 - [ ] Zone surveillée d'après le statut de la Teensy (`MOVING`, vitesse mesurée), pas d'après le `move()` en cours : un `GOTO` relancé par un renvoi qui croise un `BLOCKED` reste surveillé (ADR 0003, ADR 0010).
 - [ ] Lidar muet depuis 300 ms → arrêt et aucun départ tant qu'il ne revient pas (8.5).
 - [ ] En profil `match`, la config refuse toute désactivation de l'évitement (désactivation volontaire = forfait, RG H.4).
