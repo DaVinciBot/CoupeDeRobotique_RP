@@ -330,8 +330,8 @@ Les jalons A à C ne demandent aucune carte Teensy, et les sections 12 à 14 ne 
 
 - [ ] Première tâche du `TaskGroup` (5.3), heartbeat 20 Hz vers la Teensy moteur par `MotionPort.heartbeat()`, maintenu après `stop(URGENT)` (ADR 0010).
 - [ ] Surveillance : statut absent depuis 300 ms, `boot_id` changé, port série en erreur, BAU, boucle asyncio en retard de plus de 100 ms.
-- [ ] Réaction unique : `stop(URGENT)`, posture par défaut, `FAULT(reason)` ; jamais de relance automatique d'un match.
-- [ ] `run_brain` avec `finally` qui tente `stop(URGENT)` même si le port est mort.
+- [ ] Réaction unique : `stop(URGENT)`, `release_all(final=True)` (ADR 0011), `FAULT(reason)` ; jamais de relance automatique d'un match.
+- [ ] `run_brain` avec `finally` qui tente `stop(URGENT)` et `release_all(final=True)` même si les ports sont morts.
 - [ ] `SIGTERM` et `SIGINT` → même arrêt propre.
 - [ ] Tests : exception dans une action, Teensy muette, BAU → `FAULT` et `stop` appelé.
 
@@ -349,6 +349,7 @@ Les jalons A à C ne demandent aucune carte Teensy, et les sections 12 à 14 ne 
 - [ ] Schéma msgspec (5.6) : `edition`, `profile`, géométrie du robot (rayon, empreinte, position et hauteur du lidar), numéros de série des Teensy, navigation, évitement, durées de vie, asservissement, actionneurs, réel / simulé / désactivé par sous-système. Décodé vers des dataclasses SI de `domain/`, que reçoivent les services (ADR 0008).
 - [ ] Chargement au lancement, jamais à l'import.
 - [ ] Validations croisées : profil `match` ⇒ tout réel sauf le calcul déporté, évitement actif.
+- [ ] Hauteur de chaque position nommée d'actionneur, déclarée dans la config (l'angle d'un servo ne la donne pas) : au-dessus de la hauteur max de `config/match.json` (RG F.3), la config est refusée ; une hauteur inconnue est marquée et refusée en profil `match` (ADR 0011).
 - [ ] Erreur lisible qui nomme le champ (`navigation.avoidance.wait_s: expected >= 0, got -1`).
 - [ ] Valeurs encore inconnues marquées explicitement, refusées en profil `match`.
 
@@ -423,7 +424,7 @@ Les jalons A à C ne demandent aucune carte Teensy, et les sections 12 à 14 ne 
 
 - [ ] Contenu exact de `HEARTBEAT`, `MOVE`, `STOP`, `RESET_POSE`, `MOTION_STATUS`, `SET_CONTROL_PARAMS`, `START_TRACE`, `TRACE_SAMPLE`, `TRACE_END` (6.2) : champs, types, unités, IDs.
 - [ ] Fréquences : heartbeat 20 Hz, statut ≥ 10 Hz à cadence fixe, arrêt de la Teensy après 200 ms sans heartbeat.
-- [ ] Sémantique d'un `MOVE` reçu pendant un autre, et de la vitesse max modifiée en cours de mouvement.
+- [ ] Sémantique d'un `MOVE` reçu pendant un autre ou pendant le freinage d'un `STOP` (`FakeMotion` le lance une fois le robot arrêté, ADR 0011), et de la vitesse max modifiée en cours de mouvement.
 - [ ] Décélération d'arrêt du `STOP` normal envoyée avec les réglages, même valeur que `avoidance.decel` de la zone de sécurité (21.1, ADR 0010).
 - [ ] Redémarrage de la Teensy détectable (`boot_id`) ; Teensy inerte tant qu'elle n'a pas reçu ses réglages.
 - [ ] ADR relu et approuvé côté firmware et côté brain avant d'en coder les messages (cases 12.3 et 13.4).

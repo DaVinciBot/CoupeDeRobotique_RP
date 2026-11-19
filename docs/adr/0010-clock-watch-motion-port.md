@@ -1,6 +1,6 @@
 # ADR 0010 — Horloge, `Watch` et port de mouvement
 
-- **Statut** : proposé
+- **Statut** : proposé ; précisé par l'[ADR 0011](0011-ports-and-fake-hardware.md) (`reset_pose` pendant le freinage d'un `move()` annulé)
 - **Date** : 2026-11-17
 - **Cases** : [TODO 3.1, 3.2 et 3.3](../TODO.md#3-brain--ports-faux-matériel-et-contrat-moteur)
 

@@ -645,7 +645,7 @@ stateDiagram-v2
     RUNNING --> FINISHED: T = 100 s
     ENDING --> FINISHED: T = 100 s
     RUNNING --> FAULT: exception, Teensy muette, BAU
-    note right of FAULT: STOP + posture de défaut, relance manuelle
+    note right of FAULT: STOP + actionneurs relâchés, relance manuelle
 ```
 
 *Machine à états du match · 9 états*
@@ -656,7 +656,7 @@ Depuis `ARMED`, seul « Désarmer » est possible (retour à `READY`). Seule la 
 
 | Problème | Détection | Réaction |
 | --- | --- | --- |
-| Exception non gérée dans le brain | `TaskGroup` annulé | `finally` : `STOP` + posture par défaut, `FAULT`. systemd ne relance **pas** un match |
+| Exception non gérée dans le brain | `TaskGroup` annulé | `finally` : `STOP` + actionneurs relâchés pour de bon ([ADR 0011](adr/0011-ports-and-fake-hardware.md)), `FAULT`. systemd ne relance **pas** un match |
 | Brain figé ou Pi plantée | Plus de heartbeat depuis 200 ms | La Teensy freine et s'arrête, actionneurs en posture par défaut |
 | Câble USB débranché | Port en erreur ou 3 statuts manqués | `FAULT` ; le lien se reconnecte tout seul, mais le match ne reprend pas (relance manuelle) |
 | Teensy redémarrée | Compteur de heartbeat ou de démarrage revenu à zéro | `FAULT` définitif : pose perdue |
