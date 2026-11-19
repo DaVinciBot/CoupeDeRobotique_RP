@@ -380,6 +380,11 @@ Outputs MotionController::step(const Inputs& inputs) {
         this->heartbeat_lost = true;
         this->stop(StopMode::SMOOTH);
     }
+    // without the brain, nothing stays powered once the robot has stopped
+    if (this->heartbeat_lost && this->mode == Mode::POSITION &&
+        this->state != MotionState::MOVING) {
+        this->go_idle();
+    }
 
     switch (this->mode) {
         case Mode::IDLE:

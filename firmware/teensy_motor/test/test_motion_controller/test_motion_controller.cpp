@@ -154,7 +154,22 @@ void test_heartbeat_lost_brakes_and_stops() {
     TEST_ASSERT_TRUE(bench.controller.travelled_distance() < 1.0);
     bench.run_for(0.5);
     TEST_ASSERT_DOUBLE_WITHIN(0.005, 0.0, bench.controller.status().v);
+    // stopped without brain: motors off
+    TEST_ASSERT_EQUAL_DOUBLE(0.0, bench.last.u_left);
+    TEST_ASSERT_EQUAL_DOUBLE(0.0, bench.last.u_right);
     TEST_ASSERT_FALSE(bench.controller.move(goto_command(2, 0.0, 0.0)));
+}
+
+void test_heartbeat_lost_while_holding_cuts_the_motors() {
+    Bench bench;
+    bench.controller.move(simple_command(1, MoveKind::STRAIGHT, 0.0, 0.1));
+    TEST_ASSERT_TRUE(bench.run_until_done(5.0));
+    TEST_ASSERT_EQUAL(MotionState::ARRIVED, bench.state());
+    bench.heartbeat = false;
+    bench.run_for(0.3);
+    TEST_ASSERT_EQUAL(MotionState::ARRIVED, bench.state());
+    TEST_ASSERT_EQUAL_DOUBLE(0.0, bench.last.u_left);
+    TEST_ASSERT_EQUAL_DOUBLE(0.0, bench.last.u_right);
 }
 
 void test_emergency_stop() {
@@ -532,6 +547,7 @@ int main() {
     RUN_TEST(test_loop_period_refused_while_moving);
     RUN_TEST(test_no_move_without_heartbeat);
     RUN_TEST(test_heartbeat_lost_brakes_and_stops);
+    RUN_TEST(test_heartbeat_lost_while_holding_cuts_the_motors);
     RUN_TEST(test_emergency_stop);
     RUN_TEST(test_smooth_and_urgent_stop);
     RUN_TEST(test_goto_forward);

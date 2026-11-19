@@ -120,7 +120,7 @@ Une valeur non finie ou hors domaine (gain négatif, limite nulle…) est ignor�
 
 ### Comportement
 
-- **Heartbeat** : au-delà de 200 ms sans `HEARTBEAT`, un mouvement en cours passe en `STOP` normal (le robot freine et s'arrête) et le bit `HEARTBEAT_LOST` passe à 1. Tant que ce bit est à 1, `MOVE` et `START_TRACE` sont ignorés. Le délai ne se règle pas : il est fixé dans le firmware (invariant de sûreté).
+- **Heartbeat** : au-delà de 200 ms sans `HEARTBEAT`, un mouvement en cours passe en `STOP` normal (le robot freine et s'arrête) et le bit `HEARTBEAT_LOST` passe à 1. Une fois le robot arrêté, les moteurs sont coupés : sans brain, rien ne reste alimenté. Tant que ce bit est à 1, `MOVE` et `START_TRACE` sont ignorés. Le délai ne se règle pas : il est fixé dans le firmware (invariant de sûreté).
 - **BAU** : tant qu'il est détecté, commande et intégrateurs restent à zéro, `MOVE` et `START_TRACE` sont ignorés. Au réarmement, rien ne bouge sans nouveau `MOVE` (R2). L'odométrie continue de compter.
 - **`MOVE` pendant un autre `MOVE`** : le nouveau remplace l'ancien, et le générateur repart de la consigne courante (position et vitesse), sans saut :
   - un `STRAIGHT`, ou un `GOTO` dont le point reste à moins de 10° du cap courant, reçu pendant une ligne droite dans le même sens, continue la ligne droite sans s'arrêter. Le petit écart de cap est corrigé pendant la ligne droite ;
