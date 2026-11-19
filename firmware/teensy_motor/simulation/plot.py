@@ -1,4 +1,4 @@
-"""Trace les courbes d'un scénario : tmp/<nom>.csv vers tmp/<nom>.png."""
+"""Plots the curves of a scenario: tmp/<name>.csv to tmp/<name>.png."""
 
 import csv
 import math
@@ -14,7 +14,7 @@ with Path(f"tmp/{scenario}.csv").open(encoding="utf-8") as file:
 
 
 def column(name: str) -> list[float]:
-    """Renvoie une colonne du CSV sous forme de nombres."""
+    """One column of the CSV, as numbers."""
     return [float(row[name]) for row in rows]
 
 
@@ -24,7 +24,7 @@ figure.suptitle(f"Simulation de la base roulante : {scenario}")
 
 axes[0].plot(t, column("delta_c"), label="consigne")
 axes[0].plot(t, column("delta_mes"), "--", label="mesure")
-axes[0].set_ylabel("Distance (cm)")
+axes[0].set_ylabel("Distance (m)")
 
 axes[1].plot(t, column("psi_c"), label="consigne")
 axes[1].plot(t, column("psi_mes"), "--", label="mesure")
@@ -32,25 +32,25 @@ axes[1].set_ylabel("Angle (rad)")
 
 axes[2].plot(t, column("v_left_c"), label="consigne")
 axes[2].plot(t, column("v_left"), label="mesure", alpha=0.7)
-axes[2].set_ylabel("Roue gauche (cm/s)")
+axes[2].set_ylabel("Roue gauche (m/s)")
 
 axes[3].plot(t, column("v_right_c"), label="consigne")
 axes[3].plot(t, column("v_right"), label="mesure", alpha=0.7)
-axes[3].set_ylabel("Roue droite (cm/s)")
+axes[3].set_ylabel("Roue droite (m/s)")
 
 axes[4].plot(t, column("u_left"), label="gauche")
 axes[4].plot(t, column("u_right"), label="droite")
 axes[4].set_ylabel("Tension (V)")
 
-# écart entre la pose que croit la Teensy et la pose réelle du robot simulé
-error_x = [a - b for a, b in zip(column("x"), column("x_true"), strict=True)]
-error_y = [a - b for a, b in zip(column("y"), column("y_true"), strict=True)]
+# gap between the pose the controller believes and the real pose
+error_x = [(a - b) * 1000 for a, b in zip(column("x"), column("x_true"), strict=True)]
+error_y = [(a - b) * 1000 for a, b in zip(column("y"), column("y_true"), strict=True)]
 error_theta = [
     math.degrees(math.atan2(math.sin(a - b), math.cos(a - b)))
     for a, b in zip(column("theta"), column("theta_true"), strict=True)
 ]
-axes[5].plot(t, error_x, label="x (cm)")
-axes[5].plot(t, error_y, label="y (cm)")
+axes[5].plot(t, error_x, label="x (mm)")
+axes[5].plot(t, error_y, label="y (mm)")
 axes[5].plot(t, error_theta, label="theta (°)")
 axes[5].set_ylabel("Erreur de pose")
 axes[5].set_xlabel("Temps (s)")

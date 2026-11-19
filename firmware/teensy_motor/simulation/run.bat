@@ -1,5 +1,5 @@
 @echo off
-rem Lance la simulation et ouvre les graphes (double-clic ou depuis un terminal)
+rem Runs the simulation and opens the plots (double click or from a terminal)
 set "PATH=C:\w64devkit\bin;%PATH%"
 powershell -ExecutionPolicy Bypass -File "%~dp0run.ps1"
 if errorlevel 1 (
