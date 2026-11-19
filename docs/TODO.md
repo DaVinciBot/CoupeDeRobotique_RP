@@ -421,16 +421,16 @@ Les jalons A à C ne demandent aucune carte Teensy, et les sections 12 à 14 ne 
 
 ### 12.1 Contrat brain ↔ Teensy moteur — `docs/adr/0003-motion-protocol.md`
 
-Écrit à partir du firmware moteur actuel et des attentes du brain : contrat de `MotionPort` et points à valider de l'ADR 0010. Proposé dans l'ADR 0003 (branche `feat/asservissement-v1`, à approuver) ; le brain le suit déjà (ADR 0010).
+Écrit à partir du firmware moteur actuel et des attentes du brain : contrat de `MotionPort` et points à valider de l'ADR 0010. Accepté le 2026-11-19 dans l'ADR 0003 ; le brain le suit (ADR 0010).
 
-- [ ] Contenu exact de `HEARTBEAT`, `MOVE`, `STOP`, `RESET_POSE`, `MOTION_STATUS`, `SET_CONTROL_PARAMS`, `START_TRACE`, `TRACE_SAMPLE`, `TRACE_END` (6.2) : champs, types, unités, IDs.
-- [ ] Fréquences : heartbeat 20 Hz, statut 20 Hz à cadence fixe, arrêt de la Teensy après 200 ms sans heartbeat.
-- [ ] Sémantique d'un `MOVE` reçu pendant un autre ou pendant le freinage d'un `STOP` (`FakeMotion` le lance une fois le robot arrêté, ADR 0011), et de la vitesse max modifiée en cours de mouvement.
-- [ ] `STOP` normal freiné à `MAX_ACCEL` réglé, même valeur que `avoidance.decel` de la zone de sécurité, quel que soit le `max_accel` du `MOVE` en cours (21.1 ; écart 1 relevé par l'ADR 0010).
-- [ ] Comportements du firmware écrits dans l'ADR : `STOP` normal sans effet moteurs libres (après un `STOP` urgent, un BAU ou la perte du heartbeat) jusqu'au prochain `MOVE`, `MOVING` jusqu'à la fin du freinage, `MOVE` reçu pendant un freinage lancé une fois le robot arrêté (écart 2 relevé par l'ADR 0010).
-- [ ] Propositions de l'ADR 0010 tranchées : ignorer un `MOVE` qui reprend le `move_id` d'un mouvement fini (écart 4), garder la détection de blocage quand un `MOVE` continue le mouvement en cours (écart 5).
-- [ ] Redémarrage de la Teensy détectable (`boot_id`) ; Teensy inerte tant qu'elle n'a pas reçu ses réglages.
-- [ ] ADR relu et approuvé côté firmware et côté brain avant d'en coder les messages (cases 12.3 et 13.4).
+- [x] Contenu exact de `HEARTBEAT`, `MOVE`, `STOP`, `RESET_POSE`, `MOTION_STATUS`, `SET_CONTROL_PARAMS`, `START_TRACE`, `TRACE_SAMPLE`, `TRACE_END` (6.2) : champs, types, unités, IDs.
+- [x] Fréquences : heartbeat 20 Hz, statut 20 Hz à cadence fixe, arrêt de la Teensy après 200 ms sans heartbeat.
+- [x] Sémantique d'un `MOVE` reçu pendant un autre ou pendant le freinage d'un `STOP` (`FakeMotion` le lance une fois le robot arrêté, ADR 0011), et de la vitesse max modifiée en cours de mouvement.
+- [x] `STOP` normal freiné à `MAX_ACCEL` réglé, même valeur que `avoidance.decel` de la zone de sécurité, quel que soit le `max_accel` du `MOVE` en cours (21.1 ; écart 1 relevé par l'ADR 0010).
+- [x] Comportements du firmware écrits dans l'ADR : `STOP` normal sans effet moteurs libres (après un `STOP` urgent, un BAU ou la perte du heartbeat) jusqu'au prochain `MOVE`, `MOVING` jusqu'à la fin du freinage, `MOVE` reçu pendant un freinage lancé une fois le robot arrêté (écart 2 relevé par l'ADR 0010).
+- [x] Propositions de l'ADR 0010 tranchées : ignorer un `MOVE` qui reprend le `move_id` d'un mouvement fini (écart 4), garder la détection de blocage quand un `MOVE` continue le mouvement en cours (écart 5) : écartées.
+- [x] Redémarrage de la Teensy détectable (`boot_id`) ; Teensy inerte tant qu'elle n'a pas reçu ses réglages.
+- [x] ADR relu et approuvé côté firmware et côté brain avant d'en coder les messages (cases 12.3 et 13.4).
 
 ### 12.2 Contrat brain ↔ Teensy actionneurs — ADR dans `docs/adr/`
 
@@ -661,11 +661,6 @@ Chaque point bloque les cases indiquées.
 
 | Point à valider | Cases bloquées |
 | --- | --- |
-| Unités sur le fil USB : SI (m, rad, m/s) ou unités Teensy (cm, cm/s) avec conversion dans l'adaptateur. Proposé : SI (ADR 0003, à approuver) | 12.1, 12.3, 15.1 |
-| Types des champs des messages : `float` ou `double`. Proposé : `float` (ADR 0003, à approuver) | 12.1, 12.3 |
-| Variante exacte du CRC-16. Proposé : CRC-16/CCITT-FALSE (ADR 0003, à approuver) | 12.3 |
-| Comportement d'un `MOVE` reçu pendant un autre, et vitesse max modifiable ou non en cours de mouvement. Proposé dans l'ADR 0003, à approuver | 12.1, 6.2 |
-| Écarts entre l'ADR 0003 et le firmware de `feat/asservissement-v1`, relevés par l'ADR 0010 : le `STOP` normal freine avec l'accélération du `MOVE` en cours et non à `MAX_ACCEL` réglé (zone de sécurité trop courte) ; comportements du firmware que l'ADR 0003 n'écrit pas (`STOP` normal sans effet moteurs libres, `MOVING` jusqu'à la fin du freinage, `MOVE` reçu pendant un freinage lancé une fois le robot arrêté) ; propositions : ignorer un `MOVE` qui reprend le `move_id` d'un mouvement fini, garder la détection de blocage quand un `MOVE` continue le mouvement en cours | 6.2, 12.1, 13.3, 15.1, 21.1 |
 | Empreinte réelle du robot (rayon, polygone, actionneurs rentrés) | 2.4, 5.1, 6.1, 7.4 |
 | Position, orientation et hauteur du lidar sur le robot | 9.1, 16.2 |
 | Séquences des mécanismes (prise de pierres, construction, Graal, lanceur) | 7.1, 14 |

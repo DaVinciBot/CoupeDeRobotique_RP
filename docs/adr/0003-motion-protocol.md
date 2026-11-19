@@ -1,6 +1,6 @@
 # ADR 0003 — Contrat brain ↔ Teensy moteur
 
-- **Statut** : proposé (à relire par les auteurs du firmware moteur et du brain, TODO 12.1)
+- **Statut** : accepté le 2026-11-19, côté firmware et côté brain (TODO 12.1)
 - **Date** : 2026-11-19
 - **Cases** : [TODO 12.1](../TODO.md#121-contrat-brain--teensy-moteur--docsadr0003-motion-protocolmd), [TODO 12.3](../TODO.md#123-usb_com-v2-c-et-python), [TODO 13](../TODO.md#13-firmware-teensy-moteur--firmwareteensy_motor)
 
@@ -67,7 +67,7 @@ Le firmware 2026 envoyait des positions en cm, des `double`, une signature de 4 
 - `max_speed` (m/s) et `max_accel` (m/s²) limitent la translation. Une valeur nulle, négative ou au-dessus des limites réglées est ramenée aux limites réglées. Les rotations utilisent les limites angulaires réglées.
 - `move_id` est choisi par le brain ; 0 est réservé (aucun mouvement depuis le démarrage).
 
-**`STOP`** : `mode u8`. 0 `SMOOTH` : décélération par le générateur à l'accélération réglée, puis maintien de la position. 1 `URGENT` : commande et intégrateurs à zéro tout de suite, moteurs libres. Pendant une poussée ou un essai, les deux arrêts coupent les moteurs (vitesses faibles).
+**`STOP`** : `mode u8`. 0 `SMOOTH` : décélération par le générateur aux accélérations réglées (`MAX_ACCEL`, `MAX_ANGULAR_ACCEL` en rotation), quelles que soient celles du `MOVE` en cours, puis maintien de la position. Le statut reste `MOVING` pendant le freinage et passe à `STOPPED` une fois la consigne arrêtée ; un `MOVE` reçu pendant ce freinage est lancé une fois le robot arrêté. Moteurs libres (après un `STOP` urgent, un BAU ou la perte du heartbeat), `SMOOTH` ne fait rien jusqu'au prochain `MOVE` : rien n'adoucit un arrêt urgent. 1 `URGENT` : commande et intégrateurs à zéro tout de suite, moteurs libres. Pendant une poussée ou un essai, les deux arrêts coupent les moteurs (vitesses faibles).
 
 **`RESET_POSE`** (13 octets) : `x`, `y` (m), `theta` (rad). Impose la position absolue. Ignoré si le statut est `MOVING`. Le brain vérifie dans le statut suivant que la pose est appliquée. Les boucles ne voient jamais ce saut (D6 du document d'asservissement).
 
@@ -127,6 +127,7 @@ Une valeur non finie ou hors domaine (gain négatif, limite nulle…) est ignor�
   - un `ROTATE_BY` ou `ROTATE_TO` reçu pendant une rotation dans le même sens continue la rotation ;
   - sinon, le robot freine jusqu'à l'arrêt, puis exécute le nouveau mouvement.
 - **Vitesse max modifiée en cours de mouvement** : on renvoie le même `GOTO` (même point) avec une autre `max_speed`. Comme il continue le mouvement en cours, le robot ralentit (ou accélère) jusqu'à la nouvelle vitesse sans s'arrêter. C'est ce que fait le ralentissement de l'évitement ([section 8.4](../ARCHITECTURE%20RP%202027.md#84-évitement)). `STRAIGHT` et `ROTATE_BY` sont relatifs : renvoyés, ils repartent de la position mesurée à la réception.
+- **`MOVE` accepté** : tout `MOVE` valide est accepté, même s'il reprend le `move_id` d'un mouvement fini, qu'il relance. Il remet à zéro la détection de blocage, même quand il continue le mouvement en cours. Le brain ne renvoie donc le `GOTO` que quand la vitesse change ([ADR 0010](0010-clock-watch-motion-port.md)).
 - **Fin de mouvement** : `ARRIVED` quand le générateur a fini et que la mesure est dans les tolérances. Le robot reste ensuite asservi sur la dernière consigne.
 - **Blocage** : une roue force (tension au-dessus de `BLOCK_VOLTAGE`) sans tourner (vitesse sous `BLOCK_SPEED`) pendant `BLOCK_TIME` : commande et intégrateurs à zéro, `BLOCKED`. En poussée, il faut les deux roues, avec un seuil à 90 % de `PUSH_VOLTAGE`.
 - **`RESET_TEENSY`** : redémarrage logiciel (`SCB_AIRCR`). Le `boot_id` change.
@@ -138,11 +139,13 @@ Une valeur non finie ou hors domaine (gain négatif, limite nulle…) est ignor�
 - **Un message `SET_CONTROL_PARAMS` avec tous les réglages** : une structure à changer à chaque nouveau réglage, et l'impossibilité d'en régler un seul depuis l'écran Asservissement. Un réglage par message coûte 17 messages au démarrage, soit moins de 200 octets.
 - **Un message dédié pour changer la vitesse max** : renvoyer le `MOVE` suffit, puisqu'il continue le mouvement en cours.
 - **Mode `auto` résolu par la Teensy** : il dépend de seuils et de la table, qui sont côté brain.
+- **Ignorer un `MOVE` qui reprend le `move_id` d'un mouvement fini** : un ralentissement qui croise la fin d'un mouvement ne le relancerait plus, mais la Teensy devrait garder l'historique des `move_id`. Le brain ne renvoie que quand la vitesse change ; un renvoi qui croise un `BLOCKED` (une période de statut) relance le robot une fois vers le point, jusqu'au blocage suivant : risque accepté.
+- **Garder la détection de blocage quand un `MOVE` continue le mouvement** : un ralentissement ne retarderait plus la détection, mais il faudrait distinguer les deux cas dans le firmware. Comme le brain ne renvoie que par paliers de vitesse, le retard reste borné.
 - **Accusé de réception pour chaque commande** : le statut à 20 Hz porte `move_id` et la pose, ce qui suffit pour vérifier qu'un `MOVE` ou un `RESET_POSE` est appliqué.
 
 ## Conséquences
 
 - `messages.h` et `messages.py` suivent ce document. La CI compile `messages.h` sur PC et vérifie que les ID et les tailles sont les mêmes qu'en Python.
 - Le `MotionPort` du brain (TODO 3.3) reprend ces types : `MoveKind`, `MotionState`, `StopMode`, `MotionStatus`.
-- Les points « Unités sur le fil », « Types des champs », « Variante exacte du CRC-16 » et « Comportement d'un `MOVE` reçu pendant un autre » de la TODO sont tranchés ici, sous réserve de la relecture.
+- Les points « Unités sur le fil », « Types des champs », « Variante exacte du CRC-16 » et « Comportement d'un `MOVE` reçu pendant un autre » de la TODO sont tranchés ici.
 - Restent à valider avec l'élec : broches de V_bat et du BAU (bits `VBAT_MISSING` et `ESTOP_SENSOR_MISSING` à 1 en attendant).
