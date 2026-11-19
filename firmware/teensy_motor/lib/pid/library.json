@@ -1,7 +1,7 @@
 {
     "name": "pid",
     "version": "1.0.0",
-    "description": "Library dedicated to PID control",
+    "description": "PI corrector with anti-windup, used by the loops of the rolling base",
     "keywords": "pid",
     "frameworks": "*",
     "platforms": "*"

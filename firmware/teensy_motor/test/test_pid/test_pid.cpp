@@ -7,7 +7,7 @@ void setUp() {}
 void tearDown() {}
 
 void test_proportional_and_integral() {
-    PID pid(2.0, 10.0, 0.0, -12.0, 12.0, TS);
+    PID pid(2.0, 10.0, -12.0, 12.0, TS);
     // first call: the integral is still zero
     TEST_ASSERT_DOUBLE_WITHIN(1e-12, 2.0, pid.compute(1.0));
     // then it grows by ki * error * ts per period
@@ -15,7 +15,7 @@ void test_proportional_and_integral() {
 }
 
 void test_no_integration_while_saturated() {
-    PID pid(1.0, 100.0, 0.0, -12.0, 12.0, TS);
+    PID pid(1.0, 100.0, -12.0, 12.0, TS);
     for (int i = 0; i < 1000; i++) {
         TEST_ASSERT_TRUE(pid.compute(50.0) <= 12.0);
     }
@@ -24,7 +24,7 @@ void test_no_integration_while_saturated() {
 }
 
 void test_extra_limit_also_stops_integration() {
-    PID pid(1.0, 100.0, 0.0, -12.0, 12.0, TS);
+    PID pid(1.0, 100.0, -12.0, 12.0, TS);
     for (int i = 0; i < 1000; i++) {
         TEST_ASSERT_TRUE(pid.compute(2.0, 4.0) <= 4.0);
     }
@@ -34,7 +34,7 @@ void test_extra_limit_also_stops_integration() {
 }
 
 void test_reset_clears_integral() {
-    PID pid(0.0, 10.0, 0.0, -12.0, 12.0, TS);
+    PID pid(0.0, 10.0, -12.0, 12.0, TS);
     pid.compute(1.0);
     pid.compute(1.0);
     pid.reset();

@@ -4,74 +4,63 @@
 #include <math.h>
 
 /**
- * @brief Correcteur à période fixe, utilisé pour tous les asservissements
+ * @brief Fixed period corrector, used by every loop of the rolling base
  *
- * - Les PI de vitesse utilisent kp et ki : leur sortie est une tension.
- * - Les P de position ont ki = 0 : leur sortie est une vitesse.
- * - kd est gardé pour le message SET_PID, mais il n'est pas utilisé.
- * - L'intégrale n'avance pas quand la sortie est saturée.
+ * - The speed PIs use kp and ki: their output is a voltage.
+ * - The position Ps have ki = 0: their output is a speed.
+ * - No derivative term: on a first order system it only amplifies the noise
+ *   of the encoders (section 7 of the control design document).
+ * - The integral does not move while the output is saturated.
  */
 class PID {
    public:
     /**
-     * @param kp            Gain proportionnel
-     * @param ki            Gain intégral
-     * @param kd            Gain dérivé (non utilisé)
-     * @param minOutput     Valeur minimale de la sortie
-     * @param maxOutput     Valeur maximale de la sortie
-     * @param ts            Période de la boucle, en s
+     * @param kp            Proportional gain
+     * @param ki            Integral gain
+     * @param minOutput     Lowest output
+     * @param maxOutput     Highest output
+     * @param ts            Loop period, in s
      */
-    PID(double kp,
-        double ki,
-        double kd,
-        double minOutput,
-        double maxOutput,
-        double ts);
+    PID(double kp, double ki, double minOutput, double maxOutput, double ts);
 
     /**
-     * @brief Change les gains et remet l'intégrale à zéro
+     * @brief Changes the gains without touching the integral
      */
-    void updateParameters(double kp, double ki, double kd);
+    void setTunings(double kp, double ki);
 
     /**
-     * @brief Change les gains sans toucher à l'intégrale
-     */
-    void setTunings(double kp, double ki, double kd);
-
-    /**
-     * @brief Change les bornes de la sortie, ignorées si min >= max
+     * @brief Changes the output limits, ignored if min >= max
      */
     void setOutputLimits(double minOutput, double maxOutput);
 
     /**
-     * @brief Change la période de la boucle, en s
+     * @brief Changes the loop period, in s
      */
     void setPeriod(double ts);
 
     /**
-     * @brief Calcule la commande à partir de l'erreur
+     * @brief Command from the error
      *
-     * La sortie vaut kp * error + intégrale, bornée entre minOutput et
-     * maxOutput, et aussi entre -limit et limit. L'intégrale avance seulement
-     * si la sortie n'est pas saturée.
-     * A appeler une seule fois par période.
+     * The output is kp * error + integral, limited to [minOutput, maxOutput]
+     * and to [-limit, limit]. The integral only grows when the output is not
+     * saturated. To be called once per period.
      *
-     * @param error  Erreur (consigne - mesure)
-     * @param limit  Borne supplémentaire de la sortie, pour cet appel
-     * @return Commande bornée
+     * @param error  Error (setpoint - measurement)
+     * @param limit  Extra limit of the output, for this call
+     * @return Limited command
      */
     double compute(double error, double limit = INFINITY);
 
     /**
-     * @brief Remet l'intégrale à zéro
+     * @brief Sets the integral back to zero
      */
     void reset();
 
    private:
-    double _kp, _ki, _kd;
+    double _kp, _ki;
     double _minOutput, _maxOutput;
-    double _integral;  // somme des ki * error * ts
-    double _ts;        // période de la boucle, en s
+    double _integral;  // sum of ki * error * ts
+    double _ts;        // loop period, in s
 };
 
 #endif  // PID_H

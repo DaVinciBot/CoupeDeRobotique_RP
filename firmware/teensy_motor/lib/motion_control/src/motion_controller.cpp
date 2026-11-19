@@ -41,10 +41,10 @@ double clamp(double value, double limit) {
 MotionController::MotionController(const Config& config, double ts)
     : config(config),
       ts(ts),
-      left_pid(0.0, 0.0, 0.0, -config.u_max, config.u_max, ts),
-      right_pid(0.0, 0.0, 0.0, -config.u_max, config.u_max, ts),
-      distance_pid(0.0, 0.0, 0.0, 0.0, 0.0, ts),
-      heading_pid(0.0, 0.0, 0.0, 0.0, 0.0, ts),
+      left_pid(0.0, 0.0, -config.u_max, config.u_max, ts),
+      right_pid(0.0, 0.0, -config.u_max, config.u_max, ts),
+      distance_pid(0.0, 0.0, 0.0, 0.0, ts),
+      heading_pid(0.0, 0.0, 0.0, 0.0, ts),
       delta_profile(1.0, 1.0),
       psi_profile(1.0, 1.0) {}
 
@@ -151,11 +151,10 @@ bool MotionController::set_param(Param param, double value) {
 
     // the integral is already multiplied by ki: changing the gains does not
     // make it wrong, so it is kept
-    this->left_pid.setTunings(this->p.left_speed_kp, this->p.left_speed_ki, 0);
-    this->right_pid.setTunings(this->p.right_speed_kp, this->p.right_speed_ki,
-                               0);
-    this->distance_pid.setTunings(this->p.distance_kp, 0, 0);
-    this->heading_pid.setTunings(this->p.heading_kp, 0, 0);
+    this->left_pid.setTunings(this->p.left_speed_kp, this->p.left_speed_ki);
+    this->right_pid.setTunings(this->p.right_speed_kp, this->p.right_speed_ki);
+    this->distance_pid.setTunings(this->p.distance_kp, 0.0);
+    this->heading_pid.setTunings(this->p.heading_kp, 0.0);
     this->distance_pid.setOutputLimits(-this->p.max_speed, this->p.max_speed);
     this->heading_pid.setOutputLimits(-this->p.max_angular_speed,
                                       this->p.max_angular_speed);

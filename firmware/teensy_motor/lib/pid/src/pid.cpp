@@ -1,40 +1,22 @@
-/**
- * This is the implementation of the PID class.
- * The PID class computes the command of the servo-control from an error.
- */
-
 #include "pid.h"
 #include <math.h>
 
-PID::PID(double kp,
-         double ki,
-         double kd,
-         double minOutput,
-         double maxOutput,
-         double ts)
+PID::PID(double kp, double ki, double minOutput, double maxOutput, double ts)
     : _kp(kp),
       _ki(ki),
-      _kd(kd),
       _minOutput(minOutput),
       _maxOutput(maxOutput),
       _integral(0.0),
       _ts(ts) {}
 
-void PID::updateParameters(double kp, double ki, double kd) {
-    this->setTunings(kp, ki, kd);
-    // l'ancienne intégrale a été calculée avec les anciens gains
-    this->reset();
-}
-
-void PID::setTunings(double kp, double ki, double kd) {
+void PID::setTunings(double kp, double ki) {
     this->_kp = kp;
     this->_ki = ki;
-    this->_kd = kd;
 }
 
 void PID::setOutputLimits(double minOutput, double maxOutput) {
     if (minOutput >= maxOutput) {
-        return;  // bornes invalides : on garde les anciennes
+        return;  // invalid limits: the old ones are kept
     }
     this->_minOutput = minOutput;
     this->_maxOutput = maxOutput;
@@ -52,11 +34,11 @@ double PID::compute(double error, double limit) {
     double max_output = fmin(this->_maxOutput, limit);
     double min_output = fmax(this->_minOutput, -limit);
 
-    // correction immédiate + correction accumulée
+    // immediate correction + accumulated correction
     double output = this->_kp * error + this->_integral;
 
-    // sortie saturée : on renvoie la borne sans intégrer, pour que l'intégrale
-    // ne grossisse pas sans fin si une roue est bloquée
+    // saturated output: return the limit without integrating, so that the
+    // integral does not grow forever when a wheel is blocked
     if (output > max_output) {
         return max_output;
     }
@@ -64,7 +46,7 @@ double PID::compute(double error, double limit) {
         return min_output;
     }
 
-    // hors saturation : l'erreur s'accumule pour la période suivante
+    // not saturated: the error is accumulated for the next period
     this->_integral += this->_ki * error * this->_ts;
     return output;
 }
