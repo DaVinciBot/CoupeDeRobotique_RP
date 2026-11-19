@@ -1,79 +1,65 @@
 /*
- * This file is dedicated to the configuration of the robot: all the constants
- * and the pinout are defined here.
+ * Configuration of the motor Teensy: pins and hardware constants, in SI
+ * units. The control settings (gains, speed limits, tolerances, blocking
+ * thresholds) are not here: the brain sends them at start-up from
+ * config/robot.json, and the Teensy stays inert until it has them all.
  */
 
-// Default position
-#define START_X 0.0
-#define START_Y 0.0
-#define START_THETA 0.0
+#ifndef CONFIG_H
+#define CONFIG_H
 
 // Motor Left
 #define L_ENCA 12
 #define L_ENCB 11
 #define L_PWM 5
-#define L_DIR 4  // a changer surement
+#define L_DIR 4  // to be checked with the wiring
 
 // Motor Right
 #define R_ENCA 14
 #define R_ENCB 13
 #define R_PWM 2
-#define R_DIR 0  // a changer surement
+#define R_DIR 0  // to be checked with the wiring
 
-// Encoder
-#define ENCODER_RESOLUTION 4096 //comme on a 4 ticks par impulsions, on aura 4*1024 = 4096 ticks par tour comme résolution
-#define ENTRAXE 29.5
-#define WHEEL_DIAMETER 5.9
+// Encoder wheels (AMT102-V), to be measured on the robot (Q2 of the control
+// design document)
+#define ENCODER_RESOLUTION 4096  // counts per turn after x4 decoding: DIP switch to check
+#define ENCODER_WHEEL_DIAMETER 0.059  // m
+#define TRACK_WIDTH 0.295             // distance between the encoder wheels, m
 
-// PIs for each wheels
-#define KP_SPEED_LEFT 0
-#define KI_SPEED_LEFT 0
-
-#define KP_SPEED_RIGHT 0
-#define KI_SPEED_RIGHT 0
-
-// Niveau 2 de l'asservissement
-#define KP_LINEAR_POSITION 0
-
-#define KP_ANGULAR_POSITION 0
-
-// PID IDS
-#define LINEAR_POSITION_PID_ID 0
-#define ANGULAR_POSITION_PID_ID 1
-#define LEFT_SPEED_PID_ID 2
-#define RIGHT_SPEED_PID_ID 3
-
-// PWM
+// PWM + DIR, 30 to 40 kHz (R4)
 #define PWM_FREQUENCY 40000
 #define PWM_RESOLUTION 12
 #define PWM_MAX 4095  // (2 ** PWM_RESOLUTION) - 1
 
-// Asservissement echantillonage fréquence
-#define ASSERVISSEMENT_PERIOD 5000         // 5ms
-#define TS (ASSERVISSEMENT_PERIOD * 1e-6)  // en s
+// Loop period until the brain sends LOOP_PERIOD
+#define LOOP_PERIOD_DEFAULT 0.005  // s
 
-// Com baudrate
+// Com baudrate (ignored by the USB serial of the Teensy)
 #define BAUDRATE 115200
 
-// Tension
-#define U_MAX 12.0  // en V
-#define U_MIN 0.0 // zone morte : tension min pour que la roue démarre, à mesurer
-#define VBAT_DEFAULT 14.8  // la tension de la batterie par default
+// Motor voltage limit (Faulhaber 3242G012CR, 12 V)
+#define U_MAX 12.0  // V
 
-// SPEED AND TURN LIMIT
-#define V_MAX 20.0     // en cm/s
-#define ACC_MAX 15.0   // en cm/s²
-#define W_MAX 1.0      // en rad/s
-#define W_ACC_MAX 1.0  // en rad/s²
+// Battery voltage (R7): pin of the filtered divider and its ratio, to be
+// given by the elec team. Until then VBAT_DEFAULT is used and the status
+// says VBAT_MISSING.
+// #define VBAT_PIN A0
+// #define VBAT_DIVIDER_RATIO 6.0  // vbat = voltage on the pin * ratio
+#define VBAT_DEFAULT 14.8  // V, 4S LiPo
 
-// Arrivée d'un mouvement
-#define POSITION_TOLERANCE 0.2  // en cm
-#define ANGLE_TOLERANCE 0.01    // en rad
+// Emergency stop sense (R2): pin reading the power after the emergency stop
+// button, to be given by the elec team. Until then the status says
+// ESTOP_SENSOR_MISSING.
+// #define ESTOP_PIN 22
+// #define ESTOP_ACTIVE_LEVEL LOW  // level on the pin when the power is cut
 
-// Détection de blocage
-#define BLOCK_VOLTAGE 8.0  // en V
-#define BLOCK_SPEED 1.0    // en cm/s
-#define BLOCK_PERIODS 100  // 0,5 s à 200 Hz
+// Safety: never longer without an ADR (architecture, section 11)
+#define HEARTBEAT_TIMEOUT 0.2  // s
 
-// Poussée contre une bordure (recalage)
-#define PUSH_VOLTAGE 4.0  // en V, à valider avec l'élec : limite la force
+// MOTION_STATUS period (architecture 6.1: 10 Hz at least)
+#define STATUS_PERIOD 0.05  // s
+
+#define MAX_TRACE_DURATION 10.0  // s
+#define CONTINUE_ANGLE 0.1745    // 10 deg: heading gap under which a GOTO goes on, rad
+
+#endif  // CONFIG_H

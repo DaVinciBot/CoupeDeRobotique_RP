@@ -1,83 +1,55 @@
 /**
- * This is the Motor class header.
- * The Motor class control a Mmotor power and direction and handle odometry
- * computation.
+ * Hardware side of one wheel: the motor driver (PWM + DIR) and the encoder
+ * of the encoder wheel. The control itself is in motion_control.
  */
+
+#ifndef MOTORS_DRIVER_H
+#define MOTORS_DRIVER_H
 
 #include <Arduino.h>
 #include <Encoder.h>
 
-// Motor class
 class Motor {
    private:
-    // Pins Motor
-    byte pin_dir;   // PIN de direction
-    byte pin_pwm;   // PWM pin only !
-    byte pin_enca;  // AttachInterrupt pin only !
-    byte pin_encb;  // AttachInterrupt pin only !
+    byte pin_dir;
+    byte pin_pwm;  // PWM pin only
+    int pwm_max;   // PWM max value (depends on the PWM resolution)
+    double u_max;  // motor voltage limit, V
+    Encoder encoder;
 
-    int pwm_max;  // PWM max value (depends on PWM resolution)
-
-    // Ticks distance
-    double wheel_unit_tick_cm;
-
-    double ts;  // période de la boucle, en s
-
-    double u_max;  // tension maximale du moteur, en V
    public:
-    Encoder* encoder;  // Encoder object to handle the encoder of the motor
-
-    // Motor description (it is the last data calculated by the motor odometer
-    // handle method)
-    double distance = 0.0;  // Distance in cm
-    long last_ticks = 0L;   // Ticks distance used to compute distance and speed
-                            // (updated at the last odometer handle call)
-    double speed = 0.0;     // en cm/s
-
-    double voltage = 0.0;  // dernière tension appliquée, en V
-
-    // Constructor
     /**
-     * @brief Constructor of the Motor class
-     * Define the pins of the motor, the related encoder pins and the properties
-     * of the wheel attached to the motor
+     * @param pin_enca, pin_encb Encoder pins (interrupt pins)
      */
     Motor(byte pin_dir,
           byte pin_pwm,
           byte pin_enca,
           byte pin_encb,
-          double wheel_unit_tick_cm,
           int pwm_max,
-          double u_max,
-          double ts);
-    ~Motor() = default;
+          double u_max);
 
-    // Methods
     /**
-     * @brief Initialize the mode of the pins define for the motor
+     * @brief Sets the pins, motor stopped
      */
     void init();
 
     /**
-     * @brief Applique une tension au moteur
+     * @brief Applies a voltage to the motor
      *
-     * Borne u à +/- u_max, puis calcule le rapport cyclique alpha = u / vbat.
-     * Diviser par vbat garde la même tension moteur quand la batterie baisse.
-     * Le signe d'alpha donne le sens (DIR) et sa valeur absolue donne la PWM.
-     * Si vbat n'est pas valide, le moteur est coupé.
+     * Limits u to +/- u_max, then sets the duty cycle alpha = u / vbat:
+     * dividing by vbat keeps the same motor voltage when the battery gets
+     * low (D3). The sign of alpha gives DIR. If vbat is not valid, the motor
+     * is stopped.
      *
-     * @param u Tension à appliquer, en V (le signe donne le sens)
-     * @param vbat Tension de la batterie, en V
+     * @param u Voltage, V (the sign gives the direction)
+     * @param vbat Battery voltage, V
      */
     void set_voltage(double u, double vbat);
 
     /**
-     * @brief Met à jour la distance et la vitesse de la roue
-     *
-     * Lit le compteur de l'encodeur et le compare à la lecture précédente.
-     * Les tics parcourus sont convertis en cm, puis divisés par la période ts
-     * pour obtenir la vitesse en cm/s.
-     * A appeler une seule fois par période.
+     * @brief Encoder count since start-up
      */
-    void handle_odometrie();
+    int32_t ticks();
 };
+
+#endif  // MOTORS_DRIVER_H

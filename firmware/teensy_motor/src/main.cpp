@@ -1,223 +1,282 @@
-// Externe libraries used: Arduino, TimerOne, ATOMIC
-#include <Arduino.h>      // Arduino framework
-#include <TimerOne.h>     // Timer interrupt library
-#include <util/atomic.h>  // Atomic block library
+/**
+ * Motor Teensy: control of the rolling base.
+ *
+ * - The timer calls control_loop() at each period: it reads the encoders,
+ *   the battery and the emergency stop, runs the controller and applies the
+ *   voltages. It also prepares the messages for the Pi.
+ * - loop() reads the messages of the Pi and sends the prepared ones.
+ *
+ * Messages: docs/adr/0003-motion-protocol.md. Every call to the controller
+ * made from loop() is done with the timer interrupt blocked.
+ */
 
-// Custom libraries used: RollingBasis, Com
-#include <rolling_basis.h>  // Rolling Basis object to manage the motors and robot position
-
-// Configuration file (contains all the constants and pinout), it is just a
-// main.cpp header file
+#include <Arduino.h>
+#include <Entropy.h>
+#include <TimerOne.h>
+#include <com.h>
 #include <config.h>
+#include <motion_controller.h>
+#include <motors_driver.h>
+#include <string.h>
+#include <util/atomic.h>
 
-// 1. Instanciate the Rolling Basis object
-// a. Define the PID controllers
-PID linear_position_pid(KP_LINEAR_POSITION, 0, 0, -V_MAX, V_MAX, TS);
-PID angular_position_pid(KP_ANGULAR_POSITION, 0, 0, -W_MAX, W_MAX, TS);
+using namespace motion;
 
-// PI de vitesse : un par roue, leur sortie est une tension
-// Rolling_Basis en garde une copie, ces objets servent de valeurs de départ
-PID left_speed_pid(KP_SPEED_LEFT, KI_SPEED_LEFT, 0, -U_MAX, U_MAX, TS);
-PID right_speed_pid(KP_SPEED_RIGHT, KI_SPEED_RIGHT, 0, -U_MAX, U_MAX, TS);
+Motor left_motor(L_DIR, L_PWM, L_ENCA, L_ENCB, PWM_MAX, U_MAX);
+Motor right_motor(R_DIR, R_PWM, R_ENCA, R_ENCB, PWM_MAX, U_MAX);
 
-// générateurs de consigne : distance en cm, angle en rad
-Trapezoid delta_profile(V_MAX, ACC_MAX);
-Trapezoid psi_profile(W_MAX, W_ACC_MAX);
+const Config CONTROL_CONFIG = {
+    kPi * ENCODER_WHEEL_DIAMETER / ENCODER_RESOLUTION,  // tick_distance
+    TRACK_WIDTH,
+    U_MAX,
+    HEARTBEAT_TIMEOUT,
+    MAX_TRACE_DURATION,
+    CONTINUE_ANGLE,
+};
+MotionController controller(CONTROL_CONFIG, LOOP_PERIOD_DEFAULT);
 
-// b. Instanciate the Rolling Basis object
-Rolling_Basis* rolling_basis_ptr = new Rolling_Basis(ENCODER_RESOLUTION,
-                                                     ENTRAXE,
-                                                     WHEEL_DIAMETER,
-                                                     linear_position_pid,
-                                                     angular_position_pid,
-                                                     left_speed_pid,
-                                                     right_speed_pid,
-                                                     delta_profile,
-                                                     psi_profile,
-                                                     TS,
-                                                     POSITION_TOLERANCE,
-                                                     ANGLE_TOLERANCE,
-                                                     BLOCK_VOLTAGE,
-                                                     BLOCK_SPEED,
-                                                     BLOCK_PERIODS,
-                                                     PUSH_VOLTAGE);
-
-// 2. Instanciate the Communication object
 Com* com;
+uint32_t boot_id = 0;
+uint16_t last_heartbeat = 0;
 
-// 3. Define all com callback functions
-// a. define globals variables to keep in memory callback functions updated
-// dernière mesure de test, écrite par le timer et envoyée par loop()
-msg_update_speeds speeds_msg;
-volatile bool speeds_ready = false;
+// sensors not wired yet: reported in every status
+const uint8_t HARDWARE_FLAGS =
+#ifndef VBAT_PIN
+    status_flags::VBAT_MISSING |
+#endif
+#ifndef ESTOP_PIN
+    status_flags::ESTOP_SENSOR_MISSING |
+#endif
+    0;
 
-// b. define the callback functions
-void set_target_position(byte* msg, byte size) {
-    msg_set_target_position* target_position_msg =
-        (msg_set_target_position*)msg;
+// Messages prepared by the timer, sent by loop()
+msg_motion_status status_msg;
+volatile bool status_ready = false;
+msg_trace_sample sample_msg;
+volatile bool sample_ready = false;
+msg_trace_end trace_end_msg;
+volatile bool trace_end_ready = false;
+uint32_t periods_since_status = 0;
 
-    rolling_basis_ptr->set_target(
-        Point(target_position_msg->target_position_x,
-              target_position_msg->target_position_y,
-              target_position_msg->target_position_theta));
+double read_vbat() {
+#ifdef VBAT_PIN
+    return analogRead(VBAT_PIN) * 3.3 / 1023.0 * VBAT_DIVIDER_RATIO;
+#else
+    return VBAT_DEFAULT;
+#endif
 }
 
-void set_pid(byte* msg, byte size) {
-    msg_set_pid* pid_msg = (msg_set_pid*)msg;
-    PID* pid = nullptr;
-    bool is_valid_pid = true;
-    // pid pointe vers la copie gardée par Rolling_Basis, celle qui tourne
-    switch (pid_msg->pid_type) {
-        case LINEAR_POSITION_PID_ID:
-            pid = &rolling_basis_ptr->linear_distance_pid;
-            break;
-        case ANGULAR_POSITION_PID_ID:
-            pid = &rolling_basis_ptr->angular_distance_pid;
-            break;
-        case LEFT_SPEED_PID_ID:
-            pid = &rolling_basis_ptr->left_speed_pid;
-            break;
-        case RIGHT_SPEED_PID_ID:
-            pid = &rolling_basis_ptr->right_speed_pid;
-            break;
-        default:
-            is_valid_pid = false;
-            break;
+bool read_emergency_stop() {
+#ifdef ESTOP_PIN
+    return digitalRead(ESTOP_PIN) == ESTOP_ACTIVE_LEVEL;
+#else
+    return false;
+#endif
+}
+
+// Timer interrupt, every loop period
+void control_loop() {
+    Inputs inputs = {left_motor.ticks(), right_motor.ticks(), read_vbat(),
+                     read_emergency_stop()};
+    Outputs outputs = controller.step(inputs);
+    left_motor.set_voltage(outputs.u_left, inputs.vbat);
+    right_motor.set_voltage(outputs.u_right, inputs.vbat);
+
+    TraceSample sample;
+    if (controller.trace_sample(sample)) {
+        sample_msg.time_ms = sample.time_ms;
+        sample_msg.setpoint = sample.setpoint;
+        sample_msg.measurement = sample.measurement;
+        sample_msg.u_left = sample.u_left;
+        sample_msg.u_right = sample.u_right;
+        sample_msg.vbat = sample.vbat;
+        sample_ready = true;
     }
-    if (is_valid_pid) {
-        // le timer ne doit pas utiliser le PID pendant le changement de gains
-        noInterrupts();
-        pid->updateParameters(pid_msg->kp, pid_msg->ki, pid_msg->kd);
-        interrupts();
+
+    TraceEnd end;
+    if (controller.take_trace_end(end)) {
+        trace_end_msg.sample_count = end.sample_count;
+        trace_end_msg.state = (byte)end.state;
+        trace_end_msg.ts = end.ts;
+        trace_end_msg.kp = end.kp;
+        trace_end_msg.ki = end.ki;
+        trace_end_ready = true;
     }
-}
 
-// Test en boucle ouverte : une tension par moteur, pendant une durée limitée
-void set_motors_voltage(byte* msg, byte size) {
-    msg_set_motors_voltage* voltage_msg = (msg_set_motors_voltage*)msg;
-
-    // la durée d'abord, sinon le timer verrait 0 et couperait l'essai
-    rolling_basis_ptr->test_periods_left = voltage_msg->duration / TS;
-    rolling_basis_ptr->set_open_loop(voltage_msg->u_left, voltage_msg->u_right);
-}
-
-// Test des PI : une vitesse par roue, pendant une durée limitée
-void set_wheels_speed(byte* msg, byte size) {
-    msg_set_wheels_speed* speed_msg = (msg_set_wheels_speed*)msg;
-
-    // la durée d'abord, sinon le timer verrait 0 et couperait l'essai
-    rolling_basis_ptr->test_periods_left = speed_msg->duration / TS;
-    rolling_basis_ptr->set_speed_targets(speed_msg->v_left, speed_msg->v_right);
-}
-
-void reset_pose(byte* msg, byte size) {
-    msg_reset_pose* pose_msg = (msg_reset_pose*)msg;
-
-    // refusé si le robot bouge : la Raspberry le voit dans le statut suivant
-    rolling_basis_ptr->reset_pose(
-        Point(pose_msg->x, pose_msg->y, pose_msg->theta));
-}
-
-void push_until_blocked(byte* msg, byte size) {
-    msg_push_until_blocked* push_msg = (msg_push_until_blocked*)msg;
-
-    rolling_basis_ptr->push_until_blocked(push_msg->speed,
-                                          push_msg->max_distance);
-}
-
-void reset_teensy(byte* msg, byte size) {
-    // TODO: reset the teensy, à tester !
-    void (*reboot)(void) = 0;
-    reboot();
-}
-
-// c. assign the callback functions to the right message id
-void (*callback_functions[256])(byte* msg, byte size);
-
-void initialize_callback_functions() {
-    callback_functions[SET_TARGET_POSITION] = &set_target_position;
-    callback_functions[SET_PID] = &set_pid;
-    callback_functions[RESET_POSE] = &reset_pose;
-    callback_functions[SET_MOTORS_VOLTAGE] = &set_motors_voltage;
-    callback_functions[SET_WHEELS_SPEED] = &set_wheels_speed;
-    callback_functions[PUSH_UNTIL_BLOCKED] = &push_until_blocked;
-    callback_functions[RESET_TEENSY] = &reset_teensy;
-}
-
-// 4. Define the timer interrupt handle function (this function will be called
-// every 5ms, and which manage the robot position and speed: asservissement)
-void handle() {
-    rolling_basis_ptr->odometrie_handle();
-    rolling_basis_ptr->handle();
-
-    // pendant un test, on prépare la mesure que loop() enverra
-    if (rolling_basis_ptr->test_periods_left > 0) {
-        speeds_msg.time_ms = millis();
-        speeds_msg.v_left = rolling_basis_ptr->left_motor->speed;
-        speeds_msg.v_right = rolling_basis_ptr->right_motor->speed;
-        speeds_msg.u_left = rolling_basis_ptr->left_motor->voltage;
-        speeds_msg.u_right = rolling_basis_ptr->right_motor->voltage;
-        speeds_ready = true;
+    // fixed rate, whatever loop() is doing (architecture 2 and 6.1)
+    periods_since_status++;
+    if (periods_since_status * controller.period() >= STATUS_PERIOD - 1e-9) {
+        periods_since_status = 0;
+        Status status = controller.status();
+        status_msg.move_id = status.move_id;
+        status_msg.state = (byte)status.state;
+        status_msg.flags = status.flags | HARDWARE_FLAGS;
+        status_msg.x = status.pose.x;
+        status_msg.y = status.pose.y;
+        status_msg.theta = status.pose.theta;
+        status_msg.v = status.v;
+        status_msg.omega = status.omega;
+        status_msg.vbat = status.vbat;
+        status_msg.time_ms = millis();
+        status_msg.boot_id = boot_id;
+        status_msg.heartbeat = last_heartbeat;
+        status_ready = true;
     }
 }
+
+// Copies a received message, false if its size is wrong
+template <typename T>
+bool read_message(const byte* data, byte size, T& message) {
+    if (size != sizeof(T)) {
+        return false;
+    }
+    memcpy(&message, data, sizeof(T));
+    return true;
+}
+
+// Callbacks of the messages of the Pi
+
+void on_move(byte* data, byte size) {
+    msg_move message;
+    if (!read_message(data, size, message)) {
+        return;
+    }
+    MoveCommand command;
+    command.id = message.move_id;
+    command.kind = (MoveKind)message.kind;
+    command.flags = message.flags;
+    command.x = message.x;
+    command.y = message.y;
+    command.theta = message.theta;
+    command.distance = message.distance;
+    command.max_speed = message.max_speed;
+    command.max_accel = message.max_accel;
+    // refused: move_id does not change in the status
+    ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
+        controller.move(command);
+    }
+}
+
+void on_set_control_params(byte* data, byte size) {
+    msg_set_control_params message;
+    if (!read_message(data, size, message)) {
+        return;
+    }
+    Param param = (Param)message.param;
+    ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
+        if (controller.set_param(param, message.value) &&
+            param == Param::LOOP_PERIOD) {
+            Timer1.setPeriod(lround(message.value * 1e6));
+        }
+    }
+}
+
+void on_reset_pose(byte* data, byte size) {
+    msg_reset_pose message;
+    if (!read_message(data, size, message)) {
+        return;
+    }
+    // refused while moving: the Pi checks the pose in the next status
+    ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
+        controller.reset_pose({message.x, message.y, message.theta});
+    }
+}
+
+void on_stop(byte* data, byte size) {
+    msg_stop message;
+    if (!read_message(data, size, message)) {
+        return;
+    }
+    StopMode mode = message.mode == (byte)StopMode::URGENT ? StopMode::URGENT
+                                                           : StopMode::SMOOTH;
+    ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
+        controller.stop(mode);
+    }
+}
+
+void on_start_trace(byte* data, byte size) {
+    msg_start_trace message;
+    if (!read_message(data, size, message)) {
+        return;
+    }
+    TraceCommand command;
+    command.kind = (TraceKind)message.kind;
+    command.loop = (TraceLoop)message.loop;
+    command.initial = message.initial;
+    command.final_value = message.final;
+    command.step_time = message.step_time;
+    command.duration = message.duration;
+    ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
+        controller.start_trace(command);
+    }
+}
+
+void on_heartbeat(byte* data, byte size) {
+    msg_heartbeat message;
+    if (!read_message(data, size, message)) {
+        return;
+    }
+    ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
+        controller.heartbeat();
+        last_heartbeat = message.counter;
+    }
+}
+
+void on_reset_teensy(byte* data, byte size) {
+    // software reset of the Cortex-M7: the boot_id changes
+    SCB_AIRCR = 0x05FA0004;
+}
+
+void (*callbacks[256])(byte* msg, byte size);
 
 void setup() {
-    com = new Com(&Serial, BAUDRATE);
-
-    // Change pwm frequency
+    // drivers stopped first (R8)
     analogWriteFrequency(R_PWM, PWM_FREQUENCY);
     analogWriteFrequency(L_PWM, PWM_FREQUENCY);
-
-    // change pwm resolution
     analogWriteResolution(PWM_RESOLUTION);
+    left_motor.init();
+    right_motor.init();
 
-    // Init Rolling Basis
-    rolling_basis_ptr->define_right_motor(R_ENCA, R_ENCB, R_PWM, R_DIR, PWM_MAX,
-                                          U_MAX, TS);
-    rolling_basis_ptr->define_left_motor(L_ENCA, L_ENCB, L_PWM, L_DIR, PWM_MAX,
-                                         U_MAX, TS);
-    rolling_basis_ptr->init_motors();
+#ifdef ESTOP_PIN
+    pinMode(ESTOP_PIN, INPUT);
+#endif
 
-    rolling_basis_ptr->init_rolling_basis(START_X, START_Y, START_THETA);
+    // random, so that the Pi sees a restart of the Teensy (pose lost)
+    Entropy.Initialize();
+    boot_id = Entropy.random();
 
-    rolling_basis_ptr->vbat = VBAT_DEFAULT;
+    com = new Com(&Serial, BAUDRATE);
+    callbacks[MOVE] = &on_move;
+    callbacks[SET_CONTROL_PARAMS] = &on_set_control_params;
+    callbacks[RESET_POSE] = &on_reset_pose;
+    callbacks[STOP] = &on_stop;
+    callbacks[START_TRACE] = &on_start_trace;
+    callbacks[HEARTBEAT] = &on_heartbeat;
+    callbacks[RESET_TEENSY] = &on_reset_teensy;
 
-    // Init motors handle timer
-    Timer1.initialize(ASSERVISSEMENT_PERIOD);
-    Timer1.attachInterrupt(handle);
-
-    // Initialize callback functions
-    initialize_callback_functions();
+    Timer1.initialize(lround(LOOP_PERIOD_DEFAULT * 1e6));
+    Timer1.attachInterrupt(control_loop);
 }
 
-uint_fast32_t counter = 0;
+// Sends a message prepared by the timer; the copy keeps the timer from
+// changing it while it is sent
+template <typename T>
+void send_prepared(T& message, volatile bool& ready) {
+    if (!ready) {
+        return;
+    }
+    T copy;
+    ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
+        copy = message;
+        ready = false;
+    }
+    com->send_msg((byte*)&copy, sizeof(T));
+}
+
 void loop() {
-    // Handle the communication
-    com->handle_callback(callback_functions);
+    com->handle_callback(callbacks);
 
-    // Send the last test measure: the copy keeps the timer from changing it
-    if (speeds_ready) {
-        msg_update_speeds speeds_copy;
-        ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
-            speeds_copy = speeds_msg;
-            speeds_ready = false;
-        }
-        com->send_msg((byte*)&speeds_copy, sizeof(msg_update_speeds));
-    }
-
-    // Send rolling basis state
-    if (counter++ > 4096)  // 4096 = 2^12
-    {
-        msg_update_rolling_basis rolling_basis_msg;
-        // lecture atomique : x, y et theta viennent de la même période
-        Point position = rolling_basis_ptr->get_current_position();
-        rolling_basis_msg.x = position.x;
-        rolling_basis_msg.y = position.y;
-        rolling_basis_msg.theta = position.theta;
-        rolling_basis_msg.status = (byte)rolling_basis_ptr->get_status();
-
-        com->send_msg((byte*)&rolling_basis_msg,
-                      sizeof(msg_update_rolling_basis));
-        counter = 0;
-    }
+    send_prepared(sample_msg, sample_ready);
+    send_prepared(trace_end_msg, trace_end_ready);
+    send_prepared(status_msg, status_ready);
 }

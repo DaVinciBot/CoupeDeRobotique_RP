@@ -13,17 +13,19 @@ typedef uint8_t byte;
 // PC and in messages.py. push/pop keeps this setting inside this file only.
 #pragma pack(push, 1)
 
-// ====== Message Types ======
-/* Definition of message IDs */
-// rasp -> teensy : 0-127 (Convention)
+// Rolling base messages: docs/adr/0003-motion-protocol.md. SI units, float
+// fields (32 bits), little endian. messages.py must stay identical: the CI
+// compares the IDs and sizes.
 
-// Rolling Basis
-#define SET_TARGET_POSITION 0
-#define SET_PID 1
+// ====== Message IDs ======
+// Pi -> Teensy: 0-127
+
+// Rolling base
+#define MOVE 0
+#define SET_CONTROL_PARAMS 1
 #define RESET_POSE 2
-#define SET_MOTORS_VOLTAGE 9
-#define SET_WHEELS_SPEED 10
-#define PUSH_UNTIL_BLOCKED 11
+#define STOP 9
+#define START_TRACE 10
 
 // Actuators
 #define SET_SERVO_ANGLE_I2C 3
@@ -33,79 +35,81 @@ typedef uint8_t byte;
 #define SET_SERVO_ANGLE 7
 #define SET_STEPPER_DRIVER_ACTIVATION_STATE 8
 
-// Common (Rolling Basis + Actuators)
+// Common (rolling base + actuators)
+#define HEARTBEAT 125
 #define RESET_TEENSY 126
 
-// two ways : 127 (Convention)
+// Both ways: 127
 #define NACK 127
 
-// teensy -> rasp : 128-255 (Convention)
-// Rolling Basis
-#define UPDATE_ROLLING_BASIS 128
-#define UPDATE_SPEEDS 130
+// Teensy -> Pi: 128-255
+// Rolling base
+#define MOTION_STATUS 128
+#define TRACE_SAMPLE 130
+#define TRACE_END 131
 
 // Actuators
 #define SWITCH_STATE_RETURN 129
 
-// Common (Rolling Basis + Actuators)
+// Common (rolling base + actuators)
 #define PRINT 254
 #define UNKNOWN_MSG_TYPE 255
 
-/* Definition of the messages content */
-// rasp -> teensy : 0-127
+// ====== Pi -> Teensy ======
 
-// Rolling Basis
-struct msg_set_target_position
+// Rolling base
+// kind: 0 ROTATE_BY (theta), 1 ROTATE_TO (theta), 2 STRAIGHT (distance),
+// 3 GOTO (x, y, theta if HAS_HEADING), 4 PUSH_UNTIL_BLOCKED (distance = max
+// distance, signed). flags: bit 0 REVERSE, bit 1 HAS_HEADING.
+struct msg_move
 {
-    byte command = SET_TARGET_POSITION;
-    double target_position_x;
-    double target_position_y;
-    double target_position_theta;
+    byte command = MOVE;
+    uint16_t move_id;  // chosen by the brain, 0 is reserved
+    byte kind;
+    byte flags;
+    float x;          // m
+    float y;          // m
+    float theta;      // rad
+    float distance;   // m, negative = backwards
+    float max_speed;  // m/s, 0 = configured limit
+    float max_accel;  // m/s², 0 = configured limit
 };
 
-struct msg_set_pid
+// One setting per message; the Teensy stays inert until it has received
+// every setting once
+struct msg_set_control_params
 {
-    byte command = SET_PID;
-    byte pid_type;
-    float kp;
-    float ki;
-    float kd;
+    byte command = SET_CONTROL_PARAMS;
+    byte param;   // motion::Param
+    float value;  // SI unit of the setting
 };
 
-// Ignoré si le robot est en mouvement : la Raspberry vérifie dans le statut
-// que la nouvelle pose est appliquée
+// Ignored while moving: the brain checks the pose in the next status
 struct msg_reset_pose
 {
     byte command = RESET_POSE;
-    double x;     // en cm
-    double y;     // en cm
-    double theta; // en rad
+    float x;      // m
+    float y;      // m
+    float theta;  // rad
 };
 
-// Recul ou avance à vitesse lente jusqu'à toucher une bordure. Statut BLOCKED
-// quand les deux roues sont bloquées, STOPPED si rien n'a été touché
-struct msg_push_until_blocked
+struct msg_stop
 {
-    byte command = PUSH_UNTIL_BLOCKED;
-    double speed;        // en cm/s, négatif = recul
-    double max_distance; // en cm
+    byte command = STOP;
+    byte mode;  // 0 SMOOTH (generator braking), 1 URGENT (command to zero)
 };
 
-// Messages de test : les moteurs sont coupés à la fin de la durée
-struct msg_set_motors_voltage
+// kind: 0 OPEN_LOOP_STEP (V), 1 CLOSED_LOOP_STEP (unit of the loop).
+// loop: 0 LEFT_SPEED, 1 RIGHT_SPEED, 2 DISTANCE, 3 HEADING
+struct msg_start_trace
 {
-    byte command = SET_MOTORS_VOLTAGE;
-    double u_left;   // en V
-    double u_right;  // en V
-    double duration; // en s
-};
-
-struct msg_set_wheels_speed
-{
-    byte command = SET_WHEELS_SPEED;
-    double v_left;   // en cm/s
-    double v_right;  // en cm/s
-    double duration; // en s
+    byte command = START_TRACE;
+    byte kind;
+    byte loop;
+    float initial;    // before step_time
+    float final;      // from step_time
+    float step_time;  // s
+    float duration;   // s, at most 10 s
 };
 
 // Actuators
@@ -158,33 +162,67 @@ struct msg_attach_switch
     byte pin; // pin to which the servo is connected
 };
 
-// Common (Rolling Basis + Actuators)
+// Common (rolling base + actuators)
+// Sent at 20 Hz: without it for 200 ms, the Teensy brakes and stops
+struct msg_heartbeat
+{
+    byte command = HEARTBEAT;
+    uint16_t counter;
+};
+
 struct msg_reset_teensy
 {
     byte command = RESET_TEENSY;
 };
 
-// teensy -> rasp : 128-255
-
-// Rolling Basis
-struct msg_update_rolling_basis
+struct msg_nack
 {
-    byte command = UPDATE_ROLLING_BASIS;
-    double x;
-    double y;
-    double theta;
-    byte status; // 0 : à l'arrêt, 1 : en mouvement, 2 : bloqué
+    byte command = NACK;
 };
 
-// Mesure envoyée à chaque période pendant un test
-struct msg_update_speeds
+// ====== Teensy -> Pi ======
+
+// Rolling base
+// Every 50 ms. state: 0 MOVING, 1 ARRIVED, 2 BLOCKED, 3 STOPPED. flags: bit 0
+// CONFIGURED, 1 EMERGENCY_STOP, 2 HEARTBEAT_LOST, 3 VBAT_MISSING,
+// 4 ESTOP_SENSOR_MISSING, 5 TRACE_RUNNING
+struct msg_motion_status
 {
-    byte command = UPDATE_SPEEDS;
-    uint32_t time_ms;
-    double v_left;  // en cm/s
-    double v_right; // en cm/s
-    double u_left;  // en V
-    double u_right; // en V
+    byte command = MOTION_STATUS;
+    uint16_t move_id;  // last MOVE accepted
+    byte state;
+    byte flags;
+    float x;           // m
+    float y;           // m
+    float theta;       // rad
+    float v;           // m/s
+    float omega;       // rad/s
+    float vbat;        // V
+    uint32_t time_ms;  // Teensy time since start-up
+    uint32_t boot_id;  // random, changes at each start-up
+    uint16_t heartbeat;  // last HEARTBEAT counter received
+};
+
+// Every period during a trace
+struct msg_trace_sample
+{
+    byte command = TRACE_SAMPLE;
+    uint32_t time_ms;  // since the start of the trace
+    float setpoint;
+    float measurement;
+    float u_left;   // V
+    float u_right;  // V
+    float vbat;     // V
+};
+
+struct msg_trace_end
+{
+    byte command = TRACE_END;
+    uint16_t sample_count;
+    byte state;  // as in msg_motion_status
+    float ts;    // s
+    float kp;    // gains really used by the loop of the trace
+    float ki;
 };
 
 // Actuators
@@ -195,7 +233,8 @@ struct msg_switch_state_return
     bool state; // switch state
 };
 
-// Common (Rolling Basis + Actuators)
+// Common (rolling base + actuators)
+// PRINT has no structure: the id is followed by ASCII text
 struct msg_unknown_msg_type
 {
     byte command = UNKNOWN_MSG_TYPE;
