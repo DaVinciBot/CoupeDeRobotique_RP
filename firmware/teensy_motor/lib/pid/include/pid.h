@@ -1,7 +1,7 @@
 #ifndef PID_H
 #define PID_H
 
-#include <Arduino.h>
+#include <math.h>
 
 /**
  * @brief Correcteur à période fixe, utilisé pour tous les asservissements

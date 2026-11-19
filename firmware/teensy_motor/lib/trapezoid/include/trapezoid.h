@@ -2,30 +2,51 @@
 #define TRAPEZOID_H
 
 /**
- * @brief Générateur de consigne en trapèze de vitesse
+ * @brief Trapezoidal speed profile generator
  *
- * Accélère, roule à vitesse constante puis freine pour arriver pile à la
- * cible. Si la distance est trop courte, le trapèze devient un triangle.
+ * Goes from the initial speed to the peak speed, cruises, then brakes to stop
+ * exactly on the target. On a short distance the trapezoid becomes a
+ * triangle. Units are those of the caller (m and m/s, or rad and rad/s).
  */
 class Trapezoid {
    public:
-    double position = 0.0;  // consigne de position à l'instant courant
-    double speed = 0.0;     // vitesse prévue, utilisée pour l'anticipation
+    double position = 0.0;  // position setpoint at the current time
+    double speed = 0.0;     // planned speed, used as feedforward
 
     Trapezoid(double v_max, double a_max);
 
     /**
-     * @brief Prépare un nouveau mouvement
-     *
-     * @param start Position de départ
-     * @param distance Distance à parcourir, négative pour reculer
+     * @brief Changes the limits used by the next start() or stop()
      */
-    void start(double start, double distance);
+    void set_limits(double v_max, double a_max);
 
     /**
-     * @brief Avance le profil d'une période
+     * @brief Plans a new move
      *
-     * @param ts Période de la boucle, en s
+     * The initial speed must have the sign of distance (or be zero) and the
+     * robot must be able to stop within distance: see can_reach().
+     *
+     * @param start Start position
+     * @param distance Distance to travel, negative to go backwards
+     * @param initial_speed Speed at the start, signed
+     */
+    void start(double start, double distance, double initial_speed = 0.0);
+
+    /**
+     * @brief True if start(position, distance, speed) is possible: same
+     * direction as the current speed, and enough room to brake
+     */
+    bool can_reach(double distance) const;
+
+    /**
+     * @brief Brakes from the current speed at a_max, down to zero
+     */
+    void stop();
+
+    /**
+     * @brief Advances the profile by one period
+     *
+     * @param ts Loop period, in s
      */
     void step(double ts);
 
@@ -35,13 +56,16 @@ class Trapezoid {
     double v_max;
     double a_max;
 
-    double origin = 0.0;     // position de départ
-    double direction = 1.0;  // +1 en avant, -1 en arrière
-    double length = 0.0;     // distance à parcourir, toujours positive
-    double v_peak = 0.0;     // vitesse la plus haute du mouvement
-    double t_acc = 0.0;      // durée de l'accélération, en s
-    double t_total = 0.0;    // durée totale, en s
-    double t = 0.0;          // temps écoulé, en s
+    double origin = 0.0;     // start position
+    double direction = 1.0;  // +1 forwards, -1 backwards
+    double length = 0.0;     // distance to travel, always positive
+    double v_start = 0.0;    // initial speed along direction, >= 0
+    double v_peak = 0.0;     // cruise speed
+    double t_change = 0.0;   // duration from v_start to v_peak, in s
+    double d_change = 0.0;   // distance from v_start to v_peak
+    double t_brake = 0.0;    // time when the final braking starts, in s
+    double t_total = 0.0;    // total duration, in s
+    double t = 0.0;          // elapsed time, in s
 };
 
 #endif  // TRAPEZOID_H

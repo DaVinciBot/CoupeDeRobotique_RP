@@ -4,7 +4,7 @@
  */
 
 #include "pid.h"
-#include <Arduino.h>
+#include <math.h>
 
 PID::PID(double kp,
          double ki,
