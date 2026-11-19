@@ -1,4 +1,4 @@
-"""Contract of the motion port (ADR 0010), the same for every adapter.
+"""Contract of the motion port (ADR 0010, ADR 0003), the same for every adapter.
 
 Today the fake motor board only; the simulated base (TODO 11.2) and the Teensy adapter on the
 virtual board (TODO 15.1) join the harness fixture.
@@ -16,7 +16,7 @@ import pytest_asyncio
 from dvb_brain.adapters.fake.clock import FakeClock
 from dvb_brain.adapters.fake.motion import FakeMotion
 from dvb_brain.domain.geometry import Pose
-from dvb_brain.domain.motion import MotionState, MotionStatus, RotateBy, StopMode, Straight
+from dvb_brain.domain.motion import MotionState, MotionStatus, MoveCommand, MoveKind, StopMode
 from dvb_brain.ports.motion import MotionPort
 
 # The tasks are checked after advance() instead of awaited: a broken port fails an assertion
@@ -24,7 +24,7 @@ from dvb_brain.ports.motion import MotionPort
 pytestmark = pytest.mark.asyncio
 
 START = Pose(0.5, 0.5, 0.0)
-STOP_DECEL = 1.0  # m/s²
+MAX_ACCEL = 1.0  # m/s², board setting: also the deceleration of a smooth stop
 
 
 @dataclass(frozen=True, slots=True)
@@ -35,7 +35,7 @@ class MotionHarness:
     received_stops: Callable[[], list[StopMode]]  # what the board received
     received_heartbeats: Callable[[], int]
     start: Pose
-    stop_decel: float  # m/s², the stop deceleration the port was given
+    max_accel: float  # m/s², the MAX_ACCEL setting of the board (ADR 0003)
 
 
 @pytest_asyncio.fixture
@@ -44,9 +44,11 @@ async def harness() -> AsyncIterator[MotionHarness]:
     fake = FakeMotion(
         clock,
         pose=START,
-        rotation_speed=math.pi,
-        rotation_accel=2 * math.pi,
-        stop_decel=STOP_DECEL,
+        max_speed=1.0,
+        max_accel=MAX_ACCEL,
+        max_angular_speed=math.pi,
+        max_angular_accel=2 * math.pi,
+        vbat=16.0,
         status_period=0.05,
     )
     task = asyncio.create_task(fake.run())
@@ -57,7 +59,7 @@ async def harness() -> AsyncIterator[MotionHarness]:
         received_stops=lambda: [mode for _, mode in fake.stops],
         received_heartbeats=lambda: len(fake.heartbeats),
         start=START,
-        stop_decel=STOP_DECEL,
+        max_accel=MAX_ACCEL,
     )
     task.cancel()
     with suppress(asyncio.CancelledError):
@@ -90,14 +92,35 @@ async def assert_returns(harness: MotionHarness, call: Coroutine[object, object,
     task.result()
 
 
-def straight(distance: float) -> Straight:
-    return Straight(distance, max_speed=0.5, max_accel=0.5)
+async def returned(harness: MotionHarness, call: Coroutine[object, object, bool]) -> bool:
+    """Return what the call returns, checking that it does not wait for the board."""
+    task = asyncio.create_task(call)
+    await harness.advance(0)
+    if not task.done():
+        task.cancel()
+        pytest.fail("the call waits for the board")
+    return task.result()
+
+
+def straight(distance: float, max_accel: float = 0.5) -> MoveCommand:
+    return MoveCommand(MoveKind.STRAIGHT, distance=distance, max_speed=0.5, max_accel=max_accel)
+
+
+def goto_ahead(harness: MotionHarness, distance: float) -> MoveCommand:
+    """A GOTO to a point straight ahead: no turn before the line."""
+    return MoveCommand(
+        MoveKind.GOTO,
+        x=harness.start.x + distance,
+        y=harness.start.y,
+        max_speed=0.5,
+        max_accel=0.5,
+    )
 
 
 async def test_move_ends_arrived_at_the_target_with_a_new_move_id(harness: MotionHarness) -> None:
     first = asyncio.create_task(harness.port.move(straight(0.2)))
     await harness.advance(2.0)
-    second = asyncio.create_task(harness.port.move(RotateBy(0.5)))
+    second = asyncio.create_task(harness.port.move(MoveCommand(MoveKind.ROTATE_BY, theta=0.5)))
     await harness.advance(2.0)
 
     assert (first.result().state, second.result().state) == (MotionState.ARRIVED,) * 2
@@ -129,10 +152,10 @@ async def test_cancelling_move_stops_the_robot_short_of_the_target(harness: Moti
     assert status.pose.x < harness.start.x + 0.9
 
 
-async def test_smooth_stop_brakes_with_the_stop_deceleration(harness: MotionHarness) -> None:
-    # The move would brake over 0.5 m with its own max_accel; the stop uses the one of the
-    # safety zone (ADR 0010).
-    task = asyncio.create_task(harness.port.move(Straight(2.0, max_speed=0.5, max_accel=0.25)))
+async def test_smooth_stop_brakes_with_the_max_accel_of_the_board(harness: MotionHarness) -> None:
+    # The move would brake over 0.5 m with its own max_accel; the stop uses the MAX_ACCEL setting
+    # of the board, the deceleration of the safety zone (ADR 0003, ADR 0010).
+    task = asyncio.create_task(harness.port.move(straight(2.0, max_accel=0.25)))
     await harness.advance(3.0)
     at_stop = last(harness)
     assert at_stop.v == pytest.approx(0.5)
@@ -142,7 +165,7 @@ async def test_smooth_stop_brakes_with_the_stop_deceleration(harness: MotionHarn
 
     assert task.result().state is MotionState.STOPPED
     braking = task.result().pose.x - at_stop.pose.x
-    assert braking == pytest.approx(0.5**2 / (2 * harness.stop_decel), abs=0.02)
+    assert braking == pytest.approx(0.5**2 / (2 * harness.max_accel), abs=0.02)
 
 
 async def test_urgent_stop_is_immediate_and_final(harness: MotionHarness) -> None:
@@ -228,10 +251,72 @@ async def test_reset_pose_is_refused_while_a_cancelled_move_brakes_unseen(
     harness: MotionHarness,
 ) -> None:
     # The fake board publishes no status between 0 and 0.04 s: the last one says STOPPED.
-    task = asyncio.create_task(harness.port.move(Straight(1.0, max_speed=0.5, max_accel=5.0)))
+    task = asyncio.create_task(harness.port.move(straight(1.0, max_accel=5.0)))
     await harness.advance(0.04)
 
     task.cancel()
     await harness.advance(0)
 
     assert_refused(harness.port.reset_pose(harness.start))  # it brakes from 0.2 m/s for 0.2 s
+
+
+async def test_set_max_speed_slows_the_running_goto_without_stopping(
+    harness: MotionHarness,
+) -> None:
+    task = asyncio.create_task(harness.port.move(goto_ahead(harness, 2.0)))
+    await harness.advance(2.0)
+    assert last(harness).v == pytest.approx(0.5, abs=0.02)
+
+    assert await returned(harness, harness.port.set_max_speed(0.2))
+    for _ in range(20):  # down to 0.2 m/s in 0.6 s at 0.5 m/s², never stopped
+        await harness.advance(0.05)
+        assert last(harness).state is MotionState.MOVING
+        assert last(harness).v >= 0.2 - 0.02
+    assert last(harness).v == pytest.approx(0.2, abs=0.02)
+
+    await harness.advance(7.0)
+    result = task.result()
+    assert result.state is MotionState.ARRIVED
+    assert result.pose.x == pytest.approx(harness.start.x + 2.0, abs=1e-3)
+
+
+async def test_set_max_speed_needs_a_running_goto(harness: MotionHarness) -> None:
+    assert not await returned(harness, harness.port.set_max_speed(0.2))
+
+    # STRAIGHT is relative: sent again, it would start over from the measured pose (ADR 0003)
+    task = asyncio.create_task(harness.port.move(straight(0.5)))
+    await harness.advance(0.5)
+    assert not await returned(harness, harness.port.set_max_speed(0.2))
+
+    await harness.advance(2.0)
+    assert task.result().state is MotionState.ARRIVED
+    assert task.result().pose.x == pytest.approx(harness.start.x + 0.5, abs=1e-3)
+
+
+async def test_set_max_speed_never_starts_a_stopped_goto_again(harness: MotionHarness) -> None:
+    task = asyncio.create_task(harness.port.move(goto_ahead(harness, 2.0)))
+    await harness.advance(1.0)
+    await harness.port.stop(StopMode.SMOOTH)
+
+    assert not await returned(harness, harness.port.set_max_speed(0.2))
+    await harness.advance(1.0)
+    assert task.result().state is MotionState.STOPPED
+    stopped = task.result().pose
+
+    await harness.advance(1.0)
+    assert last(harness).pose == stopped
+
+    await assert_returns(harness, harness.port.stop(StopMode.URGENT))
+    assert not await returned(harness, harness.port.set_max_speed(0.2))
+
+
+async def test_set_max_speed_refuses_a_speed_the_board_would_read_as_its_limit(
+    harness: MotionHarness,
+) -> None:
+    task = asyncio.create_task(harness.port.move(goto_ahead(harness, 1.0)))
+    await harness.advance(0.5)
+
+    with pytest.raises(ValueError, match="max_speed"):
+        await harness.port.set_max_speed(0.0)
+    task.cancel()
+    await harness.advance(0)

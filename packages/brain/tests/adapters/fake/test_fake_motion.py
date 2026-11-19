@@ -1,6 +1,7 @@
 """The fake motor board: ideal trapezoids, and the failures a test injects (TODO 3.5).
 
-The contract of the motion port is tested once for every adapter in tests/ports.
+It behaves as the motor board contract says (ADR 0003). The contract of the motion port is
+tested once for every adapter in tests/ports.
 """
 
 import asyncio
@@ -13,17 +14,8 @@ import pytest_asyncio
 
 from dvb_brain.adapters.fake.clock import FakeClock
 from dvb_brain.adapters.fake.motion import FakeMotion
-from dvb_brain.domain.geometry import Pose, Vec2
-from dvb_brain.domain.motion import (
-    GoToPoint,
-    MotionState,
-    MotionStatus,
-    PushUntilBlocked,
-    RotateBy,
-    RotateTo,
-    StopMode,
-    Straight,
-)
+from dvb_brain.domain.geometry import Pose
+from dvb_brain.domain.motion import MotionState, MotionStatus, MoveCommand, MoveKind, StopMode
 
 # The tasks are checked after advance() instead of awaited: a broken fake fails an assertion
 # instead of hanging the test.
@@ -31,9 +23,11 @@ pytestmark = pytest.mark.asyncio
 
 START = Pose(0.5, 0.5, 0.0)
 PERIOD = 0.05  # s
-STOP_DECEL = 1.0  # m/s²
-ROTATION_SPEED = math.pi  # rad/s
-ROTATION_ACCEL = 2 * math.pi  # rad/s²
+MAX_SPEED = 1.0  # m/s, board settings
+MAX_ACCEL = 1.0  # m/s², also the deceleration of a smooth stop
+MAX_ANGULAR_SPEED = math.pi  # rad/s
+MAX_ANGULAR_ACCEL = 2 * math.pi  # rad/s²
+VBAT = 16.0  # V
 
 
 @pytest_asyncio.fixture
@@ -41,9 +35,11 @@ async def motion(clock: FakeClock) -> AsyncIterator[FakeMotion]:
     fake = FakeMotion(
         clock,
         pose=START,
-        rotation_speed=ROTATION_SPEED,
-        rotation_accel=ROTATION_ACCEL,
-        stop_decel=STOP_DECEL,
+        max_speed=MAX_SPEED,
+        max_accel=MAX_ACCEL,
+        max_angular_speed=MAX_ANGULAR_SPEED,
+        max_angular_accel=MAX_ANGULAR_ACCEL,
+        vbat=VBAT,
         status_period=PERIOD,
     )
     task = asyncio.create_task(fake.run())
@@ -51,6 +47,20 @@ async def motion(clock: FakeClock) -> AsyncIterator[FakeMotion]:
     task.cancel()
     with suppress(asyncio.CancelledError):
         await task
+
+
+def straight(distance: float, max_speed: float = 0.5, max_accel: float = 0.5) -> MoveCommand:
+    return MoveCommand(
+        MoveKind.STRAIGHT, distance=distance, max_speed=max_speed, max_accel=max_accel
+    )
+
+
+def push(distance: float) -> MoveCommand:
+    return MoveCommand(MoveKind.PUSH_UNTIL_BLOCKED, distance=distance, max_speed=0.2, max_accel=0.5)
+
+
+def rotate_by(angle: float) -> MoveCommand:
+    return MoveCommand(MoveKind.ROTATE_BY, theta=angle)
 
 
 def last(motion: FakeMotion) -> MotionStatus:
@@ -71,18 +81,23 @@ async def test_publishes_a_status_every_period(clock: FakeClock, motion: FakeMot
             times.append(status.teensy_time)
 
     reader = asyncio.create_task(record())
+    await motion.heartbeat()
     await clock.advance(0.1)
     reader.cancel()
 
     assert times == [0.05, 0.1]
     status = last(motion)
     assert (status.move_id, status.state, status.pose) == (0, MotionState.STOPPED, START)
-    assert (status.v, status.omega, status.emergency_stop) == (0.0, 0.0, False)
+    assert (status.v, status.omega, status.vbat, status.heartbeat) == (0.0, 0.0, VBAT, 1)
+    # A board that has its settings, its sensors, and no failure
+    assert status.configured
+    assert not (status.emergency_stop or status.heartbeat_lost or status.trace_running)
+    assert not (status.vbat_missing or status.estop_sensor_missing)
 
 
 async def test_a_straight_follows_a_trapezoid(clock: FakeClock, motion: FakeMotion) -> None:
     # 1 s to reach 0.5 m/s over 0.25 m, 1 s at 0.5 m/s, 1 s to stop.
-    task = asyncio.create_task(motion.move(Straight(1.0, max_speed=0.5, max_accel=0.5)))
+    task = asyncio.create_task(motion.move(straight(1.0)))
     await clock.advance(1.0)
     status = last(motion)
     assert (status.move_id, status.state) == (1, MotionState.MOVING)
@@ -100,7 +115,7 @@ async def test_a_straight_follows_a_trapezoid(clock: FakeClock, motion: FakeMoti
 
 async def test_a_short_straight_follows_a_triangle(clock: FakeClock, motion: FakeMotion) -> None:
     # Too short to reach 0.5 m/s: 0.447 s up to 0.224 m/s, 0.447 s down.
-    task = asyncio.create_task(motion.move(Straight(0.1, max_speed=0.5, max_accel=0.5)))
+    task = asyncio.create_task(motion.move(straight(0.1)))
     await clock.advance(0.85)
     assert not task.done()
 
@@ -111,7 +126,7 @@ async def test_a_short_straight_follows_a_triangle(clock: FakeClock, motion: Fak
 
 
 async def test_a_negative_straight_goes_backwards(clock: FakeClock, motion: FakeMotion) -> None:
-    task = asyncio.create_task(motion.move(Straight(-0.2, max_speed=0.5, max_accel=0.5)))
+    task = asyncio.create_task(motion.move(straight(-0.2)))
     await clock.advance(0.3)
     assert last(motion).v < 0
 
@@ -120,9 +135,23 @@ async def test_a_negative_straight_goes_backwards(clock: FakeClock, motion: Fake
     assert_pose(task.result().pose, 0.3, 0.5, 0.0)
 
 
+@pytest.mark.parametrize(("max_speed", "max_accel"), [(0.0, 0.0), (5.0, 5.0)])
+async def test_the_limits_of_a_move_are_brought_back_to_the_board_settings(
+    clock: FakeClock, motion: FakeMotion, max_speed: float, max_accel: float
+) -> None:
+    # None or too high: 1 m/s and 1 m/s², so 1 s up over 0.5 m, 1 s at 1 m/s, 1 s down.
+    task = asyncio.create_task(motion.move(straight(2.0, max_speed, max_accel)))
+    await clock.advance(1.5)
+    assert last(motion).v == pytest.approx(MAX_SPEED)
+
+    await clock.advance(1.5)
+
+    assert_pose(task.result().pose, START.x + 2.0, START.y, START.theta)
+
+
 async def test_rotate_to_takes_the_shortest_way(clock: FakeClock, motion: FakeMotion) -> None:
     # A quarter turn clockwise: 0.5 s up to pi rad/s, 0.5 s down.
-    task = asyncio.create_task(motion.move(RotateTo(3 * math.pi / 2)))
+    task = asyncio.create_task(motion.move(MoveCommand(MoveKind.ROTATE_TO, theta=3 * math.pi / 2)))
     await clock.advance(0.5)
     status = last(motion)
     assert (status.v, status.omega) == pytest.approx((0.0, -math.pi))
@@ -134,7 +163,7 @@ async def test_rotate_to_takes_the_shortest_way(clock: FakeClock, motion: FakeMo
 
 
 async def test_rotate_by_turns_by_the_angle(clock: FakeClock, motion: FakeMotion) -> None:
-    task = asyncio.create_task(motion.move(RotateBy(math.pi)))
+    task = asyncio.create_task(motion.move(rotate_by(math.pi)))
     await clock.advance(1.45)
     assert not task.done()
 
@@ -143,9 +172,10 @@ async def test_rotate_by_turns_by_the_angle(clock: FakeClock, motion: FakeMotion
     assert_pose(task.result().pose, 0.5, 0.5, math.pi)
 
 
-async def test_go_to_point_turns_then_goes_straight(clock: FakeClock, motion: FakeMotion) -> None:
+async def test_goto_turns_then_goes_straight(clock: FakeClock, motion: FakeMotion) -> None:
     # A quarter turn in 1 s, then 0.5 m in 2 s.
-    task = asyncio.create_task(motion.move(GoToPoint(Vec2(0.5, 1.0), max_speed=0.5, max_accel=0.5)))
+    goto = MoveCommand(MoveKind.GOTO, x=0.5, y=1.0, max_speed=0.5, max_accel=0.5)
+    task = asyncio.create_task(motion.move(goto))
     await clock.advance(0.5)
     assert (last(motion).v, last(motion).omega) == pytest.approx((0.0, math.pi))
 
@@ -159,27 +189,60 @@ async def test_go_to_point_turns_then_goes_straight(clock: FakeClock, motion: Fa
     assert_pose(task.result().pose, 0.5, 1.0, math.pi / 2)
 
 
-async def test_go_to_point_on_the_spot_keeps_the_heading(
+async def test_goto_in_reverse_backs_up_to_the_target(clock: FakeClock, motion: FakeMotion) -> None:
+    # The rear faces the target after a quarter turn clockwise, then 0.5 m backwards in 2 s.
+    goto = MoveCommand(MoveKind.GOTO, x=0.5, y=1.0, max_speed=0.5, max_accel=0.5, reverse=True)
+    task = asyncio.create_task(motion.move(goto))
+    await clock.advance(0.5)
+    assert last(motion).omega == pytest.approx(-math.pi)
+
+    await clock.advance(1.5)
+    status = last(motion)
+    assert (status.pose.y, status.pose.theta, status.v) == pytest.approx((0.75, -math.pi / 2, -0.5))
+
+    await clock.advance(1.0)
+
+    assert task.result().state is MotionState.ARRIVED
+    assert_pose(task.result().pose, 0.5, 1.0, -math.pi / 2)
+
+
+async def test_goto_with_a_heading_turns_to_it_at_the_end(
     clock: FakeClock, motion: FakeMotion
 ) -> None:
-    turn = asyncio.create_task(motion.move(RotateBy(math.pi / 2)))
+    # A quarter turn, 0.5 m in 2 s, then another quarter turn to face -x.
+    goto = MoveCommand(
+        MoveKind.GOTO, x=0.5, y=1.0, theta=math.pi, max_speed=0.5, max_accel=0.5, has_heading=True
+    )
+    task = asyncio.create_task(motion.move(goto))
+    await clock.advance(3.5)
+    assert last(motion).omega == pytest.approx(math.pi)
+
+    await clock.advance(0.55)
+
+    assert task.result().state is MotionState.ARRIVED
+    assert_pose(task.result().pose, 0.5, 1.0, math.pi)
+
+
+async def test_goto_on_the_spot_keeps_the_heading(clock: FakeClock, motion: FakeMotion) -> None:
+    turn = asyncio.create_task(motion.move(rotate_by(math.pi / 2)))
     await clock.advance(1.0)
     assert turn.result().state is MotionState.ARRIVED
 
-    task = asyncio.create_task(motion.move(GoToPoint(START.position, max_speed=0.5, max_accel=0.5)))
+    goto = MoveCommand(MoveKind.GOTO, x=START.x, y=START.y, max_speed=0.5, max_accel=0.5)
+    task = asyncio.create_task(motion.move(goto))
     await clock.advance(PERIOD)
 
     assert task.done()
     assert_pose(task.result().pose, START.x, START.y, math.pi / 2)
 
 
-async def test_push_until_blocked_ends_stopped_without_contact(
+async def test_push_until_blocked_ends_arrived_without_contact(
     clock: FakeClock, motion: FakeMotion
 ) -> None:
-    task = asyncio.create_task(motion.move(PushUntilBlocked(0.2, max_speed=0.2, max_accel=0.5)))
+    task = asyncio.create_task(motion.move(push(0.2)))
     await clock.advance(2.0)
 
-    assert task.result().state is MotionState.STOPPED
+    assert task.result().state is MotionState.ARRIVED
     assert_pose(task.result().pose, 0.7, 0.5, 0.0)
 
 
@@ -187,35 +250,48 @@ async def test_push_until_blocked_ends_blocked_on_contact(
     clock: FakeClock, motion: FakeMotion
 ) -> None:
     motion.block_after(0.05)
-    task = asyncio.create_task(motion.move(PushUntilBlocked(0.2, max_speed=0.2, max_accel=0.5)))
+    task = asyncio.create_task(motion.move(push(0.2)))
     await clock.advance(2.0)
 
     assert (task.result().state, task.result().v) == (MotionState.BLOCKED, 0.0)
     assert_pose(task.result().pose, 0.55, 0.5, 0.0)
 
 
+async def test_a_smooth_stop_cuts_a_push_at_once(clock: FakeClock, motion: FakeMotion) -> None:
+    task = asyncio.create_task(motion.move(push(0.5)))
+    await clock.advance(1.0)  # at 0.2 m/s
+    at_stop = last(motion)
+    assert at_stop.v == pytest.approx(0.2)
+
+    await motion.stop(StopMode.SMOOTH)
+    await clock.advance(PERIOD)
+
+    assert (task.result().state, task.result().v) == (MotionState.STOPPED, 0.0)
+    assert task.result().pose.x == pytest.approx(at_stop.pose.x)
+
+
 async def test_a_block_stops_the_next_translation_only(
     clock: FakeClock, motion: FakeMotion
 ) -> None:
     motion.block_after(0.1)
-    turn = asyncio.create_task(motion.move(RotateBy(0.1)))
+    turn = asyncio.create_task(motion.move(rotate_by(0.1)))
     await clock.advance(1.0)
     assert turn.result().state is MotionState.ARRIVED
 
-    blocked = asyncio.create_task(motion.move(Straight(0.5, max_speed=0.5, max_accel=0.5)))
+    blocked = asyncio.create_task(motion.move(straight(0.5)))
     await clock.advance(2.0)
     assert blocked.result().state is MotionState.BLOCKED
     assert blocked.result().pose.x == pytest.approx(0.5 + 0.1 * math.cos(0.1))
 
-    free = asyncio.create_task(motion.move(Straight(0.1, max_speed=0.5, max_accel=0.5)))
+    free = asyncio.create_task(motion.move(straight(0.1)))
     await clock.advance(2.0)
     assert free.result().state is MotionState.ARRIVED
 
 
-async def test_smooth_stop_brakes_a_rotation_with_the_rotation_accel(
+async def test_smooth_stop_brakes_a_rotation_with_the_angular_accel(
     clock: FakeClock, motion: FakeMotion
 ) -> None:
-    task = asyncio.create_task(motion.move(RotateBy(2 * math.pi)))
+    task = asyncio.create_task(motion.move(rotate_by(2 * math.pi)))
     await clock.advance(1.0)  # at pi rad/s
     at_stop = last(motion)
 
@@ -225,6 +301,40 @@ async def test_smooth_stop_brakes_a_rotation_with_the_rotation_accel(
     # pi² / (2 · 2 pi) = pi / 4 to stop
     assert task.result().state is MotionState.STOPPED
     assert task.result().pose.theta == pytest.approx(at_stop.pose.theta + math.pi / 4)
+
+
+async def test_a_new_speed_before_the_line_of_a_goto_sets_its_cruise(
+    clock: FakeClock, motion: FakeMotion
+) -> None:
+    goto = MoveCommand(MoveKind.GOTO, x=0.5, y=1.0, max_speed=0.5, max_accel=0.5)
+    task = asyncio.create_task(motion.move(goto))
+    await clock.advance(0.5)  # still turning to face the target
+
+    assert await motion.set_max_speed(0.25)
+    # Then 0.5 s up to 0.25 m/s, 1.5 s at 0.25 m/s, 0.5 s down
+    await clock.advance(1.5)
+    assert last(motion).v == pytest.approx(0.25)
+
+    await clock.advance(1.55)
+
+    assert task.result().state is MotionState.ARRIVED
+    assert_pose(task.result().pose, 0.5, 1.0, math.pi / 2)
+
+
+async def test_a_new_speed_during_the_final_turn_of_a_goto_changes_nothing(
+    clock: FakeClock, motion: FakeMotion
+) -> None:
+    goto = MoveCommand(
+        MoveKind.GOTO, x=0.5, y=1.0, theta=math.pi, max_speed=0.5, max_accel=0.5, has_heading=True
+    )
+    task = asyncio.create_task(motion.move(goto))
+    await clock.advance(3.5)  # in the final quarter turn, which ends at 4 s
+
+    assert await motion.set_max_speed(0.25)
+    await clock.advance(0.55)
+
+    assert task.result().state is MotionState.ARRIVED
+    assert_pose(task.result().pose, 0.5, 1.0, math.pi)
 
 
 async def test_keeps_the_heartbeats_and_the_stops_sent(
@@ -242,7 +352,7 @@ async def test_keeps_the_heartbeats_and_the_stops_sent(
 
 
 async def test_a_cancelled_move_sends_a_smooth_stop(clock: FakeClock, motion: FakeMotion) -> None:
-    move = asyncio.create_task(motion.move(Straight(1.0, max_speed=0.5, max_accel=0.5)))
+    move = asyncio.create_task(motion.move(straight(1.0)))
     await clock.advance(0.5)
 
     move.cancel()
@@ -255,12 +365,12 @@ async def test_a_cancelled_move_sends_a_smooth_stop(clock: FakeClock, motion: Fa
 async def test_a_move_sent_while_braking_starts_once_the_robot_is_still(
     clock: FakeClock, motion: FakeMotion
 ) -> None:
-    move = asyncio.create_task(motion.move(Straight(1.0, max_speed=0.5, max_accel=0.5)))
+    move = asyncio.create_task(motion.move(straight(1.0)))
     await clock.advance(1.0)  # 0.5 m/s after 0.25 m
     move.cancel()
     await clock.advance(0)
 
-    turn = asyncio.create_task(motion.move(RotateBy(math.pi / 2)))
+    turn = asyncio.create_task(motion.move(rotate_by(math.pi / 2)))
     await clock.advance(0.2)
     assert last(motion).v > 0.0  # it brakes for 0.5 s
 
@@ -273,7 +383,7 @@ async def test_a_move_sent_while_braking_starts_once_the_robot_is_still(
 async def test_a_move_cancelled_after_an_urgent_stop_sends_nothing(
     clock: FakeClock, motion: FakeMotion
 ) -> None:
-    move = asyncio.create_task(motion.move(Straight(1.0, max_speed=0.5, max_accel=0.5)))
+    move = asyncio.create_task(motion.move(straight(1.0)))
     await clock.advance(0.5)
 
     await motion.stop(StopMode.URGENT)
@@ -289,7 +399,7 @@ async def test_a_silent_board_publishes_nothing_and_loses_the_commands(
 ) -> None:
     motion.silence()
     waiting = asyncio.create_task(motion.status().wait_next(timeout=0.3))
-    move = asyncio.create_task(motion.move(Straight(0.1, max_speed=0.5, max_accel=0.5)))
+    move = asyncio.create_task(motion.move(straight(0.1)))
 
     await motion.heartbeat()
     await motion.stop(StopMode.SMOOTH)
@@ -305,7 +415,7 @@ async def test_a_silent_board_publishes_nothing_and_loses_the_commands(
 async def test_a_restart_gives_a_new_boot_id_and_loses_the_pose(
     clock: FakeClock, motion: FakeMotion
 ) -> None:
-    move = asyncio.create_task(motion.move(Straight(1.0, max_speed=0.5, max_accel=0.5)))
+    move = asyncio.create_task(motion.move(straight(1.0)))
     await clock.advance(0.5)
     before = last(motion)
 
@@ -321,10 +431,10 @@ async def test_a_restart_gives_a_new_boot_id_and_loses_the_pose(
     move.cancel()
 
 
-async def test_the_emergency_stop_stops_the_robot_at_once(
+async def test_the_emergency_stop_stops_the_robot_and_the_board_ignores_moves(
     clock: FakeClock, motion: FakeMotion
 ) -> None:
-    move = asyncio.create_task(motion.move(Straight(1.0, max_speed=0.5, max_accel=0.5)))
+    move = asyncio.create_task(motion.move(straight(1.0)))
     await clock.advance(1.0)
 
     motion.press_emergency_stop()
@@ -334,11 +444,14 @@ async def test_the_emergency_stop_stops_the_robot_at_once(
     assert (result.state, result.v, result.emergency_stop) == (MotionState.STOPPED, 0.0, True)
     assert result.pose.x == pytest.approx(0.75)
 
-    again = asyncio.create_task(motion.move(Straight(0.5, max_speed=0.5, max_accel=0.5)))
-    await clock.advance(0.05)
-    assert again.result().state is MotionState.STOPPED
-    assert again.result().pose.x == pytest.approx(0.75)
+    # The board ignores a MOVE during the emergency stop: its move_id does not change (ADR 0003)
+    again = asyncio.create_task(motion.move(straight(0.5)))
+    await clock.advance(0.5)
+    assert not again.done()
+    assert (last(motion).move_id, last(motion).pose.x) == (1, pytest.approx(0.75))
 
     motion.release_emergency_stop()
-    await clock.advance(0.05)
+    await clock.advance(0.5)
     assert not last(motion).emergency_stop
+    assert last(motion).pose.x == pytest.approx(0.75)  # nothing moves without a new MOVE
+    again.cancel()

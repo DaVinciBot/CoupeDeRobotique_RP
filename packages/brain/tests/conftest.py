@@ -28,9 +28,11 @@ from dvb_brain.ports import Ports
 TEMPLATE = Path(__file__).parents[3] / "editions" / "_template"
 
 START_POSE = Pose(0.25, 0.25, 0.0)  # m, rad
-ROTATION_SPEED = math.pi  # rad/s
-ROTATION_ACCEL = 2 * math.pi  # rad/s²
-STOP_DECEL = 1.0  # m/s²
+MAX_SPEED = 1.0  # m/s, board settings of the fake motor board (ADR 0003)
+MAX_ACCEL = 1.0  # m/s²
+MAX_ANGULAR_SPEED = math.pi  # rad/s
+MAX_ANGULAR_ACCEL = 2 * math.pi  # rad/s²
+VBAT = 16.0  # V
 MOTION_STATUS_PERIOD = 0.05  # s
 LIDAR_PERIOD = 0.1  # s
 ACTUATOR_DURATIONS = {"gripper": 0.5, "lift": 1.0}  # s
@@ -63,9 +65,11 @@ async def fake_motion(clock: FakeClock) -> AsyncIterator[FakeMotion]:
     fake = FakeMotion(
         clock,
         pose=START_POSE,
-        rotation_speed=ROTATION_SPEED,
-        rotation_accel=ROTATION_ACCEL,
-        stop_decel=STOP_DECEL,
+        max_speed=MAX_SPEED,
+        max_accel=MAX_ACCEL,
+        max_angular_speed=MAX_ANGULAR_SPEED,
+        max_angular_accel=MAX_ANGULAR_ACCEL,
+        vbat=VBAT,
         status_period=MOTION_STATUS_PERIOD,
     )
     task = asyncio.create_task(fake.run())
