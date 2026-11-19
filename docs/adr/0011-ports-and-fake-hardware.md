@@ -1,6 +1,6 @@
 # ADR 0011 — Ports du brain hors base roulante, et faux matériel
 
-- **Statut** : proposé
+- **Statut** : proposé ; puces de `FakeMotion` mises en accord avec l'[ADR 0003](0003-motion-protocol.md), le contrat avec la Teensy moteur
 - **Date** : 2026-11-19
 - **Cases** : [TODO 3.4 et 3.5](../TODO.md#34-autres-ports)
 
@@ -55,11 +55,13 @@ L'[ADR 0010](0010-clock-watch-motion-port.md) a posé l'horloge, `Watch` et le c
 
 - **Publication.** Chaque faux reçoit la `Clock`. Ceux qui publient à cadence fixe (base roulante, lidar) ont une coroutine `run()`, que le test lance et annule comme le ferait le lecteur série d'un vrai adaptateur. Sans statut périodique, « Teensy muette » ne se simulerait pas.
 - **`FakeMotion`.**
-  - Exécution idéale en trapèze (ou triangle) à partir de la vitesse et de l'accélération de chaque translation, et des limites de rotation données au faux. `GoToPoint` tourne puis avance. Les profils restent privés au faux ; ils iront dans `domain/` quand le planificateur (5.2) ou `SimMotion` (11.2) en auront besoin.
+  - Le faux suit l'ADR 0003 avec des profils idéaux. Il reçoit les quatre limites que la Teensy reçoit en réglages (`MAX_SPEED`, `MAX_ACCEL`, `MAX_ANGULAR_SPEED`, `MAX_ANGULAR_ACCEL`), se dit réglé (`configured`) et publie une tension de batterie fixe.
+  - Exécution idéale en trapèze (ou triangle). La vitesse et l'accélération de chaque translation sont ramenées aux limites réglées (0 donne la limite) ; les rotations utilisent les limites angulaires. Un `GOTO` tourne, avance, puis tourne vers son cap s'il en a un ; en marche arrière, il présente son arrière au point puis recule. Une poussée sans contact finit `ARRIVED`. Les profils restent privés au faux ; ils iront dans `domain/` quand le planificateur (5.2) ou `SimMotion` (11.2) en auront besoin.
+  - `set_max_speed` replanifie la ligne droite du `GOTO` à partir de la vitesse du moment, sans arrêt. Les cas où la Teensy freine jusqu'à l'arrêt avant de relancer le `GOTO` (renvoi pendant une rotation, point à plus de 10° du cap, pas la place de freiner) ne sont pas simulés : le faux arrive à la même pose, sans l'arrêt intermédiaire.
   - `move()` attend le statut qui termine son `move_id`, comme le fera l'adaptateur Teensy (15.1).
-  - Un `move()` reçu pendant le freinage d'un `move()` annulé part une fois le robot arrêté, sans que sa vitesse tombe à zéro d'un coup. Ce que fait le firmware est à écrire dans le contrat moteur (12.1).
-  - `stop(SMOOTH)` freine avec la décélération d'arrêt donnée au faux (avec l'accélération de rotation pendant une rotation, faute de mieux tant que le contrat moteur n'est pas écrit).
-  - Scénarios : blocage après x m, carte muette (plus de statut, commandes perdues), redémarrage (nouveau `boot_id`, pose perdue), BAU.
+  - Un `move()` reçu pendant le freinage d'un `move()` annulé part une fois le robot arrêté, sans que sa vitesse tombe à zéro d'un coup, comme le firmware de l'ADR 0003, qui doit encore l'écrire (écart 2 de l'ADR 0010).
+  - `stop(SMOOTH)` freine à `MAX_ACCEL` (à `MAX_ANGULAR_ACCEL` pendant une rotation) et coupe tout de suite une poussée, comme le dit l'ADR 0003.
+  - Scénarios : blocage après x m, carte muette (plus de statut, commandes perdues), redémarrage (nouveau `boot_id`, pose perdue), BAU. Pendant le BAU, le faux ignore les `MOVE`, comme la Teensy : `move_id` ne change pas et `move()` attend. Il ignore de même un `MOVE` invalide (valeur non finie, poussée de distance nulle).
   - Le faux garde les heartbeats et les arrêts reçus, que le `SafetyMonitor` (8.2) devra prouver même carte muette.
   - Il n'a pas de chien de garde : c'est la Teensy virtuelle qui l'aura (13.5).
 - **`FakeActuators`.** Durée fixe par actionneur, taux d'échec réglable et graine fixée. L'état se calcule depuis la `Clock`, si bien qu'une attente abandonnée laisse l'actionneur finir. Le faux ne connaît pas les noms de position : c'est l'adaptateur réel qui les lira dans `robot.json` (15.2).

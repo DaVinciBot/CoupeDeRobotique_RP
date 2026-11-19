@@ -171,8 +171,8 @@ Les jalons A à C ne demandent aucune carte Teensy, et les sections 12 à 14 ne 
 
 ### 3.3 `MotionPort`
 
-- [x] Types dans `domain/motion.py` (ADR 0008, ADR 0010) : `MoveCommand`, type somme `RotateBy | RotateTo | Straight | GoToPoint | PushUntilBlocked` en SI, avec `max_speed` et `max_accel` pour les translations seulement ; `MotionState` (`MOVING`, `ARRIVED`, `BLOCKED`, `STOPPED`), `MotionStatus` (`move_id`, `state`, `pose`, `v`, `omega`, `emergency_stop`, `teensy_time`, `boot_id`), `StopMode` (`SMOOTH`, `URGENT`).
-- [x] `MotionPort` : `async move(cmd) -> MotionStatus` (`move_id` attribué par le port), `async stop(mode)`, `async heartbeat()`, `async reset_pose(pose)`, `status() -> Watch[MotionStatus]`, `link_ok()`. Contrat dans l'ADR 0010 : un mouvement à la fois, annuler `move()` arrête le robot, `stop` n'attend jamais la Teensy.
+- [x] Types dans `domain/motion.py` (ADR 0008, ADR 0010), copies en SI des messages de l'ADR 0003 : `MoveCommand` (`kind` : `MoveKind` `ROTATE_BY`, `ROTATE_TO`, `STRAIGHT`, `GOTO`, `PUSH_UNTIL_BLOCKED` ; `x`, `y`, `theta`, `distance`, `max_speed` et `max_accel` des translations, 0 = limite réglée ; `reverse` et `has_heading` d'un `GOTO`), `MotionState` (`MOVING`, `ARRIVED`, `BLOCKED`, `STOPPED`), `MotionStatus` (`move_id`, `state`, `pose`, `v`, `omega`, `vbat`, `teensy_time`, `boot_id`, `heartbeat` et les drapeaux `configured`, `emergency_stop`, `heartbeat_lost`, `vbat_missing`, `estop_sensor_missing`, `trace_running`), `StopMode` (`SMOOTH`, `URGENT`).
+- [x] `MotionPort` : `async move(cmd) -> MotionStatus` (`move_id` attribué par le port, jamais 0), `async stop(mode)`, `async set_max_speed(max_speed) -> bool` (renvoi du `GOTO` en cours, ADR 0003), `async heartbeat()`, `async reset_pose(pose)`, `status() -> Watch[MotionStatus]`, `link_ok()`. Contrat dans l'ADR 0010 : un mouvement à la fois, annuler `move()` arrête le robot, `stop` n'attend jamais la Teensy.
 
 ### 3.4 Autres ports
 
@@ -186,8 +186,8 @@ Les jalons A à C ne demandent aucune carte Teensy, et les sections 12 à 14 ne 
 
 ### 3.5 Faux matériel — `adapters/fake/`
 
-- [x] `FakeMotion` : exécution idéale avec une durée calculée (vitesse, accélération) ; scénarios injectables : blocage après x m, Teensy muette, redémarrage, BAU.
-- [x] Tests de contrat du `MotionPort` (ADR 0010), communs à `FakeMotion`, `SimMotion` (11.2) et à l'adaptateur Teensy (15.1) : annuler `move()` arrête le robot, second `move()` refusé, `stop()` et `heartbeat()` sans exception même lien mort, `stop(SMOOTH)` freiné avec la décélération d'arrêt de la config, `stop(URGENT)` définitif (enregistré avant le premier `await`, heartbeat maintenu), `reset_pose()` refusé robot en mouvement.
+- [x] `FakeMotion` : exécution idéale avec une durée calculée (vitesse, accélération), limites ramenées aux réglages comme sur la Teensy (ADR 0003) ; scénarios injectables : blocage après x m, Teensy muette, redémarrage, BAU.
+- [x] Tests de contrat du `MotionPort` (ADR 0010), communs à `FakeMotion`, `SimMotion` (11.2) et à l'adaptateur Teensy (15.1) : annuler `move()` arrête le robot, second `move()` refusé, `stop()` et `heartbeat()` sans exception même lien mort, `stop(SMOOTH)` freiné à `MAX_ACCEL` réglé quel que soit le `max_accel` du mouvement, `stop(URGENT)` définitif (enregistré avant le premier `await`, heartbeat maintenu), `set_max_speed()` qui ralentit un `GOTO` sans l'arrêter et ne relance jamais un mouvement arrêté, `reset_pose()` refusé robot en mouvement.
 - [x] `FakeActuators` : durées fixes, taux d'échec réglable.
 - [x] `FakeLidar` : pistes scriptées dans le temps.
 - [x] `FakeStartSwitch` : `pull()` déclenché par le test.
@@ -232,7 +232,7 @@ Les jalons A à C ne demandent aucune carte Teensy, et les sections 12 à 14 ne 
 
 ### 5.3 Chemin → mouvements — `domain/motion_plan.py`
 
-- [ ] `Path` + `MoveMode` + `theta` final optionnel → `RotateTo`, `Straight`, …, `RotateTo(theta)` (9.4, ADR 0010).
+- [ ] `Path` + `MoveMode` + `theta` final optionnel → un `GOTO` par point, `REVERSE` selon le mode, `HAS_HEADING` au dernier point si `theta` est donné (9.4, ADR 0003, ADR 0010).
 - [ ] Mode `auto` : marche arrière seulement sous `reverse_max_distance` et si le gain de rotation dépasse `reverse_min_gain`.
 - [ ] Vitesse de marche arrière plafonnée (lidar 270°, rien derrière).
 - [ ] Tests par table de cas.
@@ -263,7 +263,7 @@ Les jalons A à C ne demandent aucune carte Teensy, et les sections 12 à 14 ne 
 
 - [ ] Tâche à la fréquence des pistes, lecture du snapshot.
 - [ ] Obstacle dans la zone → `stop(SMOOTH)` immédiat + événement `ObstacleStop`.
-- [ ] Obstacle plus loin sur la trajectoire → vitesse max réduite (attend 12.1 : vitesse d'un mouvement en cours, question ouverte de l'ADR 0010).
+- [ ] Obstacle plus loin sur la trajectoire → vitesse max réduite par `MotionPort.set_max_speed` (renvoi du `GOTO` en cours, ADR 0003, ADR 0010), seulement quand la vitesse plafond change : chaque renvoi remet à zéro la détection de blocage de la Teensy.
 - [ ] Lidar muet depuis 300 ms → arrêt et aucun départ tant qu'il ne revient pas (8.5).
 - [ ] En profil `match`, la config refuse toute désactivation de l'évitement (désactivation volontaire = forfait, RG H.4).
 
@@ -320,7 +320,7 @@ Les jalons A à C ne demandent aucune carte Teensy, et les sections 12 à 14 ne 
 ### 8.1 `MatchManager` — `services/match_manager.py`
 
 - [ ] `INIT` : attente des liens, vérification du profil `match` et de l'absence de ressource simulée (4.5).
-- [ ] `INIT` : envoi des réglages d'asservissement (5.6) à la Teensy moteur (attend 12.1).
+- [ ] `INIT` : envoi des 17 réglages d'asservissement (5.6) à la Teensy moteur, un `SET_CONTROL_PARAMS` par réglage, puis attente de `MotionStatus.configured` ; méthode du `MotionPort` à ajouter (ADR 0003, ADR 0010) (attend 12.1).
 - [ ] `CALIBRATING` : recalage contre deux bordures puis `RESET_POSE`, objectif < 30 s (préparation de 3 min, RG H.1) ; robot entièrement dans la salle du trône ensuite (RJ D.3.b). Un nouveau `CALIBRATE` recommence un recalage raté (ADR 0007).
 - [ ] `ARMED` : tirette en place exigée, seul le front « retirée » compte (anti-rebond dans l'adaptateur, 15.3).
 - [ ] `RUNNING` : `MatchClock` créée au front (ADR 0010), envoi du départ au calcul déporté (× 3), lancement de l'exécuteur et de la fin de match.
@@ -329,7 +329,7 @@ Les jalons A à C ne demandent aucune carte Teensy, et les sections 12 à 14 ne 
 ### 8.2 `SafetyMonitor` — `services/safety.py`
 
 - [ ] Première tâche du `TaskGroup` (5.3), heartbeat 20 Hz vers la Teensy moteur par `MotionPort.heartbeat()`, maintenu après `stop(URGENT)` (ADR 0010).
-- [ ] Surveillance : statut absent depuis 300 ms, `boot_id` changé, port série en erreur, BAU, boucle asyncio en retard de plus de 100 ms.
+- [ ] Surveillance : statut absent depuis 300 ms, `boot_id` changé, port série en erreur, BAU, heartbeat perdu vu par la Teensy (`heartbeat_lost`), boucle asyncio en retard de plus de 100 ms.
 - [ ] Réaction unique : `stop(URGENT)`, `release_all(final=True)` (ADR 0011), `FAULT(reason)` ; jamais de relance automatique d'un match.
 - [ ] `run_brain` avec `finally` qui tente `stop(URGENT)` et `release_all(final=True)` même si les ports sont morts.
 - [ ] `SIGTERM` et `SIGINT` → même arrêt propre.
@@ -337,7 +337,7 @@ Les jalons A à C ne demandent aucune carte Teensy, et les sections 12 à 14 ne 
 
 ### 8.3 Vérifications avant d'armer
 
-- [ ] Checks : Teensy moteur, actionneurs, lidar frais, pose recalée, côté choisi, stratégie valide pour ce côté, tirette en place, V_bat au-dessus du seuil (attend 12.1), aucune ressource simulée.
+- [ ] Checks : Teensy moteur, actionneurs, lidar frais, pose recalée, côté choisi, stratégie valide pour ce côté, tirette en place, V_bat du statut au-dessus du seuil, aucune ressource simulée. En profil `match`, refus si le statut signale un capteur absent (`vbat_missing`, `estop_sensor_missing`, ADR 0003).
 - [ ] Refus d'armer si un check échoue, raison en clair.
 
 ---
@@ -421,12 +421,14 @@ Les jalons A à C ne demandent aucune carte Teensy, et les sections 12 à 14 ne 
 
 ### 12.1 Contrat brain ↔ Teensy moteur — `docs/adr/0003-motion-protocol.md`
 
-Écrit à partir du firmware moteur actuel et des attentes du brain : contrat de `MotionPort` et points à valider de l'ADR 0010.
+Écrit à partir du firmware moteur actuel et des attentes du brain : contrat de `MotionPort` et points à valider de l'ADR 0010. Proposé dans l'ADR 0003 (branche `feat/asservissement-v1`, à approuver) ; le brain le suit déjà (ADR 0010).
 
 - [ ] Contenu exact de `HEARTBEAT`, `MOVE`, `STOP`, `RESET_POSE`, `MOTION_STATUS`, `SET_CONTROL_PARAMS`, `START_TRACE`, `TRACE_SAMPLE`, `TRACE_END` (6.2) : champs, types, unités, IDs.
-- [ ] Fréquences : heartbeat 20 Hz, statut ≥ 10 Hz à cadence fixe, arrêt de la Teensy après 200 ms sans heartbeat.
+- [ ] Fréquences : heartbeat 20 Hz, statut 20 Hz à cadence fixe, arrêt de la Teensy après 200 ms sans heartbeat.
 - [ ] Sémantique d'un `MOVE` reçu pendant un autre ou pendant le freinage d'un `STOP` (`FakeMotion` le lance une fois le robot arrêté, ADR 0011), et de la vitesse max modifiée en cours de mouvement.
-- [ ] Décélération d'arrêt du `STOP` normal envoyée avec les réglages, même valeur que `avoidance.decel` de la zone de sécurité (21.1, ADR 0010).
+- [ ] `STOP` normal freiné à `MAX_ACCEL` réglé, même valeur que `avoidance.decel` de la zone de sécurité, quel que soit le `max_accel` du `MOVE` en cours (21.1 ; écart 1 relevé par l'ADR 0010).
+- [ ] Comportements du firmware écrits dans l'ADR : `STOP` normal sans effet moteurs libres (après un `STOP` urgent, un BAU ou la perte du heartbeat) jusqu'au prochain `MOVE`, `MOVING` jusqu'à la fin du freinage, `MOVE` reçu pendant un freinage lancé une fois le robot arrêté (écart 2 relevé par l'ADR 0010).
+- [ ] Propositions de l'ADR 0010 tranchées : ignorer un `MOVE` qui reprend le `move_id` d'un mouvement fini (écart 4), garder la détection de blocage quand un `MOVE` continue le mouvement en cours (écart 5).
 - [ ] Redémarrage de la Teensy détectable (`boot_id`) ; Teensy inerte tant qu'elle n'a pas reçu ses réglages.
 - [ ] ADR relu et approuvé côté firmware et côté brain avant d'en coder les messages (cases 12.3 et 13.4).
 
@@ -513,8 +515,8 @@ Les jalons A à C ne demandent aucune carte Teensy, et les sections 12 à 14 ne 
 
 - [ ] Lecture asynchrone (`pyserial-asyncio-fast`) au-dessus d'usb_com v2, un seul écrivain.
 - [ ] Port trouvé par numéro de série (`/dev/dvb-motor`), reconnexion automatique ; un lien perdu en match reste un `FAULT`.
-- [ ] Conversion SI ↔ unités du fil dans cet adaptateur et nulle part ailleurs.
-- [ ] `move()` : `move_id` attribué, `Future` résolu par le `MOTION_STATUS` correspondant.
+- [ ] Conversion des types du brain (`MoveCommand`, `MotionStatus`) vers les messages de l'ADR 0003 dans cet adaptateur et nulle part ailleurs : ID, octet de drapeaux, `float`.
+- [ ] `move()` : `move_id` attribué sur 16 bits, qui boucle sans repasser par 0, `Future` résolu par le `MOTION_STATUS` correspondant ; `set_max_speed()` renvoie le `GOTO` en cours avec le même `move_id` ; `reset_pose()` confirmé à la précision du fil près (`float`, θ modulo 2π).
 - [ ] `PRINT` → `brain.log` sous `hardware.teensy`.
 - [ ] Tests contre la Teensy virtuelle sur `pty` (case 13.5), trames abîmées et débranchement compris ; tests de contrat du `MotionPort` (3.5).
 
@@ -659,11 +661,11 @@ Chaque point bloque les cases indiquées.
 
 | Point à valider | Cases bloquées |
 | --- | --- |
-| Unités sur le fil USB : SI (m, rad, m/s) ou unités Teensy (cm, cm/s) avec conversion dans l'adaptateur | 12.1, 12.3, 15.1 |
-| Types des champs des messages : `float` ou `double` | 12.1, 12.3 |
-| Variante exacte du CRC-16 | 12.3 |
-| Comportement d'un `MOVE` reçu pendant un autre, et vitesse max modifiable ou non en cours de mouvement | 12.1, 6.2 |
-| Mouvements côté firmware (ADR 0010) : liste des mouvements, limite de translation dans chaque `MOVE`, signe de `PushUntilBlocked` (sur la distance côté brain, sur la vitesse dans le firmware actuel) et fin `STOPPED` sans contact, confirmation de `RESET_POSE` par le statut, état `MOVING` jusqu'à l'arrêt complet (`ARRIVED`, `BLOCKED`, `STOPPED` seulement robot immobile), `STOP` normal freiné avec la décélération d'arrêt de la config (celle de la zone de sécurité), `STOP` normal sans effet après un `STOP` urgent jusqu'au prochain `MOVE` ou réglage, arrêt du chien de garde (200 ms) sans effet sur un arrêt urgent déjà fait | 12.1, 15.1 |
+| Unités sur le fil USB : SI (m, rad, m/s) ou unités Teensy (cm, cm/s) avec conversion dans l'adaptateur. Proposé : SI (ADR 0003, à approuver) | 12.1, 12.3, 15.1 |
+| Types des champs des messages : `float` ou `double`. Proposé : `float` (ADR 0003, à approuver) | 12.1, 12.3 |
+| Variante exacte du CRC-16. Proposé : CRC-16/CCITT-FALSE (ADR 0003, à approuver) | 12.3 |
+| Comportement d'un `MOVE` reçu pendant un autre, et vitesse max modifiable ou non en cours de mouvement. Proposé dans l'ADR 0003, à approuver | 12.1, 6.2 |
+| Écarts entre l'ADR 0003 et le firmware de `feat/asservissement-v1`, relevés par l'ADR 0010 : le `STOP` normal freine avec l'accélération du `MOVE` en cours et non à `MAX_ACCEL` réglé (zone de sécurité trop courte) ; comportements du firmware que l'ADR 0003 n'écrit pas (`STOP` normal sans effet moteurs libres, `MOVING` jusqu'à la fin du freinage, `MOVE` reçu pendant un freinage lancé une fois le robot arrêté) ; propositions : ignorer un `MOVE` qui reprend le `move_id` d'un mouvement fini, garder la détection de blocage quand un `MOVE` continue le mouvement en cours | 6.2, 12.1, 13.3, 15.1, 21.1 |
 | Empreinte réelle du robot (rayon, polygone, actionneurs rentrés) | 2.4, 5.1, 6.1, 7.4 |
 | Position, orientation et hauteur du lidar sur le robot | 9.1, 16.2 |
 | Séquences des mécanismes (prise de pierres, construction, Graal, lanceur) | 7.1, 14 |
