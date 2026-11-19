@@ -1,0 +1,20 @@
+{
+  "_comment": "Example settings of the simulation (simulation/plant.h), SI units. Replace the gains with the identification results before driving the real robot.",
+  "left_speed_kp": 40.0,
+  "left_speed_ki": 400.0,
+  "right_speed_kp": 44.4,
+  "right_speed_ki": 444.0,
+  "distance_kp": 10.0,
+  "heading_kp": 10.0,
+  "max_speed": 0.2,
+  "max_accel": 0.15,
+  "max_angular_speed": 1.0,
+  "max_angular_accel": 1.0,
+  "position_tolerance": 0.002,
+  "angle_tolerance": 0.01,
+  "block_voltage": 8.0,
+  "block_speed": 0.01,
+  "block_time": 0.5,
+  "push_voltage": 4.0,
+  "loop_period": 0.005
+}

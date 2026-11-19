@@ -1,211 +1,219 @@
-"""Banc de test du recalage : pousse contre une bordure puis recale la pose.
+"""Bench test of the recalibration: push against a border, then reset the pose.
 
-Outil de test sur table, à supprimer quand le brain enverra lui-même ces
-messages (TODO 15.1). Il parle à la Teensy moteur avec le protocole usb_com
-actuel (signature de 4 octets, CRC-8) et les messages de messages.h.
+Table test tool, to be removed when the brain sends these messages itself
+(TODO 15.1). It speaks to the motor Teensy with dvb_usb_com (messages of
+docs/adr/0003-motion-protocol.md) and sends the heartbeat itself.
 
-Usage, depuis la racine du dépôt :
-    uv run --no-project --with pyserial python firmware/teensy_motor/bench/recalage.py COM5 bas
+Usage, from the root of the repository:
+    uv run --with pyserial python firmware/teensy_motor/bench/recalage.py COM5 bas \
+        --params firmware/teensy_motor/bench/params.example.json
 """
 
 import argparse
+import json
 import math
-import struct
 import sys
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from pathlib import Path
 
 import serial
 
+from dvb_usb_com.framing import FrameDecoder, encode_frame
+from dvb_usb_com.messages import (
+    ControlParam,
+    Heartbeat,
+    Message,
+    MessageError,
+    MotionState,
+    MotionStatus,
+    Move,
+    MoveFlags,
+    MoveKind,
+    ResetPose,
+    SetControlParams,
+    StatusFlags,
+    Stop,
+    StopMode,
+    decode_message,
+)
+
 BAUDRATE = 115200
-SIGNATURE = bytes([0xBA, 0xDD, 0x1C, 0xC5])
+HEARTBEAT_PERIOD = 0.05  # s, 20 Hz
 
-# ID des messages, comme dans messages.h
-SET_TARGET_POSITION = 0
-RESET_POSE = 2
-PUSH_UNTIL_BLOCKED = 11
-UPDATE_ROLLING_BASIS = 128
+# Example values, to be checked on the robot
+D_BACK = 0.12  # wheel axis -> rear face, m, to be measured by the mechanics team
+PUSH_SPEED = 0.05  # m/s
+PUSH_DISTANCE = -0.4  # backwards, m
+CLEARANCE = 0.08  # move away after the recalibration, m
 
-# statut de la base roulante, comme Rolling_Basis::Status
-STOPPED = 0
-MOVING = 1
-BLOCKED = 2
-
-# Valeurs d'exemple, à valider sur le robot
-D_BACK_CM = 12.0  # centre des roues -> face arrière, à mesurer par la méca
-PUSH_SPEED_CM_S = -5.0  # recul
-PUSH_MAX_DISTANCE_CM = 40.0
-CLEARANCE_CM = 8.0  # dégagement après le recalage
-
-# bordure : axe recalé, position de sa face intérieure (cm), cap du robot dos à
-# la bordure (rad). Repère de la table : x de 0 à 300 cm, y de 0 à 200 cm
+# border: corrected axis, position of its inner face (m), heading of the robot
+# with its back to the border (rad). Table: x from 0 to 3 m, y from 0 to 2 m
 WALLS = {
     "bas": ("y", 0.0, math.pi / 2),
-    "haut": ("y", 200.0, -math.pi / 2),
+    "haut": ("y", 2.0, -math.pi / 2),
     "gauche": ("x", 0.0, 0.0),
-    "droite": ("x", 300.0, math.pi),
+    "droite": ("x", 3.0, math.pi),
 }
 
 
 @dataclass(frozen=True, slots=True)
 class Pose:
-    x: float  # en cm
-    y: float  # en cm
-    theta: float  # en rad
-
-
-@dataclass(frozen=True, slots=True)
-class Status:
-    pose: Pose
-    state: int
-
-
-def crc8(data: bytes) -> int:
-    """CRC-8 de polynôme 0x07, le même que crc.cpp."""
-    crc = 0
-    for byte in data:
-        crc ^= byte
-        for _ in range(8):
-            crc = ((crc << 1) ^ 0x07) & 0xFF if crc & 0x80 else (crc << 1) & 0xFF
-    return crc
-
-
-def encode(payload: bytes) -> bytes:
-    """Trame usb_com : [message][taille][crc][signature]."""
-    body = payload + bytes([len(payload)])
-    return body + bytes([crc8(body)]) + SIGNATURE
-
-
-def decode(frame: bytes) -> bytes | None:
-    """Message contenu dans une trame sans sa signature, None si elle est abîmée."""
-    if len(frame) < 3:
-        return None
-    size = frame[-2]
-    if size == 0 or len(frame) < size + 2:
-        return None
-    body = frame[-2 - size : -1]
-    if crc8(body) != frame[-1]:
-        return None
-    return body[:-1]
+    x: float  # m
+    y: float  # m
+    theta: float  # rad
 
 
 def pose_against_wall(wall: str, pose: Pose) -> Pose:
-    """Pose du robot plaqué dos à la bordure, l'autre coordonnée est gardée."""
+    """Pose of the robot flat against the border, the other coordinate kept."""
     axis, position, theta = WALLS[wall]
-    # le centre des roues est à D_BACK_CM de la bordure, vers la table
+    # the wheel axis is D_BACK away from the border, towards the table
     if axis == "y":
-        return Pose(pose.x, position + D_BACK_CM * math.sin(theta), theta)
-    return Pose(position + D_BACK_CM * math.cos(theta), pose.y, theta)
+        return Pose(pose.x, position + D_BACK * math.sin(theta), theta)
+    return Pose(position + D_BACK * math.cos(theta), pose.y, theta)
 
 
-def same_pose(a: Pose, b: Pose) -> bool:
-    angle = math.atan2(math.sin(a.theta - b.theta), math.cos(a.theta - b.theta))
-    return abs(a.x - b.x) < 0.5 and abs(a.y - b.y) < 0.5 and abs(angle) < 0.01
+def same_pose(status: MotionStatus, pose: Pose) -> bool:
+    angle = math.atan2(math.sin(status.theta - pose.theta), math.cos(status.theta - pose.theta))
+    return abs(status.x - pose.x) < 0.005 and abs(status.y - pose.y) < 0.005 and abs(angle) < 0.01
 
 
+@dataclass(slots=True)
 class Teensy:
-    """Envoi des messages et lecture du statut de la Teensy moteur."""
+    """Link with the motor Teensy; poll() must be called often (heartbeat)."""
 
-    def __init__(self, port: str) -> None:
-        self.serial = serial.Serial(port, BAUDRATE, timeout=0.05)
-        self.buffer = bytearray()
+    link: serial.Serial
+    decoder: FrameDecoder = field(default_factory=FrameDecoder)
+    counter: int = 0
+    next_heartbeat: float = 0.0
+    status: MotionStatus | None = None
 
-    def send(self, payload: bytes) -> None:
-        self.serial.write(encode(payload))
+    def send(self, message: Message) -> None:
+        self.link.write(encode_frame(message.pack()))
 
-    def push_until_blocked(self, speed: float, max_distance: float) -> None:
-        self.send(struct.pack("<Bdd", PUSH_UNTIL_BLOCKED, speed, max_distance))
+    def poll(self, duration: float) -> None:
+        """Reads the Teensy and sends the heartbeat during duration (s)."""
+        end = time.monotonic() + duration
+        while True:
+            now = time.monotonic()
+            if now >= self.next_heartbeat:
+                self.counter = (self.counter + 1) % 65536
+                self.send(Heartbeat(self.counter))
+                self.next_heartbeat = now + HEARTBEAT_PERIOD
+            for data in self.decoder.feed(self.link.read(self.link.in_waiting or 1)):
+                try:
+                    message = decode_message(data)
+                except MessageError as error:
+                    print(f"Message ignoré : {error}")
+                    continue
+                if isinstance(message, MotionStatus):
+                    self.status = message
+            if now >= end:
+                return
 
-    def reset_pose(self, pose: Pose) -> None:
-        self.send(struct.pack("<Bddd", RESET_POSE, pose.x, pose.y, pose.theta))
+    def wait_status(self, timeout: float) -> MotionStatus | None:
+        """Next status received before timeout (s)."""
+        self.status = None
+        end = time.monotonic() + timeout
+        while self.status is None and time.monotonic() < end:
+            self.poll(0.01)
+        return self.status
 
-    def set_target(self, pose: Pose) -> None:
-        self.send(struct.pack("<Bddd", SET_TARGET_POSITION, pose.x, pose.y, pose.theta))
-
-    def read_status(self, timeout: float) -> Status | None:
-        """Prochain statut reçu, None si rien n'arrive avant timeout (s)."""
+    def move(self, move: Move, timeout: float) -> MotionStatus | None:
+        """Sends a move and waits for its end; None if it never ends."""
+        self.send(move)
         end = time.monotonic() + timeout
         while time.monotonic() < end:
-            self.buffer += self.serial.read(self.serial.in_waiting or 1)
-            while (index := self.buffer.find(SIGNATURE)) >= 0:
-                message = decode(bytes(self.buffer[:index]))
-                del self.buffer[: index + len(SIGNATURE)]
-                if message is not None and message[0] == UPDATE_ROLLING_BASIS:
-                    _, x, y, theta, state = struct.unpack("<BdddB", message)
-                    return Status(Pose(x, y, theta), state)
-        return None
-
-    def wait_end_of_move(self, timeout: float) -> Status | None:
-        """Attend que le mouvement démarre puis s'arrête, et renvoie le statut final."""
-        started = False
-        end = time.monotonic() + timeout
-        while time.monotonic() < end:
-            status = self.read_status(end - time.monotonic())
-            if status is None:
-                return None
-            # les statuts envoyés avant la commande disent encore STOPPED
-            if status.state == MOVING:
-                started = True
-            elif started:
+            status = self.wait_status(0.5)
+            # the move_id says that the status comes after the command
+            if (
+                status is not None
+                and status.move_id == move.move_id
+                and status.state != MotionState.MOVING
+            ):
                 return status
         return None
 
 
-def apply_pose(teensy: Teensy, target: Pose, attempts: int = 3) -> Status | None:
-    """Envoie RESET_POSE jusqu'à voir la nouvelle pose dans le statut."""
-    # la Teensy ne répond pas au reset, et l'ignore si le robot bouge
+def configure(teensy: Teensy, params: dict[str, float]) -> bool:
+    """Sends every setting; the Teensy stays inert until it has them all."""
+    for param in ControlParam:
+        teensy.send(SetControlParams(param, params[param.name.lower()]))
+        teensy.poll(0.005)
+    status = teensy.wait_status(1.0)
+    return status is not None and bool(status.flags & StatusFlags.CONFIGURED)
+
+
+def apply_pose(teensy: Teensy, target: Pose, attempts: int = 3) -> MotionStatus | None:
+    """Sends RESET_POSE until the new pose is seen in the status."""
+    # the Teensy does not answer the reset, and ignores it while moving
     for _ in range(attempts):
-        teensy.reset_pose(target)
-        end = time.monotonic() + 0.5
-        while time.monotonic() < end:
-            status = teensy.read_status(end - time.monotonic())
-            if status is not None and same_pose(status.pose, target):
+        teensy.send(ResetPose(target.x, target.y, target.theta))
+        for _ in range(5):
+            status = teensy.wait_status(0.2)
+            if status is not None and same_pose(status, target):
                 return status
     return None
 
 
-def recalage(teensy: Teensy, wall: str) -> bool:
+def recalibrate(teensy: Teensy, wall: str) -> bool:
     print(f"Poussée vers la bordure {wall}...")
-    teensy.push_until_blocked(PUSH_SPEED_CM_S, PUSH_MAX_DISTANCE_CM)
-    status = teensy.wait_end_of_move(timeout=20.0)
+    push = Move(
+        1, MoveKind.PUSH_UNTIL_BLOCKED, MoveFlags.NONE, 0, 0, 0, PUSH_DISTANCE, PUSH_SPEED, 0
+    )
+    status = teensy.move(push, timeout=20.0)
     if status is None:
-        print("Pas de statut de la Teensy")
+        print("La poussée ne s'est pas terminée")
         return False
-    if status.state != BLOCKED:
-        print(f"Aucune bordure touchée après {PUSH_MAX_DISTANCE_CM} cm")
+    if status.state != MotionState.BLOCKED:
+        print(f"Aucune bordure touchée après {abs(PUSH_DISTANCE)} m ({status.state.name})")
         return False
-    print(f"Bloqué, pose odométrique : {status.pose}")
+    pose = Pose(status.x, status.y, status.theta)
+    print(f"Bloqué, pose odométrique : {pose}")
 
-    target = pose_against_wall(wall, status.pose)
+    target = pose_against_wall(wall, pose)
     status = apply_pose(teensy, target)
     if status is None:
         print("La Teensy n'a pas appliqué la nouvelle pose")
         return False
-    print(f"Pose recalée : {status.pose}")
+    print(f"Pose recalée : {target}")
 
-    clearance = Pose(
-        target.x + CLEARANCE_CM * math.cos(target.theta),
-        target.y + CLEARANCE_CM * math.sin(target.theta),
-        target.theta,
+    clearance = Move(
+        2,
+        MoveKind.STRAIGHT,
+        MoveFlags.NONE,
+        0,
+        0,
+        0,
+        CLEARANCE,
+        0,
+        0,
     )
     print("Dégagement...")
-    teensy.set_target(clearance)
-    status = teensy.wait_end_of_move(timeout=10.0)
-    if status is None or status.state != STOPPED:
+    status = teensy.move(clearance, timeout=10.0)
+    if status is None or status.state != MotionState.ARRIVED:
         print("Le dégagement ne s'est pas terminé")
         return False
-    print(f"Terminé, pose : {status.pose}")
+    print(f"Terminé, pose : x = {status.x:.3f} m, y = {status.y:.3f} m, theta = {status.theta:.3f}")
     return True
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
     parser.add_argument("port", help="port série de la Teensy moteur, ex. COM5")
     parser.add_argument("wall", choices=WALLS, help="bordure derrière le robot")
+    parser.add_argument("--params", type=Path, required=True, help="réglages (JSON)")
     args = parser.parse_args()
 
-    teensy = Teensy(args.port)
-    return 0 if recalage(teensy, args.wall) else 1
+    params = json.loads(args.params.read_text(encoding="utf-8"))
+    teensy = Teensy(serial.Serial(args.port, BAUDRATE, timeout=0.01))
+    try:
+        if not configure(teensy, params):
+            print("La Teensy n'a pas accepté les réglages")
+            return 1
+        return 0 if recalibrate(teensy, args.wall) else 1
+    finally:
+        teensy.send(Stop(StopMode.URGENT))
 
 
 if __name__ == "__main__":
