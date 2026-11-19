@@ -203,7 +203,10 @@ class FakeMotion:
         if self._urgent:
             raise RuntimeError("urgent stop: no reset until the brain restarts")
         last = self._status.get()
-        if self._move is not None or (last is not None and last.state is MotionState.MOVING):
+        moving = last is not None and last.state is MotionState.MOVING
+        self._update()
+        # Still braking after a cancelled move, maybe before any status has shown it
+        if self._move is not None or moving or self._run is not None:
             raise RuntimeError("the robot moves: reset the pose once it is still")
         done: asyncio.Future[None] = asyncio.get_running_loop().create_future()
         self._reset = (pose, done)
@@ -293,6 +296,11 @@ class FakeMotion:
 
     def _start(self, move_id: int, cmd: MoveCommand) -> None:
         now, pose = self._clock.now(), self._update().pose
+        # Still braking after a cancelled move: the new one starts once the robot is still.
+        braking = self._run.segments if self._run is not None else ()
+        if braking:
+            now = braking[-1].end_time
+            pose, _ = braking[-1].at(now)
         self._board_move_id = move_id
         if self._emergency_stop:  # no power: the move ends where it starts
             self._run = _Run(pose, (), MotionState.STOPPED)
@@ -306,7 +314,8 @@ class FakeMotion:
                 segments = (self._translation(pose, now, distance, speed, accel),)
             case GoToPoint(target=target, max_speed=speed, max_accel=accel):
                 offset = target - pose.position
-                turn = shortest_rotation(pose.theta, offset.angle())
+                heading = offset.angle() if offset.norm() > 0.0 else pose.theta
+                turn = shortest_rotation(pose.theta, heading)
                 rotation = self._rotation(pose, now, turn)
                 facing = Pose(pose.x, pose.y, normalize_angle(pose.theta + turn))
                 line = self._translation(facing, rotation.end_time, offset.norm(), speed, accel)
@@ -314,7 +323,7 @@ class FakeMotion:
             case PushUntilBlocked(max_distance=distance, max_speed=speed, max_accel=accel):
                 segments = (self._translation(pose, now, distance, speed, accel),)
         end = MotionState.STOPPED if isinstance(cmd, PushUntilBlocked) else MotionState.ARRIVED
-        self._run = _Run(pose, segments, end)
+        self._run = _Run(pose, braking + segments, end)
 
     def _rotation(self, pose: Pose, start: float, angle: float) -> _Segment:
         profile = _trapezoid(abs(angle), self._rotation_speed, self._rotation_accel)

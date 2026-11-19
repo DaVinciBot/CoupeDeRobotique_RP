@@ -1,6 +1,5 @@
 import asyncio
 from collections.abc import Coroutine
-from typing import Any
 
 import pytest
 
@@ -23,10 +22,10 @@ def make(clock: FakeClock, failure_rate: float = 0.0, seed: int = 0) -> FakeActu
     )
 
 
-async def assert_refused(clock: FakeClock, call: Coroutine[Any, Any, object]) -> None:
-    """Check that the call raises RuntimeError at once: a call that waits fails, not hangs."""
-    task = asyncio.create_task(call)
-    await clock.advance(0)
+def assert_refused(call: Coroutine[object, object, object]) -> None:
+    """Check that the call raises RuntimeError before its first await, so that nothing else
+    runs in between; a call that waits fails instead of hanging."""
+    task = asyncio.create_task(call, eager_start=True)
     if not task.done():
         task.cancel()
         pytest.fail("the call waits instead of being refused")
@@ -95,7 +94,7 @@ async def test_a_second_waiting_command_on_the_same_actuator_is_refused() -> Non
     first = asyncio.create_task(actuators.command("gripper", "closed", timeout=2.0))
     await clock.advance(0)
 
-    await assert_refused(clock, actuators.command("gripper", "open", timeout=2.0))
+    assert_refused(actuators.command("gripper", "open", timeout=2.0))
 
     await clock.advance(0.5)
     assert first.result() is ActuatorResult.DONE
@@ -180,7 +179,7 @@ async def test_a_final_release_refuses_every_later_command() -> None:
 
     await actuators.release_all(final=True)
 
-    await assert_refused(clock, actuators.command("gripper", "open", timeout=2.0))
+    assert_refused(actuators.command("gripper", "open", timeout=2.0))
 
 
 async def test_a_final_release_is_recorded_before_its_first_await() -> None:
@@ -190,7 +189,7 @@ async def test_a_final_release_is_recorded_before_its_first_await() -> None:
     release = asyncio.create_task(actuators.release_all(final=True))
     await asyncio.sleep(0)  # the release starts, and may not be over
 
-    await assert_refused(clock, actuators.command("gripper", "open", timeout=2.0))
+    assert_refused(actuators.command("gripper", "open", timeout=2.0))
     await clock.advance(0)
     assert release.done()
 

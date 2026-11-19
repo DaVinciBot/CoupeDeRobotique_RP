@@ -159,6 +159,20 @@ async def test_go_to_point_turns_then_goes_straight(clock: FakeClock, motion: Fa
     assert_pose(task.result().pose, 0.5, 1.0, math.pi / 2)
 
 
+async def test_go_to_point_on_the_spot_keeps_the_heading(
+    clock: FakeClock, motion: FakeMotion
+) -> None:
+    turn = asyncio.create_task(motion.move(RotateBy(math.pi / 2)))
+    await clock.advance(1.0)
+    assert turn.result().state is MotionState.ARRIVED
+
+    task = asyncio.create_task(motion.move(GoToPoint(START.position, max_speed=0.5, max_accel=0.5)))
+    await clock.advance(PERIOD)
+
+    assert task.done()
+    assert_pose(task.result().pose, START.x, START.y, math.pi / 2)
+
+
 async def test_push_until_blocked_ends_stopped_without_contact(
     clock: FakeClock, motion: FakeMotion
 ) -> None:
@@ -236,6 +250,24 @@ async def test_a_cancelled_move_sends_a_smooth_stop(clock: FakeClock, motion: Fa
 
     assert move.cancelled()
     assert motion.stops == [(0.5, StopMode.SMOOTH)]
+
+
+async def test_a_move_sent_while_braking_starts_once_the_robot_is_still(
+    clock: FakeClock, motion: FakeMotion
+) -> None:
+    move = asyncio.create_task(motion.move(Straight(1.0, max_speed=0.5, max_accel=0.5)))
+    await clock.advance(1.0)  # 0.5 m/s after 0.25 m
+    move.cancel()
+    await clock.advance(0)
+
+    turn = asyncio.create_task(motion.move(RotateBy(math.pi / 2)))
+    await clock.advance(0.2)
+    assert last(motion).v > 0.0  # it brakes for 0.5 s
+
+    await clock.advance(1.3)  # then the quarter turn takes 1 s
+    result = turn.result()
+    assert result.state is MotionState.ARRIVED
+    assert_pose(result.pose, START.x + 0.375, START.y, math.pi / 2)  # and 0.125 m of braking
 
 
 async def test_a_move_cancelled_after_an_urgent_stop_sends_nothing(
