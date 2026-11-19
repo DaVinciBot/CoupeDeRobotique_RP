@@ -35,7 +35,7 @@ Le code Python de 2026 n'est pas repris. Il sert seulement de référence.
 ## Alternatives écartées
 
 - **Garder l'organisation 2026** (`robot1/`, `common/`) : elle repose sur `sys.path.append` et ne permet pas de faire de vrais paquets.
-- **Un dépôt par composant** (brain, firmware, lidar) : `messages.h` et `messages.py` doivent être comparés en CI (TODO 12), et la Teensy virtuelle se compile à partir du firmware moteur (TODO 11.2). Les deux sont plus simples dans un seul dépôt.
+- **Un dépôt par composant** (brain, firmware, lidar) : `messages.h` et `messages.py` doivent être comparés en CI (TODO 12.3), et la Teensy virtuelle se compile à partir du firmware moteur (TODO 13.5). Les deux sont plus simples dans un seul dépôt.
 - **Un dépôt par édition** : le socle serait dupliqué chaque année, alors que les anciens modules d'édition restent dans le dépôt pour rejouer leurs logs et leurs stratégies (architecture, section 0).
 
 ## Conséquences

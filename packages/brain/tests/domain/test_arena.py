@@ -7,9 +7,9 @@ import msgspec
 import pytest
 from shapely import Polygon
 
-from dvb_brain.domain.arena import Arena, Side, Zone, ZoneKind, load_arena, parse_arena
+from dvb_brain.domain.arena import Arena, Side, Zone, ZoneKind, parse_arena
+from dvb_brain.domain.decoding import SchemaError
 from dvb_brain.domain.geometry import Vec2
-from dvb_brain.domain.json_schema import SchemaError
 
 TEMPLATE_ARENA = Path(__file__).parents[4] / "editions" / "_template" / "arena.json"
 
@@ -112,7 +112,7 @@ def valid_document() -> dict[str, Any]:
         "depth_mm": 2000,
         "border_thickness_mm": 22,
         "border_height_mm": 70,
-        "aruco_tags": {"blue": [1, 2], "yellow": [6, 7]},
+        "aruco_tags": {"blue": [1, 2], "yellow": [6, 7], "elements": {"crate": [20]}},
         "zones": [
             {
                 "id": "blue_start",
@@ -121,6 +121,7 @@ def valid_document() -> dict[str, Any]:
                 "polygon_mm": [[0, 0], [400, 0], [400, 400], [0, 400]],
                 "tags": ["dock"],
                 "mirror_id": "yellow_start",
+                "robot_poses": [{"x_mm": 200, "y_mm": 200, "theta_deg": 0}],
             },
             {
                 "id": "yellow_start",
@@ -129,6 +130,7 @@ def valid_document() -> dict[str, Any]:
                 "polygon_mm": [[2600, 0], [3000, 0], [3000, 400], [2600, 400]],
                 "tags": ["dock"],
                 "mirror_id": "blue_start",
+                "robot_poses": [{"x_mm": 2800, "y_mm": 200, "theta_deg": 180}],
             },
             {
                 "id": "middle",
@@ -169,8 +171,25 @@ def test_parse_arena_converts_to_si() -> None:
     assert arena.border_thickness == pytest.approx(0.022)
     assert arena.border_height == pytest.approx(0.07)
     assert arena.aruco_tags == {Side.BLUE: frozenset({1, 2}), Side.YELLOW: frozenset({6, 7})}
+    assert arena.element_aruco_tags == {"crate": frozenset({20})}
     assert list(arena.zones) == ["blue_start", "yellow_start", "middle"]
     assert list(arena.elements) == ["crate_blue", "crate_yellow"]
+
+
+def test_parsed_arena_is_read_only_and_hashable() -> None:
+    arena = parse_arena(encode(valid_document()))
+    mappings: list[Any] = [
+        arena.zones,
+        arena.elements,
+        arena.aruco_tags,
+        arena.element_aruco_tags,
+    ]
+
+    for mapping in mappings:
+        with pytest.raises(TypeError):
+            mapping["new"] = None
+    assert {arena: "cached"}[arena] == "cached"  # equal only to itself
+    assert arena != parse_arena(encode(valid_document()))
 
 
 def test_parse_arena_reads_zones() -> None:
@@ -187,6 +206,51 @@ def test_parse_arena_reads_zones() -> None:
     assert middle.height == pytest.approx(0.12)
     assert middle.tags == frozenset()
     assert start.height == 0.0
+
+
+def test_parse_arena_reads_robot_poses() -> None:
+    arena = parse_arena(encode(valid_document()))
+
+    (pose,) = arena.zone("yellow_start").robot_poses
+    assert (pose.x, pose.y, pose.theta) == pytest.approx((2.8, 0.2, math.pi))
+    assert arena.zone("middle").robot_poses == ()
+
+
+def test_parse_arena_reads_a_circle() -> None:
+    document = valid_document()
+    del document["zones"][2]["polygon_mm"]
+    document["zones"][2]["circle_mm"] = {"x": 1500, "y": 1000, "radius": 100}
+
+    polygon = parse_arena(encode(document)).zone("middle").polygon
+
+    assert polygon.bounds == pytest.approx((1.4, 0.9, 1.6, 1.1))
+    assert polygon.area == pytest.approx(math.pi * 0.1**2, rel=1e-2)
+
+
+def test_parse_arena_reads_a_rotated_rectangle() -> None:
+    document = valid_document()
+    del document["zones"][2]["polygon_mm"]
+    rect = {"x": 1500, "y": 1000, "length": 400, "width": 200, "theta_deg": 90}
+    document["zones"][2]["rect_mm"] = rect
+
+    polygon = parse_arena(encode(document)).zone("middle").polygon
+
+    assert polygon.bounds == pytest.approx((1.4, 0.8, 1.6, 1.2))
+    assert polygon.area == pytest.approx(0.08)
+
+
+def test_parse_arena_rectangle_at_45_degrees() -> None:
+    document = valid_document()
+    del document["zones"][2]["polygon_mm"]
+    rect = {"x": 1500, "y": 1000, "length": 400, "width": 200, "theta_deg": 45}
+    document["zones"][2]["rect_mm"] = rect
+
+    polygon = parse_arena(encode(document)).zone("middle").polygon
+
+    half_diagonal = 0.3 / math.sqrt(2)  # (length + width) / 2 projected on an axis
+    expected = (1.5 - half_diagonal, 1.0 - half_diagonal, 1.5 + half_diagonal, 1.0 + half_diagonal)
+    assert polygon.bounds == pytest.approx(expected)
+    assert polygon.area == pytest.approx(0.08)
 
 
 def test_parse_arena_reads_elements() -> None:
@@ -242,11 +306,46 @@ DELETE = object()
             ["exclusive_opponent"],
             ["$.zones[2].owner: exclusive_opponent needs an owner", "got None"],
         ),
+        (
+            ("zones", 2, "polygon_mm"),
+            DELETE,
+            ["$.zones[2]: needs exactly one of polygon_mm, circle_mm, rect_mm", "got []"],
+        ),
+        (
+            ("zones", 2, "circle_mm"),
+            {"x": 1500, "y": 1000, "radius": 100},
+            ["$.zones[2]: needs exactly one", "got ['polygon_mm', 'circle_mm']"],
+        ),
+        (
+            ("zones", 2, "circle_mm"),
+            {"x": 1500, "y": 1000, "radius": 0},
+            ["$.zones[2].circle_mm.radius:", "got 0"],
+        ),
+        (
+            ("zones", 2, "rect_mm"),
+            {"x": 1500, "y": 1000, "length": 400, "width": 200},
+            ["$.zones[2].rect_mm:", "theta_deg"],
+        ),
         (("elements", 1, "id"), "crate_blue", ["$.elements[1].id: duplicate id"]),
         (("elements", 0, "mirror_id"), "middle", ["$.elements[0].mirror_id:", "got 'middle'"]),
         (("elements", 0, "size", "length_mm"), 0, ["$.elements[0].size.length_mm:", "got 0"]),
         (("elements", 0, "pose", "theta_deg"), DELETE, ["$.elements[0].pose:", "theta_deg"]),
         (("aruco_tags", "yellow"), DELETE, ["$.aruco_tags:", "yellow"]),
+        (
+            ("aruco_tags", "elements"),
+            {"barrel": [20]},
+            ["$.aruco_tags.elements: no element of this kind", "got 'barrel'"],
+        ),
+        (
+            ("aruco_tags", "elements"),
+            {"crate": [-1]},
+            ["$.aruco_tags.elements[...][0]: Expected `int` >= 0"],  # msgspec hides dict keys
+        ),
+        (
+            ("zones", 0, "robot_poses"),
+            [{"x_mm": 200, "y_mm": 200}],
+            ["$.zones[0].robot_poses[0]:", "theta_deg"],
+        ),
         (("aruco_tags", "blue"), [1, -2], ["$.aruco_tags.blue", "-2"]),
     ],
 )
@@ -275,27 +374,9 @@ def test_parse_arena_rejects_invalid_json() -> None:
         parse_arena(encode(valid_document())[:-5])
 
 
-def test_load_arena_reads_a_file(tmp_path: Path) -> None:
-    path = tmp_path / "arena.json"
-    path.write_bytes(encode(valid_document()))
-
-    assert list(load_arena(path).zones) == ["blue_start", "yellow_start", "middle"]
-
-
-def test_load_arena_error_names_the_file(tmp_path: Path) -> None:
-    path = tmp_path / "arena.json"
-    document = valid_document()
-    document["width_mm"] = 0
-    path.write_bytes(encode(document))
-
-    with pytest.raises(SchemaError) as error:
-        load_arena(path)
-
-    assert str(error.value).startswith(f"{path}: $.width_mm:")
-
-
 def test_template_arena_loads() -> None:
-    arena = load_arena(TEMPLATE_ARENA)
+    arena = parse_arena(TEMPLATE_ARENA.read_bytes())
 
     assert (arena.width, arena.depth) == (3.0, 2.0)
     assert arena.zones == {}
+    assert arena.element_aruco_tags == {}

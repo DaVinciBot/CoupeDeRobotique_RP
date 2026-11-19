@@ -54,9 +54,9 @@ def angle_diff(a: float, b: float) -> float:
     return normalize_angle(a - b)
 
 
-def shortest_rotation(a: float, b: float) -> float:
-    """Return the signed rotation that goes from heading a to heading b."""
-    return normalize_angle(b - a)
+def shortest_rotation(current: float, target: float) -> float:
+    """Return the signed rotation that goes from the current heading to the target heading."""
+    return normalize_angle(target - current)
 
 
 @dataclass(frozen=True, slots=True)

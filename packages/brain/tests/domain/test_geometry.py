@@ -13,6 +13,7 @@ from dvb_brain.domain.geometry import (
 )
 
 angles = st.floats(min_value=-100.0, max_value=100.0)
+wide_angles = st.floats(min_value=-1e6, max_value=1e6)  # e.g. an odometry heading never wrapped
 coords = st.floats(min_value=-10.0, max_value=10.0)
 vecs = st.builds(Vec2, coords, coords)
 poses = st.builds(Pose, coords, coords, angles)
@@ -35,15 +36,36 @@ def test_normalize_angle_wraps_into_half_open_interval(angle: float, expected: f
     assert normalize_angle(angle) == pytest.approx(expected)
 
 
-@given(angles)
+def test_normalize_angle_gives_pi_for_minus_pi_exactly() -> None:
+    assert normalize_angle(-math.pi) == math.pi
+    assert normalize_angle(math.pi) == math.pi
+
+
+@given(wide_angles)
 def test_normalize_angle_result_is_in_range(angle: float) -> None:
     assert -math.pi < normalize_angle(angle) <= math.pi
 
 
-@given(angles)
+@given(wide_angles)
 def test_normalize_angle_is_idempotent(angle: float) -> None:
     once = normalize_angle(angle)
     assert normalize_angle(once) == once
+
+
+@given(wide_angles, wide_angles)
+def test_angle_diff_is_antisymmetric(a: float, b: float) -> None:
+    # Up to a full turn: a half turn is pi both ways.
+    total = angle_diff(a, b) + angle_diff(b, a)
+    assert normalize_angle(total) == pytest.approx(0.0, abs=1e-9)
+
+
+@given(wide_angles, wide_angles)
+def test_shortest_rotation_reaches_the_target_by_at_most_a_half_turn(
+    current: float, target: float
+) -> None:
+    rotation = shortest_rotation(current, target)
+    assert abs(rotation) <= math.pi
+    assert angle_diff(current + rotation, target) == pytest.approx(0.0, abs=1e-6)
 
 
 def test_angle_diff_is_first_minus_second() -> None:

@@ -1,0 +1,6 @@
+{
+  "schema_version": 1,
+  "kind": "cdr.match",
+  "duration_s": 100,
+  "max_height_mm": 350
+}

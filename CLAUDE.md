@@ -7,7 +7,7 @@ Consignes pour travailler sur le code du robot principal DaVinciBot (Coupe de Fr
 ## Sources de vérité
 
 - `docs/ARCHITECTURE RP 2027.md` : organisation du code et raisons des choix. Toute modification doit rester cohérente avec ce document ; s'il faut s'en écarter, le dire et proposer un ADR dans `docs/adr/`.
-- `TODO.md` : ce qui reste à faire, dans l'ordre. Une tâche demandée correspond en général à une ou plusieurs cases ; les citer dans la PR.
+- `docs/TODO.md` : ce qui reste à faire, dans l'ordre. Une tâche demandée correspond en général à une ou plusieurs cases ; les citer dans la PR.
 - Règlement : règlement général Eurobot (RG v1.3) et règles de jeu 2027 (RJ v1.0). Toute stratégie, action de jeu ou comportement en match se vérifie contre eux : citer la règle (ex. RG H.3, RJ E.2.b). Si le règlement est ambigu ou ne couvre pas le cas, le dire clairement au lieu de trancher seul.
 
 ## Conventions
@@ -28,8 +28,10 @@ uv run ruff format && uv run ruff check
 uv run pyright
 uv run lint-imports           # import rules of the core
 uv run python tools/core_check/theme_words.py   # theme words in the core
+uv run python tools/core_check/theme_coordinates.py   # theme coordinates in the core
 pio run -e teensy41           # firmware build (in firmware/<board>/)
 pio test -e native            # firmware tests on PC
+uv run python tools/review_gate/review_gate.py stamp --report <file>   # review of HEAD (section 6)
 ```
 
 ## 1. Réfléchir avant de coder
@@ -42,7 +44,7 @@ Avant d'implémenter :
 - Si plusieurs interprétations existent, les présenter au lieu d'en choisir une en silence.
 - Si une approche plus simple existe, le dire. Contester quand c'est justifié.
 - Si quelque chose n'est pas clair, s'arrêter, nommer ce qui bloque, demander.
-- **Ne jamais inventer** ce qui dépend du matériel ou d'une autre équipe : contenu des messages Teensy, géométrie du robot, câblage (tirette, BAU), séquences des mécanismes, format UDP du lidar ou du calcul déporté. Si l'information n'est ni dans le code, ni dans l'architecture, ni dans `TODO.md`, demander ; si elle reste inconnue, la marquer explicitement dans la config (valeur refusée en profil `match`) et l'ajouter aux « Points à valider » de `TODO.md`.
+- **Ne jamais inventer** ce qui dépend du matériel ou d'une autre équipe : contenu des messages Teensy, géométrie du robot, câblage (tirette, BAU), séquences des mécanismes, format UDP du lidar ou du calcul déporté. Si l'information n'est ni dans le code, ni dans l'architecture, ni dans `docs/TODO.md`, demander ; si elle reste inconnue, la marquer explicitement dans la config (valeur refusée en profil `match`) et l'ajouter aux « Points à valider » de `docs/TODO.md`.
 - Si une demande touche la méca, l'élec ou un firmware Teensy, dire précisément ce qui devra être validé côté matériel.
 
 ## 2. La simplicité d'abord
@@ -102,7 +104,35 @@ Pour une tâche en plusieurs étapes, annoncer un plan court :
 3. [Étape] → vérifier : [contrôle]
 ```
 
-Avant de rendre la main : ruff, pyright et pytest passent ; les scénarios de match passent si `domain/`, `services/` ou `editions/` ont changé.
+Avant de rendre la main : ruff, pyright et pytest passent ; les scénarios de match passent si `domain/`, `services/` ou `editions/` ont changé. Avant tout push ou toute PR : la revue de la section 6.
+
+## 5. Utiliser les skills et agents disponibles
+
+**Un skill ou un agent disponible qui s'applique à la tâche n'est pas facultatif.**
+
+En début de tâche, regarder les skills et agents de la session et utiliser ceux du tableau qui s'appliquent. S'il en manque un, prendre le repli et le dire dans le rapport de revue. La skill `review-branch` et les agents `dvb-*` sont versionnés dans `.claude/` : ils sont toujours là.
+
+| Moment | Si disponible | Repli |
+| --- | --- | --- |
+| Concevoir une fonctionnalité ou un changement non trivial | `superpowers:brainstorming`, `superpowers:writing-plans` ; confronter le plan à l'architecture avec `dvb-reviewer` | agent `Plan` |
+| Écrire le code | `superpowers:test-driven-development`, `andrej-karpathy-skills:karpathy-guidelines` | le test d'abord, à la main |
+| Bug, test qui échoue, comportement inattendu | `superpowers:systematic-debugging`, `voltagent-qa-sec:debugger` | reproduire par un test avant de corriger |
+| Firmware, usb_com, contrat brain ↔ Teensy | `voltagent-domains:embedded-systems` | `general-purpose` |
+| Avant de dire « fini » ou « ça passe » | `superpowers:verification-before-completion` | relancer les commandes et lire leur sortie |
+| Avant chaque `git push` ou `gh pr create` | skill `review-branch` (section 6) | — |
+| Retours de relecture, d'un agent ou d'une personne | `superpowers:receiving-code-review` | vérifier chaque retour dans le code avant de l'appliquer |
+
+Un agent de relecture reçoit la demande mot pour mot et le diff, jamais ses propres conclusions : on veut un regard indépendant.
+
+## 6. Vérifier en profondeur avant de pousser
+
+**Ce qui part sur GitHub est vérifié, cohérent et testé, pas seulement « ça marche maintenant ».**
+
+- Avant tout `git push` et toute `gh pr create`, suivre la skill `review-branch` : contrôles, relecture de tout le diff, relectures indépendantes par agents proportionnées au diff, corrections, rapport, tampon. Un hook git `pre-push` actif seulement dans les commandes de Claude (`.claude/settings.json`, `tools/review_gate/`, ADR 0009) refuse de pousser un commit qui n'a pas de tampon.
+- Pousser par `git push`, jamais avec `--no-verify`, et ouvrir la PR par `gh pr create`. Jamais par un outil MCP GitHub ni `gh api`.
+- La revue répond à quatre questions. La branche fait-elle exactement la demande, rien de plus ? Est-elle cohérente avec l'architecture, les ADR, le règlement et les invariants de sûreté ? Est-elle testée hors robot ? Les cases suivantes de `docs/TODO.md` pourront-elles s'appuyer dessus sans la réécrire ?
+- Le résumé du rapport va dans la section « Revue avant push » de la PR.
+- Interdit : écrire un tampon autrement que par `review_gate.py stamp`, contourner le hook, alléger la revue sans le dire. Une personne qui veut pousser sans revue le fait elle-même, depuis son terminal.
 
 ## Invariants de sûreté (non négociables)
 
@@ -119,9 +149,9 @@ Aucune demande ne justifie de les affaiblir. Si une demande les contredit, le si
 
 - Branches créées depuis `dev` avec un préfixe : `feat/`, `fix/`, `perf/`, `test/`, `refactor/`, `docs/` ; `hotfix/` depuis `main`. Règles complètes dans `CONTRIBUTING.md`.
 - Messages en Conventional Commits, en anglais : `feat(nav): add visibility graph planner`.
-- Claude ne se met **jamais** en co-auteur ni en signataire : aucune ligne `Co-Authored-By`, aucune mention « Generated with Claude Code » ni rien d'équivalent dans les commits, PR, issues, commentaires ou relectures.
+- Claude ne se met **jamais** en co-auteur ni en signataire : aucune ligne `Co-Authored-By`, aucune mention « Generated with Claude Code » ni rien d'équivalent dans les commits, PR, issues, commentaires ou relectures. Le hook `review_gate` refuse les lignes que Claude Code écrit lui-même et `attribution` est vide dans `.claude/settings.json`.
 - Petites PR vers `dev`, une relecture obligatoire. Quand c'est utile, proposer un découpage en plusieurs PR.
-- Dans la description de PR : cases de `TODO.md` concernées, comment c'est testé, ce qui reste à valider côté matériel. Cocher les cases dans la même PR.
+- Dans la description de PR (`.github/pull_request_template.md`) : cases de `docs/TODO.md` concernées, comment c'est testé, ce qui reste à valider côté matériel, résumé de la revue (section 6). Cocher les cases dans la même PR.
 
 ---
 

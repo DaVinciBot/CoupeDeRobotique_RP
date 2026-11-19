@@ -33,10 +33,17 @@ THEME_WORDS = (
     "courtyard",
     "boulet",
     "cannon",
+    "ecurie",
+    "camelot",
+    "arthur",
+    "chevalier",
+    "knight",
 )
 
-# The core is shared between editions: editions/, docs/, config/ and tools/ are not part of it.
-CORE_PATHS = ("packages", "dashboard", "firmware", "lidar_driver", "deploy")
+# The core is shared between editions: editions/, docs/ and tools/ are not part of it.
+# config/match.json holds the general rules (ADR 0005); config/robot.json describes the robot,
+# apart from both the core and the editions (architecture, section 0).
+CORE_PATHS = ("packages", "dashboard", "firmware", "lidar_driver", "deploy", "config/match.json")
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 

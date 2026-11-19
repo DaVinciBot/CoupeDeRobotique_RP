@@ -13,6 +13,16 @@ dependencies = [
     "dvb-usb-com",
 ]
 
+# The workspace root installs the editions/ folder as the editions package: the brain imports
+# the edition named by its config (ADR 0006).
+[build-system]
+requires = ["uv_build>=0.9.2,<0.10"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "editions"
+module-root = ""
+
 [tool.uv.workspace]
 members = ["packages/*"]
 
@@ -34,9 +44,15 @@ extend-exclude = ["*.md"]  # docs snippets are illustrative, aligned by hand
 select = ["E", "F", "I", "UP", "B", "SIM", "RUF", "ASYNC", "PTH", "N"]
 
 [tool.pyright]
-include = ["packages", "tools"]
+include = ["packages", "tools", "editions"]
 typeCheckingMode = "basic"
-strict = ["packages/*/src", "tools/core_check/*.py"]
+strict = [
+    "packages/*/src",
+    "tools/core_check/*.py",
+    "tools/review_gate/*.py",
+    "editions/*.py",
+    "editions/*/*.py",
+]
 
 [tool.importlinter]
 root_packages = [
@@ -48,7 +64,7 @@ root_packages = [
     "dvb_supervisor",
     "dvb_usb_com",
 ]
-include_external_packages = true  # needed to forbid editions and asyncio
+include_external_packages = true  # needed to forbid editions and the standard library
 
 [[tool.importlinter.contracts]]
 name = "The core never imports an edition"
@@ -64,14 +80,41 @@ source_modules = [
 ]
 forbidden_modules = ["editions"]
 
+# ADR 0008: the domain reads no clock, no file and no device; the caller gives it the time and
+# the bytes.
 [[tool.importlinter.contracts]]
 name = "The brain domain stays pure"
 type = "forbidden"
 source_modules = ["dvb_brain.domain"]
-forbidden_modules = ["dvb_brain.services", "dvb_brain.adapters", "dvb_brain.app", "asyncio"]
+forbidden_modules = [
+    "dvb_brain.services",
+    "dvb_brain.adapters",
+    "dvb_brain.app",
+    "asyncio",
+    "datetime",
+    "io",
+    "os",
+    "pathlib",
+    "socket",
+    "subprocess",
+    "threading",
+    "time",
+]
+
+# Architecture, section 5.3: each layer imports only the layers below it. Services and adapters
+# ignore each other: only app knows which adapter is plugged in (ADR 0006).
+[[tool.importlinter.contracts]]
+name = "The brain layers follow the architecture"
+type = "layers"
+layers = [
+    "dvb_brain.app",
+    "dvb_brain.adapters | dvb_brain.services",
+    "dvb_brain.ports",
+    "dvb_brain.domain",
+]
 
 [tool.pytest.ini_options]
-testpaths = ["packages", "tools"]
+testpaths = ["packages", "tools", "editions"]
 addopts = ["--import-mode=importlib"]
 asyncio_default_fixture_loop_scope = "function"
 
