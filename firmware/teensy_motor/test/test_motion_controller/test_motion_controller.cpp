@@ -218,6 +218,24 @@ void test_smooth_and_urgent_stop() {
     TEST_ASSERT_EQUAL_DOUBLE(0.0, bench.last.u_right);
 }
 
+void test_smooth_stop_brakes_at_the_configured_accel() {
+    // the safety zone of the brain assumes MAX_ACCEL (ADR 0003), whatever
+    // the acceleration of the move
+    Bench bench;
+    MoveCommand slow = simple_command(1, MoveKind::STRAIGHT, 0.0, 2.0);
+    slow.max_accel = sim::params().max_accel / 3.0;
+    bench.controller.move(slow);
+    bench.run_for(5.0);  // cruising at MAX_SPEED
+    double x_stop = bench.pose().x;
+    bench.controller.stop(StopMode::SMOOTH);
+    TEST_ASSERT_TRUE(bench.run_until_done(5.0));
+
+    // v² / 2a: 0.13 m at MAX_ACCEL, 0.4 m at the accel of the move
+    double v = sim::params().max_speed;
+    double braking = v * v / (2.0 * sim::params().max_accel);
+    TEST_ASSERT_DOUBLE_WITHIN(0.03, braking, bench.pose().x - x_stop);
+}
+
 // Moves
 
 void test_goto_forward() {
@@ -550,6 +568,7 @@ int main() {
     RUN_TEST(test_heartbeat_lost_while_holding_cuts_the_motors);
     RUN_TEST(test_emergency_stop);
     RUN_TEST(test_smooth_and_urgent_stop);
+    RUN_TEST(test_smooth_stop_brakes_at_the_configured_accel);
     RUN_TEST(test_goto_forward);
     RUN_TEST(test_goto_without_heading_keeps_direction);
     RUN_TEST(test_goto_reverse);

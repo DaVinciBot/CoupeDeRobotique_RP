@@ -279,6 +279,12 @@ void MotionController::stop(StopMode mode) {
             }
             this->pending = false;
             this->move_step = Step::BRAKE;
+            // at the configured accelerations, not those of the move: the
+            // safety zone of the brain assumes them (ADR 0003)
+            this->delta_profile.set_limits(this->p.max_speed,
+                                           this->p.max_accel);
+            this->psi_profile.set_limits(this->p.max_angular_speed,
+                                         this->p.max_angular_accel);
             this->delta_profile.stop();
             this->psi_profile.stop();
             return;
