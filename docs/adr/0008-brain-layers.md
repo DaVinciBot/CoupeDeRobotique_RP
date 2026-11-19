@@ -1,6 +1,6 @@
 # ADR 0008 — Couches du brain et place des types
 
-- **Statut** : proposé
+- **Statut** : proposé ; amendé par l'[ADR 0011](0011-ports-and-fake-hardware.md) (`Ports` dans `ports/`)
 - **Date** : 2026-11-13
 - **Cases** : [TODO 1.3](../TODO.md#13-qualité), et la place des types des cases 3.1, 3.3, 3.4, 4 et 9.1
 

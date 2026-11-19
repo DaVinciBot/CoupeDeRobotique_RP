@@ -1,6 +1,6 @@
 # ADR 0007 — Table de transitions de la machine à états du match
 
-- **Statut** : proposé
+- **Statut** : proposé ; amendé par l'[ADR 0011](0011-ports-and-fake-hardware.md) (en `FAULT`, les actionneurs sont relâchés pour de bon au lieu de prendre leur posture par défaut)
 - **Date** : 2026-11-13
 - **Cases** : [TODO 2.8](../TODO.md#28-machine-à-états-du-match--domainmatch_fsmpy)
 

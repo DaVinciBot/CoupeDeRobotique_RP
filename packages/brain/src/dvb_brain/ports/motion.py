@@ -51,10 +51,10 @@ class MotionPort(Protocol):
     async def reset_pose(self, pose: Pose) -> None:
         """Set the absolute pose of the robot, which must be still (start, calibration).
 
-        Raise RuntimeError while a move runs, while the last status is MOVING (braking after a
-        cancelled move: wait for another state first, the board reports MOVING until the robot
-        is still), or after stop(URGENT). Return once a
-        status shows the new pose; the caller bounds its wait on the Clock.
+        Raise RuntimeError while a move runs, while the robot still brakes after a cancelled
+        move, even before a status shows it (the caller waits for a new status that is not
+        MOVING), or after stop(URGENT). Return once a status shows the new pose; the caller
+        bounds its wait on the Clock.
         """
         ...
 

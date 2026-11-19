@@ -176,22 +176,22 @@ Les jalons A à C ne demandent aucune carte Teensy, et les sections 12 à 14 ne 
 
 ### 3.4 Autres ports
 
-- [ ] `ActuatorPort` : `async command(actuator_id, position_name, timeout) -> ActuatorResult` (`DONE`, `BLOCKED`, `TIMEOUT`), `async release_all()`, `state(actuator_id)`, `sensor(name) -> Watch[bool]`.
-- [ ] `LidarPort` : `tracks() -> Watch[TrackSet]` ; `Track(id, center, radius, velocity, confirmed)` et `TrackSet` dans `domain/world.py` (ADR 0008).
-- [ ] `RemoteVisionPort` : `observations() -> Watch[RemoteObservations]`, `async send(event)`.
-- [ ] `StartSwitchPort` : `inserted()`, `async wait_pulled()`.
-- [ ] `TelemetryPort` : `publish(topic, msg)` non bloquant, jeté si personne n'écoute.
-- [ ] BAU lu via `MotionStatus.emergency_stop`, pas de port séparé.
-- [ ] `Ports` : dataclass qui regroupe tous les ports.
+- [x] `ActuatorPort` : `async command(actuator_id, position_name, timeout) -> ActuatorResult` (`DONE`, `BLOCKED`, `TIMEOUT`), `async release_all(final)` (`final` verrouille le port comme `stop(URGENT)`, ADR 0011), `state(actuator_id)`, `sensor(name) -> Watch[bool]`.
+- [x] `LidarPort` : `tracks() -> Watch[TrackSet]` ; `Track(id, center, radius, velocity, confirmed)` et `TrackSet` dans `domain/world.py` (ADR 0008).
+- [x] `RemoteVisionPort` : `observations() -> Watch[RemoteObservations]`, `async send(event)` (types provisoires, ADR 0011).
+- [x] `StartSwitchPort` : `inserted()`, `async wait_pulled() -> float` (instant du premier front, `t0` du match, ADR 0011).
+- [x] `TelemetryPort` : `publish(topic, msg)` non bloquant, jeté si personne n'écoute.
+- [x] BAU lu via `MotionStatus.emergency_stop`, pas de port séparé.
+- [x] `Ports` : dataclass qui regroupe tous les ports, horloge comprise (`ports/__init__.py`, ADR 0011).
 
 ### 3.5 Faux matériel — `adapters/fake/`
 
-- [ ] `FakeMotion` : exécution idéale avec une durée calculée (vitesse, accélération) ; scénarios injectables : blocage après x m, Teensy muette, redémarrage, BAU.
-- [ ] Tests de contrat du `MotionPort` (ADR 0010), communs à `FakeMotion`, `SimMotion` (11.2) et à l'adaptateur Teensy (15.1) : annuler `move()` arrête le robot, second `move()` refusé, `stop()` et `heartbeat()` sans exception même lien mort, `stop(SMOOTH)` freiné avec la décélération d'arrêt de la config, `stop(URGENT)` définitif (enregistré avant le premier `await`, heartbeat maintenu), `reset_pose()` refusé robot en mouvement.
-- [ ] `FakeActuators` : durées fixes, taux d'échec réglable.
-- [ ] `FakeLidar` : pistes scriptées dans le temps.
-- [ ] `FakeStartSwitch` : `pull()` déclenché par le test.
-- [ ] Fixtures pytest `ports`, `clock`, `arena`, `strategy` dans `tests/conftest.py`.
+- [x] `FakeMotion` : exécution idéale avec une durée calculée (vitesse, accélération) ; scénarios injectables : blocage après x m, Teensy muette, redémarrage, BAU.
+- [x] Tests de contrat du `MotionPort` (ADR 0010), communs à `FakeMotion`, `SimMotion` (11.2) et à l'adaptateur Teensy (15.1) : annuler `move()` arrête le robot, second `move()` refusé, `stop()` et `heartbeat()` sans exception même lien mort, `stop(SMOOTH)` freiné avec la décélération d'arrêt de la config, `stop(URGENT)` définitif (enregistré avant le premier `await`, heartbeat maintenu), `reset_pose()` refusé robot en mouvement.
+- [x] `FakeActuators` : durées fixes, taux d'échec réglable.
+- [x] `FakeLidar` : pistes scriptées dans le temps.
+- [x] `FakeStartSwitch` : `pull()` déclenché par le test.
+- [x] Fixtures pytest `ports`, `clock`, `arena`, `strategy` dans `tests/conftest.py` (édition `_template`), avec `FakeRemoteVision` et `FakeTelemetry`.
 
 ---
 
@@ -308,7 +308,7 @@ Les jalons A à C ne demandent aucune carte Teensy, et les sections 12 à 14 ne 
 ### 7.4 Fin de match — `services/endgame.py`
 
 - [ ] Calcul continu du temps de retour (planificateur) + `end_reserve_s`.
-- [ ] Temps restant atteint → annulation de l'étape, `release_all`, actionneurs rentrés, retour en salle du trône (RJ E.3).
+- [ ] Temps restant atteint → annulation de l'étape, `release_all(final=False)`, actionneurs rentrés, retour en salle du trône (RJ E.3).
 - [ ] Pose de fin avec l'empreinte entièrement dans la zone (10 pts au lieu de 5, RJ E.3.c), autre pose candidate si la première est occupée.
 - [ ] Plus rien tenu par un actionneur à la fin (RJ E.2.b) ; Graal au niveau 4 libre de tout actionneur.
 - [ ] Test : stratégie trop longue → fin dans la zone avant 100 s sur 20 graines.
@@ -322,16 +322,16 @@ Les jalons A à C ne demandent aucune carte Teensy, et les sections 12 à 14 ne 
 - [ ] `INIT` : attente des liens, vérification du profil `match` et de l'absence de ressource simulée (4.5).
 - [ ] `INIT` : envoi des réglages d'asservissement (5.6) à la Teensy moteur (attend 12.1).
 - [ ] `CALIBRATING` : recalage contre deux bordures puis `RESET_POSE`, objectif < 30 s (préparation de 3 min, RG H.1) ; robot entièrement dans la salle du trône ensuite (RJ D.3.b). Un nouveau `CALIBRATE` recommence un recalage raté (ADR 0007).
-- [ ] `ARMED` : tirette en place exigée, anti-rebond 50 ms, seul le front « retirée » compte.
+- [ ] `ARMED` : tirette en place exigée, seul le front « retirée » compte (anti-rebond dans l'adaptateur, 15.3).
 - [ ] `RUNNING` : `MatchClock` créée au front (ADR 0010), envoi du départ au calcul déporté (× 3), lancement de l'exécuteur et de la fin de match.
-- [ ] Minuteur de fin indépendant de la stratégie : à 100 s moins `hard_stop_margin_s`, `stop(URGENT)`, `release_all`, plus aucune commande (RG H.3 ; −50 pts si le robot bouge encore, RG H.4).
+- [ ] Minuteur de fin indépendant de la stratégie : à 100 s moins `hard_stop_margin_s`, `stop(URGENT)`, `release_all(final=True)`, plus aucune commande (RG H.3 ; −50 pts si le robot bouge encore, RG H.4).
 
 ### 8.2 `SafetyMonitor` — `services/safety.py`
 
 - [ ] Première tâche du `TaskGroup` (5.3), heartbeat 20 Hz vers la Teensy moteur par `MotionPort.heartbeat()`, maintenu après `stop(URGENT)` (ADR 0010).
 - [ ] Surveillance : statut absent depuis 300 ms, `boot_id` changé, port série en erreur, BAU, boucle asyncio en retard de plus de 100 ms.
-- [ ] Réaction unique : `stop(URGENT)`, posture par défaut, `FAULT(reason)` ; jamais de relance automatique d'un match.
-- [ ] `run_brain` avec `finally` qui tente `stop(URGENT)` même si le port est mort.
+- [ ] Réaction unique : `stop(URGENT)`, `release_all(final=True)` (ADR 0011), `FAULT(reason)` ; jamais de relance automatique d'un match.
+- [ ] `run_brain` avec `finally` qui tente `stop(URGENT)` et `release_all(final=True)` même si les ports sont morts.
 - [ ] `SIGTERM` et `SIGINT` → même arrêt propre.
 - [ ] Tests : exception dans une action, Teensy muette, BAU → `FAULT` et `stop` appelé.
 
@@ -349,6 +349,7 @@ Les jalons A à C ne demandent aucune carte Teensy, et les sections 12 à 14 ne 
 - [ ] Schéma msgspec (5.6) : `edition`, `profile`, géométrie du robot (rayon, empreinte, position et hauteur du lidar), numéros de série des Teensy, navigation, évitement, durées de vie, asservissement, actionneurs, réel / simulé / désactivé par sous-système. Décodé vers des dataclasses SI de `domain/`, que reçoivent les services (ADR 0008).
 - [ ] Chargement au lancement, jamais à l'import.
 - [ ] Validations croisées : profil `match` ⇒ tout réel sauf le calcul déporté, évitement actif.
+- [ ] Hauteur de chaque position nommée d'actionneur, déclarée dans la config (l'angle d'un servo ne la donne pas) : au-dessus de la hauteur max de `config/match.json` (RG F.3), la config est refusée ; une hauteur inconnue est marquée et refusée en profil `match` (ADR 0011).
 - [ ] Erreur lisible qui nomme le champ (`navigation.avoidance.wait_s: expected >= 0, got -1`).
 - [ ] Valeurs encore inconnues marquées explicitement, refusées en profil `match`.
 
@@ -423,7 +424,7 @@ Les jalons A à C ne demandent aucune carte Teensy, et les sections 12 à 14 ne 
 
 - [ ] Contenu exact de `HEARTBEAT`, `MOVE`, `STOP`, `RESET_POSE`, `MOTION_STATUS`, `SET_CONTROL_PARAMS`, `START_TRACE`, `TRACE_SAMPLE`, `TRACE_END` (6.2) : champs, types, unités, IDs.
 - [ ] Fréquences : heartbeat 20 Hz, statut ≥ 10 Hz à cadence fixe, arrêt de la Teensy après 200 ms sans heartbeat.
-- [ ] Sémantique d'un `MOVE` reçu pendant un autre, et de la vitesse max modifiée en cours de mouvement.
+- [ ] Sémantique d'un `MOVE` reçu pendant un autre ou pendant le freinage d'un `STOP` (`FakeMotion` le lance une fois le robot arrêté, ADR 0011), et de la vitesse max modifiée en cours de mouvement.
 - [ ] Décélération d'arrêt du `STOP` normal envoyée avec les réglages, même valeur que `avoidance.decel` de la zone de sécurité (21.1, ADR 0010).
 - [ ] Redémarrage de la Teensy détectable (`boot_id`) ; Teensy inerte tant qu'elle n'a pas reçu ses réglages.
 - [ ] ADR relu et approuvé côté firmware et côté brain avant d'en coder les messages (cases 12.3 et 13.4).
@@ -432,8 +433,8 @@ Les jalons A à C ne demandent aucune carte Teensy, et les sections 12 à 14 ne 
 
 Écrit à partir des attentes du brain : `ActuatorPort` tel que le décrit la case 3.4, et l'architecture (10).
 
-- [ ] Messages des commandes génériques (10) : servo à un angle, pas-à-pas à une position, sortie tout-ou-rien, lecture de capteur, à partir des messages actionneurs existants (6.2) ; réponses « fini », « bloqué », « timeout ».
-- [ ] État et fins de course à 20 Hz, heartbeat et `boot_id` comme la Teensy moteur, posture par défaut sur perte du heartbeat.
+- [ ] Messages des commandes génériques (10) : servo à un angle, pas-à-pas à une position, sortie tout-ou-rien, lecture de capteur, à partir des messages actionneurs existants (6.2) ; réponses « fini », « bloqué », « timeout » ; sur un timeout, l'actionneur s'arrête où il est (ADR 0011).
+- [ ] État et fins de course à 20 Hz, heartbeat et `boot_id` comme la Teensy moteur, posture par défaut sur perte du heartbeat, sauf après un relâchement final : tout reste relâché (ADR 0011).
 - [ ] ADR relu et approuvé côté firmware et côté brain avant d'en coder les messages (cases 12.3 et 14).
 
 ### 12.3 usb_com v2 (C++ et Python)
@@ -498,7 +499,7 @@ Les jalons A à C ne demandent aucune carte Teensy, et les sections 12 à 14 ne 
 - [ ] Servos avec rampes, pas-à-pas non bloquants (AccelStepper ou TeensyStep), aucun `delay()` dans les callbacks.
 - [ ] Prise d'origine au démarrage et après un BAU.
 - [ ] Butées logicielles, dont la hauteur de 350 mm (RG F.3).
-- [ ] Posture par défaut sur perte du heartbeat (`hold` ou `release` par actionneur).
+- [ ] Posture par défaut sur perte du heartbeat (`hold` ou `release` par actionneur), sauf après un relâchement final : tout reste relâché (ADR 0011).
 - [ ] État et fins de course remontés à 20 Hz.
 - [ ] Heartbeat et `boot_id` comme la Teensy moteur.
 - [ ] Tests `native` de la logique de séquencement.
@@ -519,7 +520,7 @@ Les jalons A à C ne demandent aucune carte Teensy, et les sections 12 à 14 ne 
 ### 15.2 Teensy actionneurs — `adapters/teensy/actuators.py`
 
 - [ ] Commandes par nom traduites via `robot.json` (positions nommées, vitesses, limites).
-- [ ] Vérification de la hauteur selon la zone avant chaque commande.
+- [ ] Hauteur (RG F.3) : le port ne reçoit ni pose ni zone ; positions nommées au-dessus de 350 mm refusées au chargement de la config (9.1), règle selon la zone dans `MatchRules` (7.2), avant l'appel (ADR 0011).
 - [ ] Mode réglage : position libre puis « enregistrer comme `<nom>` » dans la config.
 
 ### 15.3 Tirette et LED — `adapters/gpio.py`
@@ -669,7 +670,7 @@ Chaque point bloque les cases indiquées.
 | Câblage du BAU conforme à R1, R2 et R8 du document d'asservissement | 13.3, 8.2 |
 | Variante ROS 2 et pilote du TiM561, résolution angulaire réelle | 11.3, 16.1 |
 | Horloge commune container lidar / brain pour l'horodatage des balayages | 16.1, 16.2 |
-| Format UDP des échanges avec le calcul déporté | 17 |
+| Format UDP des échanges avec le calcul déporté, et contenu des observations (tags vus, pose sur la table, instant de l'image ; types provisoires de l'ADR 0011) | 4, 17 |
 | Liste exacte des « aires adverses à accès exclusif » (RG H.4) : le règlement 2027 ne la donne pas explicitement, à faire confirmer (FAQ). Le vol de pierres dans le château adverse (RJ E.1) suppose d'approcher ses remparts, que l'on interdit pour l'instant | 2.4, 5.1, 7.2 |
 | Début exact de la phase d'attaque : « entre la 85e seconde et la fin du match » (RJ E.4.b) peut se lire t ≥ 84 s (la 85e seconde commence à 84 s) ou t ≥ 85 s. `scoring.json` dit 85 s pour l'instant ; une action faite avant la phase n'est pas comptée. À faire confirmer (FAQ). `MatchClock` (3.1) lit le début dans `scoring.json` sans trancher | 7.2 |
 | Dates de la pré-coupe et de la CDR 2027 | 21.4 |
