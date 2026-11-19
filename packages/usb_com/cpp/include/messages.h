@@ -1,14 +1,17 @@
-#pragma pack(1)
-// dans nos structures, nous avons des variables plus petites que la taille
-// défaut du processeur (processeur 32 bits et variables 8 bits de type byte)
-// cela indique au compilateur de ne pas ajouter de padding entre les variables
-// (pack(1) indique que la taille de l'alignement est de 1 octet)
+#ifndef USB_COM_MESSAGES_H
+#define USB_COM_MESSAGES_H
 
+#if defined(ARDUINO)
 #include <Arduino.h>
+#else
+// compiled on a PC by the protocol tests
+#include <stdint.h>
+typedef uint8_t byte;
+#endif
 
-// ====== USB Communication Signature ======
-// This signature must be exactly the same on both sides (Raspberry Pi and Teensy) to ensure valid communication.
-const byte END_BYTES_SIGNATURE[4] = {0xBA, 0xDD, 0x1C, 0xC5};
+// No padding between the fields: the layout is the same on the Teensy, on a
+// PC and in messages.py. push/pop keeps this setting inside this file only.
+#pragma pack(push, 1)
 
 // ====== Message Types ======
 /* Definition of message IDs */
@@ -198,3 +201,7 @@ struct msg_unknown_msg_type
     byte command = UNKNOWN_MSG_TYPE;
     byte type_id; // ID of the unknown message
 };
+
+#pragma pack(pop)
+
+#endif  // USB_COM_MESSAGES_H
