@@ -95,7 +95,7 @@ async def test_a_straight_follows_a_trapezoid(clock: FakeClock, motion: FakeMoti
     await clock.advance(1.0)
     result = task.result()
     assert (result.move_id, result.state, result.v) == (1, MotionState.ARRIVED, 0.0)
-    assert_pose(result.pose, 1.5, 0.5, 0.0)
+    assert_pose(result.pose, START.x + 1.0, START.y, START.theta)
 
 
 async def test_a_short_straight_follows_a_triangle(clock: FakeClock, motion: FakeMotion) -> None:
