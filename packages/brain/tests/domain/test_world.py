@@ -1,9 +1,11 @@
 import math
 
 import pytest
+from hypothesis import given
+from hypothesis import strategies as st
 from shapely import box
 
-from dvb_brain.domain.geometry import Pose, Vec2
+from dvb_brain.domain.geometry import Pose, Vec2, angle_diff
 from dvb_brain.domain.remote_vision import MarkerObservation, RemoteObservations
 from dvb_brain.domain.world import (
     Construction,
@@ -106,10 +108,33 @@ def test_pose_at_is_none_for_an_empty_history() -> None:
 
 
 def test_history_forgets_samples_older_than_its_window() -> None:
-    history = history_with((1.0, Pose(0, 0, 0)), (2.0, Pose(1, 0, 0)), (3.5, Pose(2, 0, 0)))
+    history = history_with(
+        (1.0, Pose(0, 0, 0)), (2.0, Pose(1, 0, 0)), (3.5, Pose(2, 0, 0)), (4.5, Pose(3, 0, 0))
+    )
 
     assert history.pose_at(1.5) is None
     assert_pose(history.pose_at(2.0), Pose(1, 0, 0))
+
+
+def test_history_covers_its_whole_window() -> None:
+    history = history_with((1.0, Pose(0, 0, 0)), (3.5, Pose(2.5, 0, 0)))
+
+    assert_pose(history.pose_at(1.5), Pose(0.5, 0, 0))
+
+
+coords = st.floats(min_value=-10.0, max_value=10.0)
+headings = st.floats(min_value=-math.pi, max_value=math.pi)
+poses = st.builds(Pose, coords, coords, headings)
+
+
+@given(poses, poses, st.floats(min_value=0.0, max_value=1.0))
+def test_pose_at_stays_between_its_two_samples(p0: Pose, p1: Pose, r: float) -> None:
+    pose = history_with((1.0, p0), (2.0, p1)).pose_at(1.0 + r)
+
+    assert pose is not None
+    assert min(p0.x, p1.x) - 1e-9 <= pose.x <= max(p0.x, p1.x) + 1e-9
+    assert min(p0.y, p1.y) - 1e-9 <= pose.y <= max(p0.y, p1.y) + 1e-9
+    assert abs(angle_diff(pose.theta, p0.theta)) <= abs(angle_diff(p1.theta, p0.theta)) + 1e-9
 
 
 def test_a_sample_at_the_same_time_replaces_the_last_one() -> None:
@@ -165,9 +190,23 @@ def test_odometry_gives_the_pose_the_velocity_and_the_history() -> None:
 def test_odometry_history_lasts_the_configured_window() -> None:
     model = world()
     model.update_odometry(Pose(0, 0, 0), Velocity(0, 0), stamp=11.0)
-    model.update_odometry(Pose(1, 0, 0), Velocity(0, 0), stamp=13.5)
+    model.update_odometry(Pose(0.2, 0, 0), Velocity(0, 0), stamp=11.2)
+    model.update_odometry(Pose(2.5, 0, 0), Velocity(0, 0), stamp=13.5)
 
     assert model.pose_at(11.0) is None
+    assert model.pose_at(11.5) is not None
+
+
+def test_an_odometry_measurement_older_than_the_last_one_is_ignored() -> None:
+    model = world()
+    model.update_odometry(Pose(1, 1, 0), Velocity(0.2, 0), stamp=12.0)
+    model.update_odometry(Pose(0, 0, 0), Velocity(0, 0), stamp=11.9)
+
+    snapshot = model.snapshot(12.0)
+
+    assert snapshot.robot_pose == Observed(Pose(1, 1, 0), 12.0, Source.ODOMETRY)
+    assert snapshot.robot_velocity == Observed(Velocity(0.2, 0), 12.0, Source.ODOMETRY)
+    assert model.pose_at(12.0) == Pose(1, 1, 0)
 
 
 def test_opponents_are_the_tracks_of_the_last_scan() -> None:
@@ -242,6 +281,25 @@ def test_a_fresh_remote_view_newer_than_our_state_wins() -> None:
     assert snapshot.element("a") == Observed(GONE, 12.0, Source.REMOTE)
     assert snapshot.our_elements["a"].source is Source.CONFIG
     assert snapshot.carrying == frozenset()
+
+
+PLACED = ElementState(
+    present=False, taken=True, placed_at=Pose(1, 1, 0), carried_by_us=False, confidence=1.0
+)
+
+
+@pytest.mark.parametrize("ours", [CARRIED, PLACED])
+def test_a_remote_view_keeps_what_only_our_robot_knows(ours: ElementState) -> None:
+    model = world()
+    model.mark_element("a", ours, stamp=12.0, source=Source.STRATEGY)
+    model.mark_element("a", GONE, stamp=12.5, source=Source.REMOTE)
+
+    element = model.snapshot(13.0).element("a")
+
+    assert (element.stamp, element.source) == (12.5, Source.REMOTE)
+    assert element.value.confidence == GONE.confidence
+    assert element.value.carried_by_us == ours.carried_by_us
+    assert element.value.placed_at == ours.placed_at
 
 
 def test_a_remote_view_older_than_our_state_does_not_win() -> None:

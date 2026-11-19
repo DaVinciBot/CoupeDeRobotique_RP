@@ -8,12 +8,13 @@ Fusion rules (section 5.5):
 - the opponents come from the lidar only, which is what the avoidance trusts; the remote vision
   identifies the robots through Track.confirmed, set by the lidar process (section 8.3);
 - for the game elements, a fresh view of the remote vision, newer than our own state, wins over
-  it; once stale, our own state counts again.
+  it, except for what only our robot knows (carried by us, where we put it down); once stale,
+  our own state counts again.
 """
 
 import bisect
 from collections.abc import Iterable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import StrEnum, auto
 from types import MappingProxyType
 
@@ -94,7 +95,9 @@ class Construction:
 class WorldLifetimes:
     """How long a measurement serves to decide, in s (config/robot.json)."""
 
-    lidar_tracks: float  # beyond it, the lidar is mute (section 8.5)
+    # Beyond it, the tracks no longer serve to decide. The silence that stops the robot is read
+    # on reception, by the avoidance (section 8.5, ADR 0011).
+    lidar_tracks: float
     remote: float  # beyond it, the remote vision is silent
     element_seen: float  # beyond it, a view of the remote vision gives way to our own state
     odometry_history: float  # how far back pose_at goes
@@ -117,7 +120,8 @@ class PoseHistory:
             return
         self._stamps.append(stamp)
         self._poses.append(pose)
-        kept = bisect.bisect_left(self._stamps, stamp - self._window)
+        # Keep the last pose before the window too, so that pose_at covers all of it.
+        kept = max(bisect.bisect_left(self._stamps, stamp - self._window) - 1, 0)
         del self._stamps[:kept]
         del self._poses[:kept]
 
@@ -164,7 +168,13 @@ class WorldSnapshot:
             and seen.stamp > ours.stamp
             and seen.is_fresh(self.t, self.element_seen_ttl)
         ):
-            return seen
+            # The remote vision does not see inside our robot, nor who put an element down.
+            state = replace(
+                seen.value,
+                carried_by_us=ours.value.carried_by_us,
+                placed_at=ours.value.placed_at,
+            )
+            return Observed(state, seen.stamp, seen.source)
         return ours
 
 
@@ -194,6 +204,13 @@ class WorldModel:
         self._carrying: frozenset[str] = frozenset()
 
     def update_odometry(self, pose: Pose, velocity: Velocity, stamp: float) -> None:
+        """Record a status of the motor board; one older than the last is ignored.
+
+        Its stamp may come from the clock of the board, converted with an estimated offset that
+        can step back a little: that must not stop the match.
+        """
+        if self._robot_pose is not None and stamp < self._robot_pose.stamp:
+            return
         self._robot_pose = Observed(pose, stamp, Source.ODOMETRY)
         self._robot_velocity = Observed(velocity, stamp, Source.ODOMETRY)
         self._history.add(stamp, pose)
