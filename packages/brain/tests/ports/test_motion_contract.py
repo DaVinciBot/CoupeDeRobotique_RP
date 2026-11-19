@@ -15,7 +15,7 @@ import pytest_asyncio
 
 from dvb_brain.adapters.fake.clock import FakeClock
 from dvb_brain.adapters.fake.motion import FakeMotion
-from dvb_brain.domain.geometry import Pose
+from dvb_brain.domain.geometry import Pose, angle_diff
 from dvb_brain.domain.motion import MotionState, MotionStatus, MoveCommand, MoveKind, StopMode
 from dvb_brain.ports.motion import MotionPort
 
@@ -244,7 +244,10 @@ async def test_reset_pose_waits_for_a_still_robot(harness: MotionHarness) -> Non
     await harness.advance(0.1)
     assert reset.done()
     reset.result()
-    assert last(harness).pose == new_pose
+    # float32 on the wire, theta wrapped by the board (ADR 0003): equal within a tolerance
+    pose = last(harness).pose
+    assert (pose.x, pose.y) == pytest.approx((new_pose.x, new_pose.y), abs=1e-6)
+    assert angle_diff(pose.theta, new_pose.theta) == pytest.approx(0.0, abs=1e-6)
 
 
 async def test_reset_pose_is_refused_while_a_cancelled_move_brakes_unseen(
@@ -310,13 +313,23 @@ async def test_set_max_speed_never_starts_a_stopped_goto_again(harness: MotionHa
     assert not await returned(harness, harness.port.set_max_speed(0.2))
 
 
-async def test_set_max_speed_refuses_a_speed_the_board_would_read_as_its_limit(
-    harness: MotionHarness,
+async def test_set_max_speed_is_false_once_the_goto_has_ended(harness: MotionHarness) -> None:
+    task = asyncio.create_task(harness.port.move(goto_ahead(harness, 0.5)))
+    await harness.advance(3.0)
+    assert task.result().state is MotionState.ARRIVED
+
+    assert not await returned(harness, harness.port.set_max_speed(0.2))
+
+
+@pytest.mark.parametrize("max_speed", [0.0, -0.1, math.nan, math.inf])
+async def test_set_max_speed_refuses_a_speed_the_board_would_not_apply(
+    harness: MotionHarness, max_speed: float
 ) -> None:
+    # 0 or less: the board limit; not finite: the board ignores the MOVE (ADR 0003)
     task = asyncio.create_task(harness.port.move(goto_ahead(harness, 1.0)))
     await harness.advance(0.5)
 
     with pytest.raises(ValueError, match="max_speed"):
-        await harness.port.set_max_speed(0.0)
+        await harness.port.set_max_speed(max_speed)
     task.cancel()
     await harness.advance(0)

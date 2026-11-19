@@ -354,6 +354,57 @@ async def test_a_new_speed_during_the_final_turn_of_a_goto_changes_nothing(
     assert_pose(task.result().pose, 0.5, 1.0, math.pi)
 
 
+async def test_a_new_speed_keeps_the_contact_ahead(clock: FakeClock, motion: FakeMotion) -> None:
+    motion.block_after(0.3)
+    goto = MoveCommand(MoveKind.GOTO, x=START.x + 1.0, y=START.y, max_speed=0.5, max_accel=0.5)
+    task = asyncio.create_task(motion.move(goto))
+    await clock.advance(0.5)  # 0.0625 m covered
+
+    assert await motion.set_max_speed(0.25)
+    await clock.advance(3.0)
+
+    assert task.result().state is MotionState.BLOCKED
+    assert_pose(task.result().pose, START.x + 0.3, START.y, START.theta)
+
+
+async def test_a_higher_speed_shortens_the_goto(clock: FakeClock, motion: FakeMotion) -> None:
+    # 0.25 m/s over 1 m would take 4.5 s. From 0.5 s on: 0.5 s up to 0.5 m/s, 1 s at 0.5 m/s,
+    # 1 s down, so it ends at 3 s.
+    goto = MoveCommand(MoveKind.GOTO, x=START.x + 1.0, y=START.y, max_speed=0.25, max_accel=0.5)
+    task = asyncio.create_task(motion.move(goto))
+    await clock.advance(0.5)  # at 0.25 m/s after 0.0625 m
+
+    assert await motion.set_max_speed(0.5)
+    await clock.advance(1.0)
+    assert last(motion).v == pytest.approx(0.5)
+
+    await clock.advance(1.4)
+    assert not task.done()
+    await clock.advance(0.15)
+    assert task.result().state is MotionState.ARRIVED
+    assert_pose(task.result().pose, START.x + 1.0, START.y, START.theta)
+
+
+@pytest.mark.parametrize(
+    "cmd",
+    [
+        MoveCommand(MoveKind.PUSH_UNTIL_BLOCKED, distance=0.0, max_speed=0.2),
+        MoveCommand(MoveKind.STRAIGHT, distance=math.nan),
+        MoveCommand(MoveKind.GOTO, x=math.inf, y=0.5),
+    ],
+)
+async def test_the_board_ignores_an_invalid_move(
+    clock: FakeClock, motion: FakeMotion, cmd: MoveCommand
+) -> None:
+    # Like the Teensy (ADR 0003): move_id does not change and move() waits
+    task = asyncio.create_task(motion.move(cmd))
+    await clock.advance(1.0)
+
+    assert not task.done()
+    assert (last(motion).move_id, last(motion).pose) == (0, START)
+    task.cancel()
+
+
 async def test_keeps_the_heartbeats_and_the_stops_sent(
     clock: FakeClock, motion: FakeMotion
 ) -> None:

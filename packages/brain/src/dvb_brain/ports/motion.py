@@ -46,11 +46,16 @@ class MotionPort(Protocol):
         """Change the max speed of the running GOTO, which goes on without stopping (ADR 0003).
 
         The port sends the GOTO again, same target and same move_id, with this max_speed: the
-        board slows down (or speeds up) along the straight line. Only a GOTO: STRAIGHT and
-        ROTATE_BY are relative, and sent again they would start over from the measured pose.
+        board slows down (or speeds up) along the straight line. During a turn of the GOTO, or
+        with the target more than 10 degrees off, the board brakes to a stop, then goes on. Each
+        MOVE resets the block detection of the board: call it when the speed changes, not at
+        every lidar scan. Only a GOTO: STRAIGHT and ROTATE_BY are relative, and sent again they
+        would start over from the measured pose.
         Return False and send nothing when no GOTO runs, once stop() has been called during it,
-        or after stop(URGENT): a stopped move never starts again. Never waits for the board, and
-        raises only ValueError when max_speed <= 0, which the board would read as its own limit.
+        or after stop(URGENT): a stopped move never starts again. The check and the send are not
+        separated by an await, so a resend never follows a stop(). Never waits for the board, and
+        raises only ValueError when max_speed is not finite or <= 0, which the board would
+        ignore or read as its own limit.
         """
         ...
 
@@ -67,8 +72,9 @@ class MotionPort(Protocol):
 
         Raise RuntimeError while a move runs, while the robot still brakes after a cancelled
         move, even before a status shows it (the caller waits for a new status that is not
-        MOVING), or after stop(URGENT). Return once a status shows the new pose; the caller
-        bounds its wait on the Clock.
+        MOVING), or after stop(URGENT). Return once a status shows the new pose, within the
+        precision of the wire (float32, theta wrapped by the board: ADR 0003); the caller bounds
+        its wait on the Clock.
         """
         ...
 

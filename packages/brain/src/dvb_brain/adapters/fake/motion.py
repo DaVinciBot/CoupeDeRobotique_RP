@@ -129,6 +129,13 @@ class _Run:
         return _Kinematics(pose, 0.0, 0.0, self.end_state)
 
 
+def _valid(cmd: MoveCommand) -> bool:
+    """What the board accepts (ADR 0003): finite values, and a push that goes somewhere."""
+    values = (cmd.x, cmd.y, cmd.theta, cmd.distance, cmd.max_speed, cmd.max_accel)
+    no_push = cmd.kind is not MoveKind.PUSH_UNTIL_BLOCKED or cmd.distance != 0.0
+    return all(math.isfinite(value) for value in values) and no_push
+
+
 class FakeMotion:
     def __init__(
         self,
@@ -202,8 +209,8 @@ class FakeMotion:
         self._send_stop(mode)
 
     async def set_max_speed(self, max_speed: float) -> bool:
-        if max_speed <= 0.0:
-            raise ValueError(f"max_speed must be > 0, got {max_speed}: 0 is the board limit")
+        if not (math.isfinite(max_speed) and max_speed > 0.0):
+            raise ValueError(f"max_speed must be finite and > 0, got {max_speed}")
         if self._urgent or self._goto is None:
             return False
         move_id, goto = self._goto
@@ -324,7 +331,7 @@ class FakeMotion:
         return speed, accel
 
     def _start(self, move_id: int, cmd: MoveCommand) -> None:
-        if self._emergency_stop:  # the board ignores the MOVE: move_id does not change
+        if self._emergency_stop or not _valid(cmd):  # ignored: move_id does not change
             return
         now, pose = self._clock.now(), self._update().pose
         # Still braking after a cancelled move: the new one starts once the robot is still.
