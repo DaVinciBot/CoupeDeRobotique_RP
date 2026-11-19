@@ -426,7 +426,9 @@ class FakeMotion:
             return
         rotation = kinematics.omega != 0.0
         speed = kinematics.omega if rotation else kinematics.v
-        if speed == 0.0 or self._run.push:  # between two segments, or a push: cut the motors
+        # A push is the last segment; before it starts, the robot brakes from the previous move.
+        pushing = self._run.push and self._clock.now() >= self._run.segments[-1].start_time
+        if speed == 0.0 or pushing:  # between two segments, or a push: cut the motors
             self._halt()
             return
         decel = self._max_angular_accel if rotation else self._max_accel

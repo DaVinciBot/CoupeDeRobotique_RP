@@ -270,6 +270,23 @@ async def test_a_smooth_stop_cuts_a_push_at_once(clock: FakeClock, motion: FakeM
     assert task.result().pose.x == pytest.approx(at_stop.pose.x)
 
 
+async def test_a_smooth_stop_before_a_queued_push_still_brakes(
+    clock: FakeClock, motion: FakeMotion
+) -> None:
+    move = asyncio.create_task(motion.move(straight(1.0)))
+    await clock.advance(1.0)  # 0.5 m/s after 0.25 m
+    move.cancel()
+    await clock.advance(0)
+    pushing = asyncio.create_task(motion.move(push(0.5)))  # waits for the robot to be still
+    await clock.advance(0.1)
+
+    await motion.stop(StopMode.SMOOTH)  # the push has not started: the robot keeps braking
+    await clock.advance(1.0)
+
+    assert pushing.result().state is MotionState.STOPPED
+    assert pushing.result().pose.x == pytest.approx(START.x + 0.375)  # 0.125 m of braking
+
+
 async def test_a_block_stops_the_next_translation_only(
     clock: FakeClock, motion: FakeMotion
 ) -> None:
