@@ -390,6 +390,30 @@ void test_new_goto_slows_down_without_stopping() {
     TEST_ASSERT_DOUBLE_WITHIN(0.005, 1.5, bench.pose().x);
 }
 
+void test_arrived_once_the_heading_correction_is_over() {
+    // a GOTO resent near the end, 9.5° off: the heading correction lasts
+    // longer than the end of the straight line
+    Bench bench;
+    TEST_ASSERT_TRUE(bench.controller.set_param(Param::MAX_ACCEL, 0.5));
+    bench.controller.move(goto_command(1, 3.0, 0.0));
+    bench.run_for(2.5);
+    Pose start = bench.pose();
+    double gap = 9.5 * DEG;
+    bench.controller.move(goto_command(2, start.x + 0.045 * cos(gap),
+                                       start.y + 0.045 * sin(gap)));
+    TEST_ASSERT_TRUE(bench.run_until_done(5.0));
+    TEST_ASSERT_EQUAL(MotionState::ARRIVED, bench.state());
+
+    // still: the brain may reset the pose, and nothing turns any more; one
+    // encoder count per period is 0.03 rad/s
+    TEST_ASSERT_DOUBLE_WITHIN(0.1, 0.0, bench.controller.status().omega);
+    // what is left is within the angle tolerance, as after a rotation
+    double theta = bench.pose().theta;
+    bench.run_for(1.0);
+    TEST_ASSERT_TRUE(angle_gap(bench.pose().theta, theta) <
+                     sim::params().angle_tolerance);
+}
+
 void test_new_move_in_other_direction_brakes_first() {
     Bench bench;
     bench.controller.move(simple_command(1, MoveKind::STRAIGHT, 0.0, 1.0));
@@ -633,6 +657,7 @@ int main() {
     RUN_TEST(test_straight_backwards);
     RUN_TEST(test_max_speed_of_the_command);
     RUN_TEST(test_new_goto_slows_down_without_stopping);
+    RUN_TEST(test_arrived_once_the_heading_correction_is_over);
     RUN_TEST(test_new_move_in_other_direction_brakes_first);
     RUN_TEST(test_blocked_wheel);
     RUN_TEST(test_reset_pose);

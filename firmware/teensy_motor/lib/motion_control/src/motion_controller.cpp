@@ -677,7 +677,8 @@ void MotionController::update_move() {
             break;
 
         case Step::FORWARD:
-            if (forward_done) {
+            // a heading gap of a continued GOTO may still be corrected
+            if (forward_done && rotation_done) {
                 if (this->current.kind == MoveKind::GOTO &&
                     (this->current.flags & move_flags::HAS_HEADING)) {
                     this->start_rotation(normalize_angle(
