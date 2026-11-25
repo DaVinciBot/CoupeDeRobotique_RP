@@ -69,6 +69,11 @@ bool MotionController::set_param(Param param, double value) {
             }
             break;
         case Param::BLOCK_VOLTAGE:
+            // the command never goes above u_max: the block must be seen
+            if (value <= 0.0 || value >= this->config.u_max) {
+                return false;
+            }
+            break;
         case Param::PUSH_VOLTAGE:
             if (value <= 0.0 || value > this->config.u_max) {
                 return false;

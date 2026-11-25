@@ -119,6 +119,15 @@ void test_invalid_settings_are_ignored() {
     TEST_ASSERT_EQUAL_DOUBLE(0.3, controller.params().max_speed);
 }
 
+void test_block_voltage_below_the_voltage_limit() {
+    // the command never goes above u_max: a threshold there would never be
+    // crossed and a blocked wheel would stay powered
+    MotionController controller(sim::config(), sim::TS);
+    TEST_ASSERT_FALSE(controller.set_param(Param::BLOCK_VOLTAGE, 12.0));
+    TEST_ASSERT_TRUE(controller.set_param(Param::BLOCK_VOLTAGE, 11.9));
+    TEST_ASSERT_TRUE(controller.set_param(Param::PUSH_VOLTAGE, 12.0));
+}
+
 void test_unknown_settings_are_refused() {
     // a wrong id must never count as a received setting
     MotionController controller(sim::config(), sim::TS);
@@ -571,6 +580,7 @@ int main() {
     UNITY_BEGIN();
     RUN_TEST(test_inert_until_configured);
     RUN_TEST(test_invalid_settings_are_ignored);
+    RUN_TEST(test_block_voltage_below_the_voltage_limit);
     RUN_TEST(test_unknown_settings_are_refused);
     RUN_TEST(test_loop_period_refused_while_moving);
     RUN_TEST(test_no_move_without_heartbeat);
