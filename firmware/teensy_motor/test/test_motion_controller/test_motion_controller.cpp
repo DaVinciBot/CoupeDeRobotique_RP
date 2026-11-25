@@ -430,6 +430,40 @@ void test_replaced_move_brakes_at_the_configured_accel() {
     TEST_ASSERT_DOUBLE_WITHIN(0.03, braking, furthest - x_start);
 }
 
+void test_heading_correction_reversed_without_jump() {
+    // a GOTO continued with a heading gap, then resent with a gap on the
+    // other side while the correction turns
+    Bench bench;
+    TEST_ASSERT_TRUE(bench.controller.set_param(Param::MAX_SPEED, 0.4));
+    TEST_ASSERT_TRUE(bench.controller.set_param(Param::MAX_ACCEL, 0.5));
+    bench.controller.move(goto_command(1, 3.0, 0.0));
+    bench.run_for(2.5);
+    Pose start = bench.pose();
+    bench.controller.move(goto_command(2, start.x + 1.0, start.y + 0.15));
+
+    double worst = 0.0;
+    double previous = bench.controller.angle_setpoint();
+    double w_previous = 0.0;
+    for (int i = 0; i < 2000 && bench.state() == MotionState::MOVING; i++) {
+        if (i == 60) {
+            TEST_ASSERT_TRUE(bench.controller.move(
+                goto_command(3, start.x + 1.0, start.y - 0.02)));
+        }
+        bench.step();
+        double w = (bench.controller.angle_setpoint() - previous) / sim::TS;
+        previous = bench.controller.angle_setpoint();
+        if (i > 0) {
+            worst = fmax(worst, fabs(w - w_previous));
+        }
+        w_previous = w;
+    }
+    TEST_ASSERT_EQUAL(MotionState::ARRIVED, bench.state());
+    TEST_ASSERT_EQUAL(3, bench.controller.status().move_id);
+    // the planned angular speed changes at MAX_ANGULAR_ACCEL at most
+    double step = sim::params().max_angular_accel * sim::TS;
+    TEST_ASSERT_TRUE(worst <= 2.0 * step);
+}
+
 void test_arrived_once_the_heading_correction_is_over() {
     // a GOTO resent near the end, 9.5° off: the heading correction lasts
     // longer than the end of the straight line
@@ -698,6 +732,7 @@ int main() {
     RUN_TEST(test_max_speed_of_the_command);
     RUN_TEST(test_new_goto_slows_down_without_stopping);
     RUN_TEST(test_replaced_move_brakes_at_the_configured_accel);
+    RUN_TEST(test_heading_correction_reversed_without_jump);
     RUN_TEST(test_arrived_once_the_heading_correction_is_over);
     RUN_TEST(test_new_move_in_other_direction_brakes_first);
     RUN_TEST(test_blocked_wheel);

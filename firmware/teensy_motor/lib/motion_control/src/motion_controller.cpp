@@ -295,6 +295,7 @@ void MotionController::stop(StopMode mode) {
 void MotionController::brake() {
     // at the configured accelerations, not those of the move: the safety
     // zone of the brain assumes them (ADR 0003)
+    this->heading_pending = false;
     this->delta_profile.set_limits(this->p.max_speed, this->p.max_accel);
     this->psi_profile.set_limits(this->p.max_angular_speed,
                                  this->p.max_angular_accel);
@@ -469,6 +470,7 @@ void MotionController::go_idle() {
     this->mode = Mode::IDLE;
     this->move_step = Step::NONE;
     this->pending = false;
+    this->heading_pending = false;
     this->left_pid.reset();
     this->right_pid.reset();
     this->distance_pid.reset();
@@ -493,6 +495,7 @@ void MotionController::enter_position_mode() {
 void MotionController::begin(const MoveCommand& command) {
     this->current = command;
     this->pending = false;
+    this->heading_pending = false;
     this->delta_profile.set_limits(this->move_speed, this->move_accel);
     this->psi_profile.set_limits(this->p.max_angular_speed,
                                  this->p.max_angular_accel);
@@ -558,12 +561,19 @@ bool MotionController::continue_move(const MoveCommand& command) {
                                   this->delta_profile.speed);
         // small heading gap: corrected while driving
         if (heading_error != 0.0) {
-            double d_psi =
-                this->psi_mes + heading_error - this->psi_profile.position;
-            double w0 = this->psi_profile.can_reach(d_psi)
-                            ? this->psi_profile.speed
-                            : 0.0;
-            this->psi_profile.start(this->psi_profile.position, d_psi, w0);
+            double target = this->psi_mes + heading_error;
+            double d_psi = target - this->psi_profile.position;
+            if (this->psi_profile.can_reach(d_psi)) {
+                this->heading_pending = false;
+                this->psi_profile.start(this->psi_profile.position, d_psi,
+                                        this->psi_profile.speed);
+            } else {
+                // turning the other way, or too late to stop there: the
+                // rotation stops first, without a jump in its speed
+                this->heading_pending = true;
+                this->heading_target = target;
+                this->psi_profile.stop();
+            }
         }
         return true;
     }
@@ -679,6 +689,16 @@ void MotionController::update_move() {
             break;
 
         case Step::FORWARD:
+            // heading gap of a continued GOTO, once the rotation has stopped
+            if (this->heading_pending) {
+                if (this->psi_profile.finished()) {
+                    this->heading_pending = false;
+                    this->psi_profile.start(
+                        this->psi_profile.position,
+                        this->heading_target - this->psi_profile.position);
+                }
+                break;
+            }
             // a heading gap of a continued GOTO may still be corrected
             if (forward_done && rotation_done) {
                 if (this->current.kind == MoveKind::GOTO &&

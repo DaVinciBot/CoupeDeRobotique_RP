@@ -282,6 +282,9 @@ class MotionController {
     MoveCommand current;   // move being done, or waiting for the end of BRAKE
     bool pending = false;  // after BRAKE: start current (true) or stop (false)
     double move_speed = 0.0, move_accel = 0.0;  // limits of the current move
+    // heading to turn to once the rotation has stopped (continued GOTO)
+    bool heading_pending = false;
+    double heading_target = 0.0;  // rad, on the travelled angle
     uint16_t move_id = 0;
     MotionState state = MotionState::STOPPED;
     double v_left_target = 0.0, v_right_target = 0.0;
