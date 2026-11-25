@@ -8,6 +8,8 @@ from dvb_usb_com.framing import decode_frame, encode_frame
 from dvb_usb_com.messages import (
     MESSAGES,
     ControlParam,
+    Cup,
+    Door,
     Heartbeat,
     Message,
     MessageError,
@@ -18,6 +20,7 @@ from dvb_usb_com.messages import (
     MoveFlags,
     MoveKind,
     Nack,
+    Pickup,
     Print,
     ResetPose,
     SetControlParams,
@@ -26,10 +29,12 @@ from dvb_usb_com.messages import (
     StepperStep,
     Stop,
     StopMode,
+    Tower,
     TraceEnd,
     TraceKind,
     TraceLoop,
     TraceSample,
+    Wall,
     decode_message,
 )
 
@@ -106,6 +111,11 @@ def test_sizes_of_the_adr() -> None:
         TraceSample(5, 0.5, 0.25, 3.0, -3.0, 14.5),
         TraceEnd(400, MotionState.ARRIVED, 0.0078125, 40, 400),
         StepperStep(-200, True, 800, 1, 2, 3),
+        Door(),
+        Pickup(),
+        Cup(),
+        Wall(),
+        Tower(),
     ],
 )
 def test_pack_unpack_round_trip(message: Message) -> None:

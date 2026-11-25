@@ -34,6 +34,12 @@ typedef uint8_t byte;
 #define ATTACH_SWITCH 6
 #define SET_SERVO_ANGLE 7
 #define SET_STEPPER_DRIVER_ACTIVATION_STATE 8
+// Provisional: content to be defined with the actuator board contract (TODO 12.2)
+#define DOOR 11
+#define PICKUP 12
+#define CUP 13
+#define WALL 14
+#define TOWER 15
 
 // Common (rolling base + actuators)
 #define HEARTBEAT 125
@@ -160,6 +166,33 @@ struct msg_attach_switch
 {
     byte command = ATTACH_SWITCH;
     byte pin; // pin to which the servo is connected
+};
+
+// Provisional: only the id for now, the fields come with the actuator board
+// contract (TODO 12.2)
+struct msg_door
+{
+    byte command = DOOR;
+};
+
+struct msg_pickup
+{
+    byte command = PICKUP;
+};
+
+struct msg_cup
+{
+    byte command = CUP;
+};
+
+struct msg_wall
+{
+    byte command = WALL;
+};
+
+struct msg_tower
+{
+    byte command = TOWER;
 };
 
 // Common (rolling base + actuators)

@@ -41,6 +41,12 @@ class Messages(Enum):
     ATTACH_SWITCH = 6
     SET_SERVO_ANGLE = 7
     SET_STEPPER_DRIVER_ACTIVATION_STATE = 8
+    # Provisional (TODO 12.2)
+    DOOR = 11
+    PICKUP = 12
+    CUP = 13
+    WALL = 14
+    TOWER = 15
 
     # Common (Rolling Basis + Actuators)
     HEARTBEAT = 125
@@ -281,6 +287,39 @@ class SetStepperDriverActivationState(Message):
     enable_driver_state: bool  # active low: True disables the driver
 
 
+# Provisional: only the id for now, the fields come with the actuator board contract (TODO 12.2)
+
+
+@dataclass(frozen=True, slots=True)
+class Door(Message):
+    ID = 11
+    FORMAT = ""
+
+
+@dataclass(frozen=True, slots=True)
+class Pickup(Message):
+    ID = 12
+    FORMAT = ""
+
+
+@dataclass(frozen=True, slots=True)
+class Cup(Message):
+    ID = 13
+    FORMAT = ""
+
+
+@dataclass(frozen=True, slots=True)
+class Wall(Message):
+    ID = 14
+    FORMAT = ""
+
+
+@dataclass(frozen=True, slots=True)
+class Tower(Message):
+    ID = 15
+    FORMAT = ""
+
+
 @dataclass(frozen=True, slots=True)
 class Stop(Message):
     ID = 9
@@ -401,6 +440,11 @@ MESSAGES: dict[int, type[Message]] = {
         AttachSwitch,
         SetServoAngle,
         SetStepperDriverActivationState,
+        Door,
+        Pickup,
+        Cup,
+        Wall,
+        Tower,
         Stop,
         StartTrace,
         Heartbeat,
