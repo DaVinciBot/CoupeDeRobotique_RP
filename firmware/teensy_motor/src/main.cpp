@@ -105,7 +105,7 @@ void control_loop() {
 
     // fixed rate, whatever loop() is doing (architecture 2 and 6.1)
     periods_since_status++;
-    if (periods_since_status * controller.period() >= STATUS_PERIOD - 1e-9) {
+    if (periods_since_status >= periods_in(STATUS_PERIOD, controller.period())) {
         periods_since_status = 0;
         Status status = controller.status();
         status_msg.move_id = status.move_id;

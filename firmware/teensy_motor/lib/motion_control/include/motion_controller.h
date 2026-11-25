@@ -25,6 +25,14 @@ constexpr double kPi = 3.14159265358979323846;
  */
 double normalize_angle(double theta);
 
+/**
+ * @brief Number of loop periods needed to cover a duration (s)
+ *
+ * The period comes from the brain as a float (0.005 is 0.00499999989): a
+ * thousandth of a period is ignored, so that 50 ms are 10 periods of 5 ms.
+ */
+uint32_t periods_in(double duration, double ts);
+
 enum class MoveKind : uint8_t {
     ROTATE_BY = 0,
     ROTATE_TO = 1,

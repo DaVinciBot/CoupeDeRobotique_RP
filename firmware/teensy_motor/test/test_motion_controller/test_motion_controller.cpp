@@ -137,6 +137,41 @@ void test_unknown_settings_are_refused() {
     TEST_ASSERT_FALSE(controller.configured());
 }
 
+void test_periods_of_a_float_loop_period() {
+    // LOOP_PERIOD comes as a float: 0.005 is 0.00499999989
+    TEST_ASSERT_EQUAL_UINT32(10, periods_in(0.05, (float)0.005));
+    TEST_ASSERT_EQUAL_UINT32(5, periods_in(0.05, (float)0.01));
+    TEST_ASSERT_EQUAL_UINT32(50, periods_in(0.05, (float)0.001));
+    TEST_ASSERT_EQUAL_UINT32(3, periods_in(0.05, (float)0.02));  // 60 ms
+    TEST_ASSERT_EQUAL_UINT32(10000, periods_in(10.0, (float)0.001));
+    TEST_ASSERT_EQUAL_UINT32(201, periods_in(1.003, 0.005));
+    TEST_ASSERT_EQUAL_UINT32(0, periods_in(0.0, 0.005));
+}
+
+void test_trace_with_a_float_loop_period() {
+    Bench bench;
+    TEST_ASSERT_TRUE(
+        bench.controller.set_param(Param::LOOP_PERIOD, (float)sim::TS));
+    TraceCommand trace;
+    trace.initial = 3.0;
+    trace.final_value = 5.0;
+    trace.step_time = 1.0;
+    trace.duration = 2.0;
+    TEST_ASSERT_TRUE(bench.controller.start_trace(trace));
+    int samples = 0;
+    TraceSample sample;
+    while (bench.state() == MotionState::MOVING && samples < 1000) {
+        bench.step();
+        if (bench.controller.trace_sample(sample)) {
+            samples++;
+            // the step comes exactly at step_time
+            TEST_ASSERT_EQUAL_DOUBLE(sample.time_ms < 1000 ? 3.0 : 5.0,
+                                     sample.setpoint);
+        }
+    }
+    TEST_ASSERT_EQUAL(400, samples);
+}
+
 void test_loop_period_refused_while_moving() {
     Bench bench;
     TEST_ASSERT_TRUE(bench.controller.move(goto_command(1, 0.5, 0.0)));
@@ -582,6 +617,8 @@ int main() {
     RUN_TEST(test_invalid_settings_are_ignored);
     RUN_TEST(test_block_voltage_below_the_voltage_limit);
     RUN_TEST(test_unknown_settings_are_refused);
+    RUN_TEST(test_periods_of_a_float_loop_period);
+    RUN_TEST(test_trace_with_a_float_loop_period);
     RUN_TEST(test_loop_period_refused_while_moving);
     RUN_TEST(test_no_move_without_heartbeat);
     RUN_TEST(test_heartbeat_lost_brakes_and_stops);

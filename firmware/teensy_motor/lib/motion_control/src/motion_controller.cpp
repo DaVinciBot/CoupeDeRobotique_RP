@@ -23,6 +23,10 @@ double normalize_angle(double theta) {
     return theta - kPi;
 }
 
+uint32_t periods_in(double duration, double ts) {
+    return (uint32_t)fmax(ceil(duration / ts - 1e-3), 0.0);
+}
+
 namespace {
 
 uint32_t bit(Param param) {
@@ -736,8 +740,10 @@ void MotionController::run_push() {
 
 void MotionController::run_trace() {
     double t = this->trace_periods * this->ts;
-    double value = t >= this->trace.step_time ? this->trace.final_value
-                                              : this->trace.initial;
+    double value =
+        this->trace_periods >= periods_in(this->trace.step_time, this->ts)
+            ? this->trace.final_value
+            : this->trace.initial;
     bool left = this->trace.loop == TraceLoop::LEFT_SPEED;
     double measurement = 0.0;
 
@@ -783,8 +789,7 @@ void MotionController::run_trace() {
     this->trace_count++;
 
     this->trace_periods++;
-    // small margin: the duration is rarely a whole number of periods
-    if (this->trace_periods * this->ts >= this->trace.duration - 1e-9) {
+    if (this->trace_periods >= periods_in(this->trace.duration, this->ts)) {
         this->end_trace(MotionState::ARRIVED);
     }
 }
@@ -860,7 +865,7 @@ bool MotionController::check_blocked() {
         return false;
     }
     this->blocked_count++;
-    return this->blocked_count >= (uint32_t)ceil(this->p.block_time / this->ts);
+    return this->blocked_count >= periods_in(this->p.block_time, this->ts);
 }
 
 // Read back
