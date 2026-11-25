@@ -6,87 +6,104 @@
 #include <messages.h>
 
 /**
- * @brief Serial link with the Raspberry Pi
+ * @brief Structure to store the last sent message.
  *
- * Frames are cut by COBS and checked by a CRC-16 (codec.h). A damaged frame
- * is dropped and answered with a NACK; a NACK received triggers the
- * retransmission of the last message sent.
+ * This structure keeps track of the size and content of the last message
+ * sent by the communication system. It is used to handle retransmissions
+ * in case of a NACK (Negative Acknowledgment).
+ */
+struct last_message
+{
+    byte size; ///< Size of the message in bytes
+    byte msg[256]; ///< Content of the message
+};
+
+/**
+ * @brief Communication (Com) class for serial communication.
+ *
+ * This class facilitates communication over a serial interface. It provides methods for
+ * handling incoming messages, managing callbacks, and sending messages. The class also
+ * implements message buffering, COBS framing with a CRC-16 (codec.h), and retransmission handling.
  */
 class Com {
-   private:
-    Stream* stream;  ///< USB or hardware serial
+private:
+    byte* buffer = new byte[usb_com::MAX_FRAME_SIZE]; ///< Internal buffer for storing received data
+    uint16_t pointer = 0; ///< Pointer for tracking the buffer position (16 bits: a frame can exceed 255 bytes)
+    Stream* stream; ///< Pointer to the serial stream (USB or Hardware)
 
-    uint8_t rx[usb_com::MAX_FRAME_SIZE];  ///< frame being received
-    uint16_t rx_size = 0;
-    bool rx_overflow = false;  ///< frame too long: dropped up to the next 0x00
-
-    uint8_t msg[usb_com::MAX_MSG_SIZE];  ///< last message received
-
-    uint8_t last_msg[usb_com::MAX_MSG_SIZE];  ///< last message sent
-    uint8_t last_msg_size = 0;
-
-    void write_frame(const uint8_t* data, uint8_t size);
-
-   public:
+public:
     /**
-     * @brief Constructor for USB serial communication
+     * @brief Constructor for USB serial communication.
      *
-     * @param stream Pointer to the USB serial class
-     * @param baudrate Baud rate (ignored by the Teensy USB serial)
+     * Initializes the communication stream for USB serial and sets the baud rate.
+     *
+     * @param stream Pointer to the USB serial class.
+     * @param baudrate Baud rate for serial communication.
      */
-    Com(usb_serial_class* stream, uint32_t baudrate);
+    Com(usb_serial_class *stream, uint32_t baudrate);
 
     /**
-     * @brief Constructor for hardware serial communication
+     * @brief Constructor for hardware serial communication.
      *
-     * @param stream Pointer to the hardware serial class
-     * @param baudrate Baud rate for serial communication
+     * Initializes the communication stream for hardware serial and sets the baud rate.
+     *
+     * @param stream Pointer to the hardware serial class.
+     * @param baudrate Baud rate for serial communication.
      */
-    Com(HardwareSerial* stream, uint32_t baudrate);
+    Com(HardwareSerial *stream, uint32_t baudrate);
 
     /**
-     * @brief Reads the bytes available on the stream
+     * @brief Handles incoming data from the communication stream.
      *
-     * Stops at the first complete and valid message.
+     * Processes data received from the serial stream up to the 0x00 that ends a frame,
+     * validates it (COBS, size and CRC-16), and answers a damaged frame with a NACK.
      *
-     * @return Size of the message (available with read_buffer()), 0 if no
-     * complete message was received
+     * @return The size of the valid message, or 0 if no valid message is found.
      */
     byte handle();
 
     /**
-     * @brief Reads the stream and calls the callback of each message received
+     * @brief Handles callbacks for received messages.
      *
-     * The callback receives the message (id included) and its size, which it
-     * must check before reading the fields. A message without callback is
-     * answered with UNKNOWN_MSG_TYPE.
+     * Retrieves the message ID from the received message and calls the corresponding
+     * callback function from the provided array of function pointers.
      *
-     * @param functions Array of callback functions indexed by message ID
+     * @param functions Array of callback functions indexed by message ID.
      */
-    void handle_callback(void (*functions[256])(byte* msg, byte size));
+    void handle_callback(void (*functions[256])(byte *msg, byte size));
 
     /**
-     * @brief Last message received by handle()
+     * @brief Provides access to the internal buffer.
+     *
+     * @return Pointer to the internal buffer containing the received data.
      */
-    byte* read_buffer();
+    byte * read_buffer();
 
     /**
-     * @brief Sends a message (id included)
+     * @brief Sends a message over the communication stream.
      *
-     * @param msg Message to send
-     * @param size Message size, 1 to 255
-     * @param is_nack True for a retransmission: the message is not saved again
+     * Builds the frame of the message (codec.h) and transmits it. The message is kept for
+     * retransmission, except a NACK or a retransmission.
+     *
+     * @param msg Pointer to the message data to send.
+     * @param size Size of the message data.
+     * @param is_nack Indicates if the message is a retransmission due to a NACK (default: false).
      */
-    void send_msg(byte* msg, byte size, bool is_nack = false);
+    void send_msg(byte *msg, byte size, bool is_nack = false);
 
     /**
-     * @brief Sends a debug text in a PRINT message, if print_enabled is true
+     * @brief Sends a debug text message.
      *
-     * @param text Null-terminated ASCII text, cut at 254 characters
+     * This function sends a text message for debugging purposes. The message must
+     * be in ASCII format and cannot exceed 253 characters.
+     *
+     * @param text Pointer to the null-terminated ASCII text string to send.
      */
-    void print(const char* text);
+    void print(char* text);
 
-    bool print_enabled = false;  ///< PRINT is for debug only (TODO 13.4)
+    bool print_enabled = true; ///< False to turn the debug messages off (TODO 13.4)
+
+    last_message* last_msg = new last_message(); ///< Pointer to the last sent message for retransmission
 };
 
 #endif  // USB_COM_COM_H

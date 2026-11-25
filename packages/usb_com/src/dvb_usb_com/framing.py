@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 MAX_MSG_SIZE = 255
 MAX_RAW_SIZE = MAX_MSG_SIZE + 3
 MAX_FRAME_SIZE = MAX_RAW_SIZE + (MAX_RAW_SIZE + 253) // 254 + 1
+DELIMITER = b"\x00"
 
 
 class FrameError(ValueError):
@@ -66,10 +67,10 @@ def encode_frame(msg: bytes) -> bytes:
         raise ValueError(f"message size must be 1 to {MAX_MSG_SIZE}, got {len(msg)}")
     raw = msg + bytes([len(msg)])
     raw += crc16(raw).to_bytes(2, "little")
-    return cobs_encode(raw) + b"\x00"
+    return cobs_encode(raw) + DELIMITER
 
 
-def decode_frame(frame: bytes) -> bytes:
+def decode_frame(frame: bytes, *, check_crc: bool = True) -> bytes:
     """Message of a frame given without its 0x00 delimiter."""
     raw = cobs_decode(frame)
     if len(raw) < 4:
@@ -77,7 +78,7 @@ def decode_frame(frame: bytes) -> bytes:
     msg, size, crc = raw[:-3], raw[-3], int.from_bytes(raw[-2:], "little")
     if size != len(msg):
         raise FrameError(f"length field {size} does not match message size {len(msg)}")
-    if crc != crc16(raw[:-2]):
+    if check_crc and crc != crc16(raw[:-2]):
         raise FrameError("CRC mismatch")
     return msg
 

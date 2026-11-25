@@ -7,7 +7,7 @@ checks that each structure has the same ID and size as its class here.
 
 import struct
 from dataclasses import dataclass, fields
-from enum import IntEnum, IntFlag
+from enum import Enum, IntEnum, IntFlag
 from typing import TYPE_CHECKING, ClassVar, Self, cast, get_type_hints
 
 if TYPE_CHECKING:
@@ -16,6 +16,60 @@ if TYPE_CHECKING:
 
 class MessageError(ValueError):
     """A message with an unknown ID, a wrong size or a wrong field value."""
+
+
+class Messages(Enum):
+    """IDs of the messages exchanged between the Raspberry Pi and the Teensy.
+
+    Commands from Raspberry Pi to Teensy are in the range ``0``-``127`` while
+    those from Teensy to Raspberry Pi are in ``128``-``255``.
+    """
+
+    # rasp -> teensy : 0-127 (Convention)
+
+    # Rolling Basis
+    MOVE = 0
+    SET_CONTROL_PARAMS = 1
+    RESET_POSE = 2
+    STOP = 9
+    START_TRACE = 10
+
+    # Actuators
+    SET_SERVO_ANGLE_I2C = 3
+    STEPPER_STEP = 4
+    SET_SERVO_ANGLE_DETACH = 5
+    ATTACH_SWITCH = 6
+    SET_SERVO_ANGLE = 7
+    SET_STEPPER_DRIVER_ACTIVATION_STATE = 8
+
+    # Common (Rolling Basis + Actuators)
+    HEARTBEAT = 125
+    RESET_TEENSY = 126
+
+    # two ways : 127 (Convention)
+    NACK = 127
+
+    # teensy -> rasp : 128-255 (Convention)
+    # Rolling Basis
+    MOTION_STATUS = 128
+    TRACE_SAMPLE = 130
+    TRACE_END = 131
+
+    # Actuators
+    SWITCH_STATE_RETURN = 129
+
+    # Common (Rolling Basis + Actuators)
+    PRINT = 254
+    UNKNOWN_MSG_TYPE = 255
+
+    # To use for message creation
+    def to_bytes(self) -> bytes:
+        """Converts the command to its byte representation.
+
+        Returns:
+            bytes: Single-byte representation of the command.
+        """
+        return bytes([self.value])
 
 
 # ====== Field values ======

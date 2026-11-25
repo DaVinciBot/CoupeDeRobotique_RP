@@ -11,6 +11,7 @@ from dvb_usb_com.messages import (
     Heartbeat,
     Message,
     MessageError,
+    Messages,
     MotionState,
     MotionStatus,
     Move,
@@ -59,6 +60,10 @@ def test_same_ids_and_sizes_as_messages_h(cpp_tool: CppTool) -> None:
 def test_every_id_of_messages_h_is_known() -> None:
     known = set(MESSAGES) | {Print.ID}
     assert set(header_ids().values()) == known
+
+
+def test_message_ids_are_those_of_the_header() -> None:
+    assert {message.name: message.value for message in Messages} == header_ids()
 
 
 def test_sizes_of_the_adr() -> None:
