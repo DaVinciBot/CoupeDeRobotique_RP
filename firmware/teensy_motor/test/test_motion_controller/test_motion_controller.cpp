@@ -119,6 +119,15 @@ void test_invalid_settings_are_ignored() {
     TEST_ASSERT_EQUAL_DOUBLE(0.3, controller.params().max_speed);
 }
 
+void test_unknown_settings_are_refused() {
+    // a wrong id must never count as a received setting
+    MotionController controller(sim::config(), sim::TS);
+    for (int id = static_cast<int>(Param::COUNT); id <= 255; id++) {
+        TEST_ASSERT_FALSE(controller.set_param(static_cast<Param>(id), 1.0));
+    }
+    TEST_ASSERT_FALSE(controller.configured());
+}
+
 void test_loop_period_refused_while_moving() {
     Bench bench;
     TEST_ASSERT_TRUE(bench.controller.move(goto_command(1, 0.5, 0.0)));
@@ -562,6 +571,7 @@ int main() {
     UNITY_BEGIN();
     RUN_TEST(test_inert_until_configured);
     RUN_TEST(test_invalid_settings_are_ignored);
+    RUN_TEST(test_unknown_settings_are_refused);
     RUN_TEST(test_loop_period_refused_while_moving);
     RUN_TEST(test_no_move_without_heartbeat);
     RUN_TEST(test_heartbeat_lost_brakes_and_stops);

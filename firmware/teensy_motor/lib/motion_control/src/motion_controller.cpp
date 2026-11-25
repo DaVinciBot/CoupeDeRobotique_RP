@@ -51,7 +51,9 @@ MotionController::MotionController(const Config& config, double ts)
 // Settings
 
 bool MotionController::set_param(Param param, double value) {
-    if (!isfinite(value)) {
+    // the id comes from the brain: an unknown one must not count as received
+    if (static_cast<uint8_t>(param) >= static_cast<uint8_t>(Param::COUNT) ||
+        !isfinite(value)) {
         return false;
     }
 
@@ -78,8 +80,6 @@ bool MotionController::set_param(Param param, double value) {
                 return false;
             }
             break;
-        case Param::COUNT:
-            return false;
         default:
             // limits, tolerances and durations
             if (value <= 0.0) {
