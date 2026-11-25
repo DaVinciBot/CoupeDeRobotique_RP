@@ -126,7 +126,7 @@ Une valeur non finie ou hors domaine (gain négatif, limite nulle…) est ignor�
 - **`MOVE` pendant un autre `MOVE`** : le nouveau remplace l'ancien, et le générateur repart de la consigne courante (position et vitesse), sans saut :
   - un `STRAIGHT`, ou un `GOTO` dont le point reste à moins de 10° du cap courant, reçu pendant une ligne droite dans le même sens, continue la ligne droite sans s'arrêter. Le petit écart de cap est corrigé pendant la ligne droite ;
   - un `ROTATE_BY` ou `ROTATE_TO` reçu pendant une rotation dans le même sens continue la rotation ;
-  - sinon, le robot freine jusqu'à l'arrêt, puis exécute le nouveau mouvement.
+  - sinon, le robot freine jusqu'à l'arrêt aux accélérations réglées, comme pour un `STOP` normal, puis exécute le nouveau mouvement.
 - **Vitesse max modifiée en cours de mouvement** : on renvoie le même `GOTO` (même point) avec une autre `max_speed`. Comme il continue le mouvement en cours, le robot ralentit (ou accélère) jusqu'à la nouvelle vitesse sans s'arrêter. C'est ce que fait le ralentissement de l'évitement ([section 8.4](../ARCHITECTURE%20RP%202027.md#84-évitement)). `STRAIGHT` et `ROTATE_BY` sont relatifs : renvoyés, ils repartent de la position mesurée à la réception.
 - **`MOVE` accepté** : hors des cas où il est ignoré (section `MOVE`), un `MOVE` est accepté, même s'il reprend le `move_id` d'un mouvement fini, qu'il relance. Il remet à zéro la détection de blocage, même quand il continue le mouvement en cours. Le brain espace donc ses renvois du `GOTO` d'au moins deux fois `BLOCK_TIME` ([ADR 0010](0010-clock-watch-motion-port.md)).
 - **Fin de mouvement** : `ARRIVED` quand le générateur a fini et que la mesure est dans les tolérances. Le robot reste ensuite asservi sur la dernière consigne.

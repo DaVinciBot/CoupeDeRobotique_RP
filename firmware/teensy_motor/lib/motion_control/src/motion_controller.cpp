@@ -253,8 +253,7 @@ bool MotionController::move(const MoveCommand& command) {
     this->current = command;
     this->pending = true;
     this->move_step = Step::BRAKE;
-    this->delta_profile.stop();
-    this->psi_profile.stop();
+    this->brake();
     return true;
 }
 
@@ -288,16 +287,19 @@ void MotionController::stop(StopMode mode) {
             }
             this->pending = false;
             this->move_step = Step::BRAKE;
-            // at the configured accelerations, not those of the move: the
-            // safety zone of the brain assumes them (ADR 0003)
-            this->delta_profile.set_limits(this->p.max_speed,
-                                           this->p.max_accel);
-            this->psi_profile.set_limits(this->p.max_angular_speed,
-                                         this->p.max_angular_accel);
-            this->delta_profile.stop();
-            this->psi_profile.stop();
+            this->brake();
             return;
     }
+}
+
+void MotionController::brake() {
+    // at the configured accelerations, not those of the move: the safety
+    // zone of the brain assumes them (ADR 0003)
+    this->delta_profile.set_limits(this->p.max_speed, this->p.max_accel);
+    this->psi_profile.set_limits(this->p.max_angular_speed,
+                                 this->p.max_angular_accel);
+    this->delta_profile.stop();
+    this->psi_profile.stop();
 }
 
 bool MotionController::reset_pose(const Pose& pose) {

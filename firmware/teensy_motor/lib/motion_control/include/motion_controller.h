@@ -306,6 +306,7 @@ class MotionController {
 
     void update_odometry(const Inputs& inputs);
     void go_idle();
+    void brake();
     void enter_position_mode();
     void begin(const MoveCommand& command);
     bool continue_move(const MoveCommand& command);

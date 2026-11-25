@@ -390,6 +390,46 @@ void test_new_goto_slows_down_without_stopping() {
     TEST_ASSERT_DOUBLE_WITHIN(0.005, 1.5, bench.pose().x);
 }
 
+void test_replaced_move_brakes_at_the_configured_accel() {
+    // same target, a lower accel and no room left to brake with it: the
+    // robot stops at MAX_ACCEL, then goes on, without passing the target
+    Bench bench;
+    MoveCommand c = goto_command(1, 1.0, 0.0);
+    bench.controller.move(c);
+    while (bench.pose().x < 0.6) {
+        bench.step();
+    }
+    c.id = 2;
+    c.max_accel = sim::params().max_accel / 5.0;  // 0.67 m to brake
+    bench.controller.move(c);
+    double max_x = 0.0;
+    for (int i = 0; i < 6000 && bench.state() == MotionState::MOVING; i++) {
+        bench.step();
+        max_x = fmax(max_x, bench.plant.pose.x);
+    }
+    TEST_ASSERT_EQUAL(MotionState::ARRIVED, bench.state());
+    TEST_ASSERT_DOUBLE_WITHIN(0.005, 1.0, bench.pose().x);
+    TEST_ASSERT_TRUE(max_x < 1.005);
+
+    // a slow move replaced by a target behind: braking at MAX_ACCEL, not at
+    // the accel of the slow move (0.4 m)
+    Bench slow;
+    MoveCommand s = simple_command(1, MoveKind::STRAIGHT, 0.0, 3.0);
+    s.max_accel = sim::params().max_accel / 3.0;
+    slow.controller.move(s);
+    slow.run_for(5.0);  // cruising at MAX_SPEED
+    double x_start = slow.plant.pose.x;
+    slow.controller.move(goto_command(2, 0.0, 0.0));
+    double furthest = x_start;
+    for (int i = 0; i < 1000; i++) {
+        slow.step();
+        furthest = fmax(furthest, slow.plant.pose.x);
+    }
+    double v = sim::params().max_speed;
+    double braking = v * v / (2.0 * sim::params().max_accel);
+    TEST_ASSERT_DOUBLE_WITHIN(0.03, braking, furthest - x_start);
+}
+
 void test_arrived_once_the_heading_correction_is_over() {
     // a GOTO resent near the end, 9.5° off: the heading correction lasts
     // longer than the end of the straight line
@@ -657,6 +697,7 @@ int main() {
     RUN_TEST(test_straight_backwards);
     RUN_TEST(test_max_speed_of_the_command);
     RUN_TEST(test_new_goto_slows_down_without_stopping);
+    RUN_TEST(test_replaced_move_brakes_at_the_configured_accel);
     RUN_TEST(test_arrived_once_the_heading_correction_is_over);
     RUN_TEST(test_new_move_in_other_direction_brakes_first);
     RUN_TEST(test_blocked_wheel);
