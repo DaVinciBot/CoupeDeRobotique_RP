@@ -5,4 +5,5 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True, slots=True)
 class RobotGeometry:
-    radius: float  # m, circumscribed circle of the footprint, actuators retracted
+    # m, circumscribed circle of the robot as it moves, carried elements and actuators included
+    radius: float

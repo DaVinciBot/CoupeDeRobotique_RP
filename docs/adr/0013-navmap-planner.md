@@ -41,7 +41,7 @@ Les zones `CONSTRUCTION`, `STORAGE`, `START`, `END` et `OTHER` ne bloquent rien.
 - `GOAL_IN_OBSTACLE` : l'arrivée est dans un obstacle gonflé, adversaire compris ;
 - `UNREACHABLE` : aucun chemin, par exemple quand départ et arrivée sont dans deux morceaux séparés de l'espace libre.
 
-Un départ dans un obstacle gonflé est projeté sur l'espace libre réduit de 0,1 mm, et le chemin commence alors par ce point. Sur le bord exact, le point projeté tombe souvent juste dehors à cause des flottants, et aucune arête n'en part.
+Un départ dans un obstacle gonflé est projeté sur l'espace libre réduit de 0,1 mm : le chemin rendu commence par le départ, puis passe par ce point. Ce premier segment sert à sortir de l'obstacle gonflé et n'est vérifié contre rien. Quand le robot s'est arrêté au bord d'un obstacle gonflé, il peut ne faire qu'une fraction de millimètre : la case 5.3 devra ignorer un segment plus court que la tolérance de position (9.3). Sur le bord exact, le point projeté tombe souvent juste dehors à cause des flottants, et aucune arête n'en part.
 
 **`Path.estimated_duration(speed, accel, rot_speed)`** compte un trapèze de vitesse par segment et |Δθ| / `rot_speed` à chaque sommet intérieur. La rotation initiale et le cap final ne sont pas comptés : la case 5.3 connaît `theta`, et la fin de match (7.4) les ajoutera à son temps de retour.
 
@@ -55,7 +55,7 @@ Un départ dans un obstacle gonflé est projeté sur l'espace libre réduit de 0
 "provisional": ["geometry.radius_mm"]
 ```
 
-Ces sections sont décodées vers `RobotGeometry` (`domain/robot.py`) et `NavigationSettings` (`domain/navmap.py`), en SI ([ADR 0008](0008-brain-layers.md)). La section `geometry` recevra le reste de la géométrie à la case 9.1 (empreinte, lidar), et l'évitement (6.1) en a besoin. **Le rayon de 212 mm est provisoire** : c'est le cercle circonscrit d'un carré de 300 × 300 mm, le plus grand carré qui respecte le périmètre maximal de 1200 mm au départ (RG F). `provisional` liste les champs encore inconnus, et le décodage vérifie que chacun existe. La case 9.1 refusera en profil `match` une config qui en contient.
+Ces sections sont décodées vers `RobotGeometry` (`domain/robot.py`) et `NavigationSettings` (`domain/navmap.py`), en SI ([ADR 0008](0008-brain-layers.md)). La section `geometry` recevra le reste de la géométrie à la case 9.1 (empreinte, lidar), et l'évitement (6.1) en a besoin. **Le rayon de 212 mm est provisoire** : c'est le cercle circonscrit d'un carré de 300 × 300 mm, de périmètre 1200 mm, le maximum au départ (RG F). Ce n'est pas une borne : un robot de 450 × 150 mm, de même périmètre, a un rayon de 237 mm, et le robot déployé peut atteindre 1400 mm de périmètre pendant le match (RG F). Le rayon doit couvrir le robot tel qu'il se déplace, éléments portés et actionneurs sortis compris : c'est à décider avec la méca. `provisional` liste les champs encore inconnus, et le décodage vérifie que chacun existe. La case 9.1 refusera en profil `match` une config qui en contient.
 
 ## Alternatives écartées
 
@@ -70,7 +70,7 @@ Ces sections sont décodées vers `RobotGeometry` (`domain/robot.py`) et `Naviga
 
 ## Conséquences
 
-- **Stratégie `homologation`.** L'étape `quarry` vise (2250, 300) : c'est dans les pierres gonflées de `quarry_front_4`, qui montent jusqu'à y ≈ 360 mm. Le planificateur rendra `GOAL_IN_OBSTACLE`. La pose d'approche, déjà provisoire, est à revoir avec l'empreinte du robot et les mécanismes : voir le point à valider « Poses d'approche… ».
-- **Constructions.** Une construction bloque par toute son empreinte. L'action qui construit une porte du château (7.1) ne devra enregistrer que ses piliers, sinon le retour en salle du trône (7.4) devient impossible.
+- **Stratégie `homologation`.** L'étape `quarry` vise (2250, 300) : c'est dans les pierres gonflées de `quarry_front_4`, qui montent jusqu'à y ≈ 342 mm. Le planificateur rendra `GOAL_IN_OBSTACLE`. La pose d'approche, déjà provisoire, est à revoir avec l'empreinte du robot et les mécanismes : voir le point à valider « Poses d'approche… ».
+- **Constructions.** Une construction bloque par toute son empreinte. L'action qui construit une porte du château (7.1) ne devra enregistrer que ses piliers, sinon le retour en salle du trône (7.4) devient impossible. De même, une pierre que nous posons ailleurs qu'à sa place n'est plus `present` : l'action qui la pose (7.1) doit l'enregistrer par `add_construction` pour qu'elle reste un obstacle, car le lidar ne la voit peut-être pas (8.4).
 - **Aires exclusives.** Leur liste (RG H.4) reste à faire confirmer : si elle change, seuls les `kinds` de `arena.json` changent, et les obstacles fixes suivent.
 - **Temps de calcul.** Le benchmark (`editions/cdr_2027/tests/test_navigation.py`) mesure, côté bleu avec le rayon provisoire, une requête avec deux adversaires et le recalcul de la partie fixe, qui revient à chaque pierre prise. Le 2026-11-26, sur un Mac (Apple Silicon), la requête prend 1,1 ms et le recalcul 2,0 ms en moyenne. La partie fixe compte 34 nœuds et 89 arêtes. Si la Pi 5 dépasse 10 ms pour l'un des deux, le `Navigator` (5.4) l'appellera par `asyncio.to_thread` : la boucle ne doit jamais prendre 100 ms de retard, sinon le `SafetyMonitor` (8.2) met le robot en `FAULT`. La mesure sur la Pi 5 reste à faire (5.2, 21.1).

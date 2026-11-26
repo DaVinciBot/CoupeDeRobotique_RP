@@ -217,7 +217,7 @@ Les jalons A à C ne demandent aucune carte Teensy, et les sections 12 à 14 ne 
 - [x] Gonflage `shapely.buffer(robot_radius + margin)`, marge de 20 mm dans la config (8.1). Coins coupés par une tangente, disques circonscrits : jamais moins que le jeu (ADR 0013).
 - [x] Espace libre = table réduite du rayon du robot, plus la marge (ADR 0013).
 - [x] Obstacles dynamiques : un disque gonflé par piste adverse.
-- [x] Zones interdites conditionnelles de `MatchRules.forbidden_zones(world)` : le planificateur les reçoit ; la méthode arrive avec la case 7.2.
+- [x] Zones interdites conditionnelles de `MatchRules.forbidden_zones(world)` : le planificateur les reçoit ; la méthode arrive avec la case 7.2, le branchement avec la case 5.4.
 
 ### 5.2 Planificateur — `domain/planner.py`
 
@@ -243,6 +243,7 @@ Les jalons A à C ne demandent aucune carte Teensy, et les sections 12 à 14 ne 
 - [ ] Envoi des `MoveCommand` un par un, vérification de la tolérance en position et en angle à l'arrivée (9.3).
 - [ ] Attentes bornées sur la `Clock`, jamais par `asyncio.timeout` ni `asyncio.wait_for`, que `FakeClock` ne fait pas avancer : outil commun tiré de `Watch._next` (ADR 0010).
 - [ ] Cible absolue conservée lors d'une replanification.
+- [ ] Planification par `Planner.plan` avec les pistes adverses du `WorldSnapshot` et `MatchRules.forbidden_zones(world)` (7.2) ; `Planner.updated(world)` avant chaque planification (ADR 0013).
 - [ ] `push_until_blocked(direction, max_dist)` et `recalibrate(wall)` : `RESET_POSE` avec la coordonnée et l'angle de la bordure, l'autre coordonnée gardée (7.2) ; attendre un statut autre que `MOVING` avant `reset_pose` (ADR 0010).
 - [ ] Tests avec `FakeMotion` et `FakeClock`.
 
@@ -351,7 +352,7 @@ Les jalons A à C ne demandent aucune carte Teensy, et les sections 12 à 14 ne 
 - [ ] Validations croisées : profil `match` ⇒ tout réel sauf le calcul déporté, évitement actif.
 - [ ] Hauteur de chaque position nommée d'actionneur, déclarée dans la config (l'angle d'un servo ne la donne pas) : au-dessus de la hauteur max de `config/match.json` (RG F.3), la config est refusée ; une hauteur inconnue est marquée et refusée en profil `match` (ADR 0011).
 - [ ] Erreur lisible qui nomme le champ (`navigation.avoidance.wait_s: expected >= 0, got -1`).
-- [ ] Valeurs encore inconnues marquées explicitement, refusées en profil `match`.
+- [ ] Valeurs encore inconnues marquées explicitement, refusées en profil `match` : la liste `provisional` de `config/robot.json` (ADR 0013).
 
 ### 9.2 Composition — `app/main.py`
 
@@ -666,7 +667,7 @@ Chaque point bloque les cases indiquées.
 | Variante exacte du CRC-16. Proposé : CRC-16/CCITT-FALSE (ADR 0003, à approuver) | 12.3 |
 | Comportement d'un `MOVE` reçu pendant un autre, et vitesse max modifiable ou non en cours de mouvement. Proposé dans l'ADR 0003, à approuver | 12.1, 6.2 |
 | Écarts entre l'ADR 0003 et le firmware de `feat/asservissement-v1`, relevés par l'ADR 0010 : le `STOP` normal freine avec l'accélération du `MOVE` en cours et non à `MAX_ACCEL` réglé (zone de sécurité trop courte) ; comportements du firmware que l'ADR 0003 n'écrit pas (`STOP` normal sans effet moteurs libres, `MOVING` jusqu'à la fin du freinage, `MOVE` reçu pendant un freinage lancé une fois le robot arrêté) ; propositions : ignorer un `MOVE` qui reprend le `move_id` d'un mouvement fini, garder la détection de blocage quand un `MOVE` continue le mouvement en cours | 6.2, 12.1, 13.3, 15.1, 21.1 |
-| Empreinte réelle du robot (rayon, polygone, actionneurs rentrés). En attendant, rayon provisoire de 212 mm dans `config/robot.json`, listé dans `provisional` (ADR 0013) | 2.4, 5.1, 6.1, 7.4 |
+| Empreinte réelle du robot en déplacement (rayon du cercle circonscrit, polygone), éléments portés et actionneurs sortis compris : jusqu'à 1400 mm de périmètre déployé (RG F). En attendant, rayon provisoire de 212 mm dans `config/robot.json`, listé dans `provisional` (ADR 0013) | 2.4, 5.1, 6.1, 7.4 |
 | Position, orientation et hauteur du lidar sur le robot | 9.1, 16.2 |
 | Séquences des mécanismes (prise de pierres, construction, Graal, lanceur) | 7.1, 14 |
 | Poses d'approche de la stratégie `homologation` (carrière `quarry_front_4`, tour `blue_tower_front_outer`), selon l'empreinte du robot et les mécanismes ; sens de `element_id` pour `pick_stones` (une pierre ou toute la carrière). La pose de l'étape `quarry`, (2250, 300), est dans les pierres gonflées : le planificateur la refuse (ADR 0013) | 7.1, 21.2 |
