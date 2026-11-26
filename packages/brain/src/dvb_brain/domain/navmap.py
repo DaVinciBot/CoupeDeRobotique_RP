@@ -80,7 +80,7 @@ def dynamic_obstacles(
 ) -> BaseGeometry:
     """Return the inflated opponents and conditional forbidden zones, as one shape.
 
-    forbidden comes from MatchRules.forbidden_zones(world) (TODO 7.2).
+    forbidden comes from MatchRules.forbidden_zones(side, world) (ADR 0014).
     """
     discs = [disc(track.center, track.radius + clearance) for track in opponents]
     zones = [inflate(polygon, clearance) for polygon in forbidden]

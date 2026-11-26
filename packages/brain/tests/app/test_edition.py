@@ -5,18 +5,22 @@ from dataclasses import dataclass, replace
 from types import ModuleType
 
 import pytest
-from shapely import box
+from shapely import Polygon, box
 
 from dvb_brain.app.edition import EditionError, load_edition
 from dvb_brain.domain.arena import Arena, Side, Zone, ZoneKind
 from dvb_brain.domain.decoding import SchemaError
 from dvb_brain.domain.match_rules import MatchRules
 from dvb_brain.domain.scoring import Scoring
+from dvb_brain.domain.world import WorldLifetimes, WorldModel, WorldSnapshot
 
 
 @dataclass(frozen=True, slots=True)
 class FakeRules:
     def end_zones(self, side: Side) -> tuple[Zone, ...]:
+        return ()
+
+    def forbidden_zones(self, side: Side, world: WorldSnapshot) -> tuple[Polygon, ...]:
         return ()
 
 
@@ -54,6 +58,9 @@ def test_template_loads() -> None:
     assert edition.scoring.points == {}
     assert edition.rules().end_zones(Side.BLUE) == ()
     assert edition.rules().end_zones(Side.YELLOW) == ()
+    lifetimes = WorldLifetimes(lidar_tracks=0.3, remote=0.3, element_seen=2.0, odometry_history=2.0)
+    world = WorldModel(edition.arena.elements, lifetimes, now=0.0).snapshot(0.0)
+    assert edition.rules().forbidden_zones(Side.BLUE, world) == ()
 
 
 def test_unknown_edition_is_named() -> None:
