@@ -1,4 +1,5 @@
 import copy
+import math
 from pathlib import Path
 from typing import Any
 
@@ -19,8 +20,14 @@ def valid_document() -> dict[str, Any]:
     return {
         "schema_version": 1,
         "kind": "cdr.robot",
-        "geometry": {"radius_mm": 250},
-        "navigation": {"margin_mm": 20, "turn_penalty_mm": 100},
+        "geometry": {"radius_mm": 250, "rear_mm": 140},
+        "navigation": {
+            "margin_mm": 20,
+            "turn_penalty_mm": 100,
+            "reverse_max_distance_mm": 250,
+            "reverse_min_gain_deg": 30,
+            "reverse_max_speed_mps": 0.15,
+        },
         "world": {
             "lidar_tracks_ttl_s": 0.25,
             "remote_ttl_s": 0.5,
@@ -45,8 +52,14 @@ def test_parse_robot_config_gives_the_world_lifetimes() -> None:
 def test_parse_robot_config_gives_the_geometry_and_navigation_in_si() -> None:
     config = parse_robot_config(encode(valid_document()))
 
-    assert config.geometry == RobotGeometry(radius=0.25)
-    assert config.navigation == NavigationSettings(margin=0.02, turn_penalty=0.1)
+    assert config.geometry == RobotGeometry(radius=0.25, rear=0.14)
+    assert config.navigation == NavigationSettings(
+        margin=0.02,
+        turn_penalty=0.1,
+        reverse_max_distance=0.25,
+        reverse_min_gain=math.radians(30),
+        reverse_max_speed=0.15,
+    )
     assert config.provisional == frozenset()
 
 
@@ -91,6 +104,7 @@ def test_parse_robot_config_refuses_a_provisional_field_that_does_not_exist(
         (("world", "remote_ttl_s"), -1, "$.world.remote_ttl_s: Expected `float` > 0.0, got -1"),
         (("world", "colour"), "red", "$.world: Object contains unknown field `colour`"),
         (("geometry", "radius_mm"), 0, "$.geometry.radius_mm: Expected `float` > 0.0, got 0"),
+        (("geometry", "rear_mm"), 0, "$.geometry.rear_mm: Expected `float` > 0.0, got 0"),
         (
             ("navigation", "margin_mm"),
             -1,
@@ -100,6 +114,21 @@ def test_parse_robot_config_refuses_a_provisional_field_that_does_not_exist(
             ("navigation", "turn_penalty_mm"),
             -5,
             "$.navigation.turn_penalty_mm: Expected `float` >= 0.0, got -5",
+        ),
+        (
+            ("navigation", "reverse_max_distance_mm"),
+            0,
+            "$.navigation.reverse_max_distance_mm: Expected `float` > 0.0, got 0",
+        ),
+        (
+            ("navigation", "reverse_min_gain_deg"),
+            -1,
+            "$.navigation.reverse_min_gain_deg: Expected `float` >= 0.0, got -1",
+        ),
+        (
+            ("navigation", "reverse_max_speed_mps"),
+            0,
+            "$.navigation.reverse_max_speed_mps: Expected `float` > 0.0, got 0",
         ),
     ],
 )
@@ -131,7 +160,23 @@ def test_robot_config_gives_a_provisional_radius_and_the_margin_of_the_architect
     config = load_file(ROBOT_CONFIG, parse_robot_config)
 
     # ADR 0013: circumscribed circle of a 300 x 300 mm square, until the real footprint is known.
-    assert config.geometry == RobotGeometry(radius=0.212)
+    assert config.geometry.radius == pytest.approx(0.212)
     assert "geometry.radius_mm" in config.provisional
     # Section 8.1: 20 mm margin around the inflated obstacles.
     assert config.navigation.margin == pytest.approx(0.02)
+
+
+def test_robot_config_gives_provisional_rear_and_reverse_settings() -> None:
+    config = load_file(ROBOT_CONFIG, parse_robot_config)
+
+    # ADR 0014: half of a 300 mm square, and reverse thresholds to tune on the table (TODO 21.1).
+    assert config.geometry.rear == pytest.approx(0.15)
+    assert config.navigation.reverse_max_distance == pytest.approx(0.3)
+    assert config.navigation.reverse_min_gain == pytest.approx(math.radians(45))
+    assert config.navigation.reverse_max_speed == pytest.approx(0.2)
+    assert {
+        "geometry.rear_mm",
+        "navigation.reverse_max_distance_mm",
+        "navigation.reverse_min_gain_deg",
+        "navigation.reverse_max_speed_mps",
+    } <= config.provisional

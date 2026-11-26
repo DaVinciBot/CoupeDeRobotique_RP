@@ -1,6 +1,6 @@
 # ADR 0013 — Carte de navigation et planificateur
 
-- **Statut** : proposé ; amende l'[architecture, sections 8.1 et 8.2](../ARCHITECTURE%20RP%202027.md#81-carte) (les éléments en place sont des obstacles fixes, le jeu s'applique aux bordures)
+- **Statut** : proposé ; amende l'[architecture, sections 8.1 et 8.2](../ARCHITECTURE%20RP%202027.md#81-carte) (les éléments en place sont des obstacles fixes, le jeu s'applique aux bordures) ; amendé par l'[ADR 0014](0014-motion-plan-navigator.md) (`MatchRules.forbidden_zones(side, world)` existe dès la case 5.4, le `Navigator` la passe au planificateur)
 - **Date** : 2026-11-26
 - **Cases** : [TODO 5.1](../TODO.md#51-carte-de-navigation--domainnavmappy), [TODO 5.2](../TODO.md#52-planificateur--domainplannerpy)
 
@@ -28,7 +28,7 @@ Les zones `CONSTRUCTION`, `STORAGE`, `START`, `END` et `OTHER` ne bloquent rien.
 
 **Éléments en place, selon notre propre état.** Un élément est un obstacle tant que `our_elements[id].value.present` est vrai, et non d'après la vue fusionnée `element(id)` ([ADR 0012](0012-world-model.md)). Notre état ne change que par nos actions : une vue du calcul déporté qui se périme ne relance donc pas le calcul. Une pierre prise par l'adversaire reste un obstacle, ce qui est prudent. Pour prendre un élément, la stratégie vise une pose d'approche hors de l'obstacle gonflé, puis l'action finit par une courte ligne droite (7.1). Le planificateur n'a pas de liste d'éléments à ignorer.
 
-**Obstacles dynamiques**, passés à chaque planification : un disque de rayon `track.radius + clearance` par piste adverse, et des polygones interdits selon l'état du match, gonflés de `clearance`. Ces polygones viendront de `MatchRules.forbidden_zones(world)`, que la case 7.2 ajoute au socle ; d'ici là, le planificateur se contente de les accepter.
+**Obstacles dynamiques**, passés à chaque planification : un disque de rayon `track.radius + clearance` par piste adverse, et des polygones interdits selon l'état du match, gonflés de `clearance`. Ces polygones viennent de `MatchRules.forbidden_zones(side, world)`, que le `Navigator` (5.4) lui passe ; la case 7.2 en écrit les règles ([ADR 0014](0014-motion-plan-navigator.md)).
 
 **Gonflage simplifié mais prudent.** Un polygone est gonflé par `buffer(clearance, join_style="mitre", mitre_limit=1)`. Ses côtés reculent d'exactement `clearance`, et chaque coin est coupé par une droite tangente au cercle de rayon `clearance` : le polygone couvre tout le gonflage exact, avec deux sommets par coin au lieu d'un arc. Un disque, comme un adversaire, devient le polygone régulier à 8 côtés qui lui est circonscrit. Sur la table 2027, côté bleu, avec le rayon provisoire, l'espace libre n'est jamais à moins de 232 mm d'un obstacle. Il a 34 nœuds, et toute la partie fixe se calcule en 2 ms sur PC.
 

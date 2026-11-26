@@ -142,7 +142,7 @@ Les jalons A à C ne demandent aucune carte Teensy, et les sections 12 à 14 ne 
 ### 2.7 Interface `Edition`
 
 - [x] `Protocol` `Edition` (section 0) dans `app/edition.py` : `id`, `arena`, `scoring`, `rules` (ADR 0006). `register_actions` arrive avec le registre (7.1), `sim_elements` avec la simulation (11.1).
-- [x] `MatchRules` générique dans `domain/match_rules.py` : `end_zones(side)`. `is_action_allowed` et `forbidden_zones` arrivent avec le `WorldSnapshot` (7.2).
+- [x] `MatchRules` générique dans `domain/match_rules.py` : `end_zones(side)` et `forbidden_zones(side, world)` (ADR 0014) ; `is_action_allowed` arrive avec la case 7.2.
 - [x] Chargement par nom via `importlib` : `load_edition("cdr_2027")` appelle le `load()` du module et vérifie son `id`. `editions` est installé par le projet racine du workspace. Le nom sera lu dans la config en 9.1.
 
 ### 2.8 Machine à états du match — `domain/match_fsm.py`
@@ -217,7 +217,7 @@ Les jalons A à C ne demandent aucune carte Teensy, et les sections 12 à 14 ne 
 - [x] Gonflage `shapely.buffer(robot_radius + margin)`, marge de 20 mm dans la config (8.1). Coins coupés par une tangente, disques circonscrits : jamais moins que le jeu (ADR 0013).
 - [x] Espace libre = table réduite du rayon du robot, plus la marge (ADR 0013).
 - [x] Obstacles dynamiques : un disque gonflé par piste adverse.
-- [x] Zones interdites conditionnelles de `MatchRules.forbidden_zones(world)` : le planificateur les reçoit ; la méthode arrive avec la case 7.2, le branchement avec la case 5.4.
+- [x] Zones interdites conditionnelles de `MatchRules.forbidden_zones(side, world)` : le planificateur les reçoit, le `Navigator` (5.4) les lui passe ; leurs règles s'écrivent en 7.2.
 
 ### 5.2 Planificateur — `domain/planner.py`
 
@@ -232,20 +232,21 @@ Les jalons A à C ne demandent aucune carte Teensy, et les sections 12 à 14 ne 
 
 ### 5.3 Chemin → mouvements — `domain/motion_plan.py`
 
-- [ ] `Path` + `MoveMode` + `theta` final optionnel → un `GOTO` par point, `REVERSE` selon le mode, `HAS_HEADING` au dernier point si `theta` est donné (9.4, ADR 0003, ADR 0010).
-- [ ] Mode `auto` : marche arrière seulement sous `reverse_max_distance` et si le gain de rotation dépasse `reverse_min_gain`.
-- [ ] Vitesse de marche arrière plafonnée (lidar 270°, rien derrière).
-- [ ] Tests par table de cas.
+- [x] `moves_along(path, heading, mode, theta, max_speed, settings)` : un `GOTO` par point après le départ, `REVERSE` selon le mode, `HAS_HEADING` au dernier point si `theta` est donné ; un chemin réduit au départ donne `ROTATE_TO theta` ou rien (9.4, ADR 0003, ADR 0010, ADR 0014).
+- [x] Mode `reverse` : seule la dernière ligne droite recule, coupée à `reverse_max_distance` de la cible si elle est plus longue (ADR 0014).
+- [x] Mode `auto` : marche arrière seulement sous `reverse_max_distance`, lignes reculées à la suite comprises, et si le gain de rotation dépasse `reverse_min_gain`, rotation vers la ligne suivante ou le cap final comprise (ADR 0014).
+- [x] Vitesse de marche arrière plafonnée à `reverse_max_speed` (lidar 270°, rien derrière) ; une `max_speed` qui n'est pas > 0 est refusée.
+- [x] Tests par table de cas, et Hypothesis : aucun recul d'affilée plus long que `reverse_max_distance` ni plus rapide que `reverse_max_speed`.
 
 ### 5.4 Service `Navigator` — `services/navigator.py`
 
-- [ ] `async go_to(target, deadline) -> NavResult` (`ARRIVED`, `BLOCKED_BY_OPPONENT`, `NO_PATH`, `TIMEOUT`, `MOTION_FAULT`).
-- [ ] Envoi des `MoveCommand` un par un, vérification de la tolérance en position et en angle à l'arrivée (9.3).
-- [ ] Attentes bornées sur la `Clock`, jamais par `asyncio.timeout` ni `asyncio.wait_for`, que `FakeClock` ne fait pas avancer : outil commun tiré de `Watch._next` (ADR 0010).
-- [ ] Cible absolue conservée lors d'une replanification.
-- [ ] Planification par `Planner.plan` avec les pistes adverses du `WorldSnapshot` et `MatchRules.forbidden_zones(world)` (7.2) ; `Planner.updated(world)` avant chaque planification (ADR 0013).
-- [ ] `push_until_blocked(direction, max_dist)` et `recalibrate(wall)` : `RESET_POSE` avec la coordonnée et l'angle de la bordure, l'autre coordonnée gardée (7.2) ; attendre un statut autre que `MOVING` avant `reset_pose` (ADR 0010).
-- [ ] Tests avec `FakeMotion` et `FakeClock`.
+- [x] `async go_to(target, deadline) -> NavResult` (`ARRIVED`, `BLOCKED_BY_OPPONENT` à partir de 6.3, `NO_PATH`, `TIMEOUT`, `MOTION_FAULT`) ; `deadline` finie, en secondes sur la `Clock`, `ValueError` sinon (ADR 0014).
+- [x] Envoi des `MoveCommand` un par un, vérification de la tolérance en position et en angle à l'arrivée (9.3) ; hors tolérance, une seule correction, puis `MOTION_FAULT` (ADR 0014).
+- [x] Attentes bornées sur la `Clock` par `until` (`ports/deadline.py`), tiré de `Watch._next`, jamais par `asyncio.timeout` ni `asyncio.wait_for`, que `FakeClock` ne fait pas avancer (ADR 0010, ADR 0014).
+- [x] Cible absolue conservée lors d'une replanification ; pose lue dans le `MotionPort`, une fois le robot immobile (ADR 0014).
+- [x] Planification par `Planner.plan` avec les pistes adverses du `WorldSnapshot` et `MatchRules.forbidden_zones(side, world)` ; `Planner.updated(world)` avant chaque planification (ADR 0013).
+- [x] `push_until_blocked(distance, deadline)`, distance signée, recul court et lent, et `recalibrate(border, max_distance, deadline)` par l'arrière : `RESET_POSE` avec la coordonnée et l'angle de la bordure, l'autre coordonnée gardée (architecture 7.2) ; statut autre que `MOVING` attendu avant `reset_pose` (ADR 0010, ADR 0014).
+- [x] Tests avec `FakeMotion` et `FakeClock`.
 
 ---
 
@@ -264,7 +265,7 @@ Les jalons A à C ne demandent aucune carte Teensy, et les sections 12 à 14 ne 
 
 - [ ] Tâche à la fréquence des pistes, lecture du snapshot.
 - [ ] Obstacle dans la zone → `stop(SMOOTH)` immédiat + événement `ObstacleStop`.
-- [ ] Obstacle plus loin sur la trajectoire → vitesse max réduite par `MotionPort.set_max_speed` (renvoi du `GOTO` en cours, ADR 0003, ADR 0010), seulement quand la vitesse plafond change : chaque renvoi remet à zéro la détection de blocage de la Teensy.
+- [ ] Obstacle plus loin sur la trajectoire → vitesse max réduite par `MotionPort.set_max_speed` (renvoi du `GOTO` en cours, ADR 0003, ADR 0010), seulement quand la vitesse plafond change : chaque renvoi remet à zéro la détection de blocage de la Teensy. Le renvoi ne dépasse jamais la `max_speed` du `GOTO` en cours, sinon un recul repartirait plus vite que `reverse_max_speed` (contrat de l'ADR 0014 ; le mécanisme se choisit ici, par exemple le port qui borne le renvoi).
 - [ ] Lidar muet depuis 300 ms → arrêt et aucun départ tant qu'il ne revient pas (8.5).
 - [ ] En profil `match`, la config refuse toute désactivation de l'évitement (désactivation volontaire = forfait, RG H.4).
 
@@ -290,7 +291,7 @@ Les jalons A à C ne demandent aucune carte Teensy, et les sections 12 à 14 ne 
 
 ### 7.2 Garde-fous du règlement — `editions/cdr_2027/rules.py`
 
-- [ ] `MatchRules.is_action_allowed(action, world, t)` et `MatchRules.forbidden_zones(world)` dans le socle, avec le `WorldSnapshot` de la section 4, qui doit donc être dans `domain/` (ADR 0006).
+- [ ] `MatchRules.is_action_allowed(action, world, t)` dans le socle, à côté de `forbidden_zones(side, world)`, dont les éditions écrivent ici les règles (ADR 0006, ADR 0014).
 - [ ] Vol de pierres refusé tant qu'une carrière n'est pas vide, et jamais en détruisant le château adverse (RJ E.1).
 - [ ] Au plus 3 pierres stockées dans notre cour (RJ E.1).
 - [ ] Graal porté → interdit de sortir de la cour et des remparts ; Graal adverse jamais déplacé (RJ E.2.b).
@@ -323,6 +324,7 @@ Les jalons A à C ne demandent aucune carte Teensy, et les sections 12 à 14 ne 
 - [ ] `INIT` : attente des liens, vérification du profil `match` et de l'absence de ressource simulée (4.5).
 - [ ] `INIT` : envoi des 17 réglages d'asservissement (5.6) à la Teensy moteur, un `SET_CONTROL_PARAMS` par réglage, puis attente de `MotionStatus.configured` ; méthode du `MotionPort` à ajouter (ADR 0003, ADR 0010) (attend 12.1).
 - [ ] `CALIBRATING` : recalage contre deux bordures puis `RESET_POSE`, objectif < 30 s (préparation de 3 min, RG H.1) ; robot entièrement dans la salle du trône ensuite (RJ D.3.b). Un nouveau `CALIBRATE` recommence un recalage raté (ADR 0007).
+- [ ] Recalage par `Navigator.recalibrate` (ADR 0014) : d'abord un `RESET_POSE` à la pose de départ approchée, `ROTATE_TO` visant un cap absolu ; à trancher, vérifier que la pose au contact est proche de la bordure visée avant de la garder, un contact contre autre chose (rien n'est vu derrière) faussant la pose.
 - [ ] `ARMED` : tirette en place exigée, seul le front « retirée » compte (anti-rebond dans l'adaptateur, 15.3).
 - [ ] `RUNNING` : `MatchClock` créée au front (ADR 0010), envoi du départ au calcul déporté (× 3), lancement de l'exécuteur et de la fin de match.
 - [ ] Minuteur de fin indépendant de la stratégie : à 100 s moins `hard_stop_margin_s`, `stop(URGENT)`, `release_all(final=True)`, plus aucune commande (RG H.3 ; −50 pts si le robot bouge encore, RG H.4).
@@ -668,6 +670,9 @@ Chaque point bloque les cases indiquées.
 | Comportement d'un `MOVE` reçu pendant un autre, et vitesse max modifiable ou non en cours de mouvement. Proposé dans l'ADR 0003, à approuver | 12.1, 6.2 |
 | Écarts entre l'ADR 0003 et le firmware de `feat/asservissement-v1`, relevés par l'ADR 0010 : le `STOP` normal freine avec l'accélération du `MOVE` en cours et non à `MAX_ACCEL` réglé (zone de sécurité trop courte) ; comportements du firmware que l'ADR 0003 n'écrit pas (`STOP` normal sans effet moteurs libres, `MOVING` jusqu'à la fin du freinage, `MOVE` reçu pendant un freinage lancé une fois le robot arrêté) ; propositions : ignorer un `MOVE` qui reprend le `move_id` d'un mouvement fini, garder la détection de blocage quand un `MOVE` continue le mouvement en cours | 6.2, 12.1, 13.3, 15.1, 21.1 |
 | Empreinte réelle du robot en déplacement (rayon du cercle circonscrit, polygone), éléments portés et actionneurs sortis compris : jusqu'à 1400 mm de périmètre déployé (RG F). En attendant, rayon provisoire de 212 mm dans `config/robot.json`, listé dans `provisional` (ADR 0013) | 2.4, 5.1, 6.1, 7.4 |
+| Distance du centre du robot (le point que suit la pose de l'odométrie) à sa face arrière, qui pousse contre une bordure au recalage ; face plane et sans actionneur qui dépasse, à confirmer. En attendant, 150 mm provisoires dans `config/robot.json` (`geometry.rear_mm`, ADR 0014) | 5.4, 8.1, 21.1 |
+| Seuils de marche arrière : longueur max (300 mm), gain de rotation min (45°) et vitesse max (0,2 m/s), provisoires dans `config/robot.json` (ADR 0014), à régler sur table | 5.3, 21.1 |
+| Tolérances des étapes de stratégie au moins égales à `POSITION_TOLERANCE` et `ANGLE_TOLERANCE` de la Teensy : la Teensy rend `ARRIVED` dans ses propres tolérances, et la correction du `Navigator` échouerait toujours (ADR 0014) | 5.4, 12.1, 21.1 |
 | Position, orientation et hauteur du lidar sur le robot | 9.1, 16.2 |
 | Séquences des mécanismes (prise de pierres, construction, Graal, lanceur) | 7.1, 14 |
 | Poses d'approche de la stratégie `homologation` (carrière `quarry_front_4`, tour `blue_tower_front_outer`), selon l'empreinte du robot et les mécanismes ; sens de `element_id` pour `pick_stones` (une pierre ou toute la carrière). La pose de l'étape `quarry`, (2250, 300), est dans les pierres gonflées : le planificateur la refuse (ADR 0013) | 7.1, 21.2 |

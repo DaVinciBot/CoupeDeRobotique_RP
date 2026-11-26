@@ -284,7 +284,7 @@ Jamais de données modifiables partagées entre threads : le code reste compatib
 | `adapters` | Teensy série, lidar, calcul déporté ; simulation ; rejeu de logs ; faux matériel | Les ports |
 | `app` | Lancement et choix des adaptateurs selon le profil (`match`, `test`, `sim`, `replay`) | Tout |
 
-Les types de valeurs qui passent par les ports (commandes de mouvement, statuts, pistes lidar) et le modèle du monde sont dans `domain` ; `ports` ne contient que les interfaces. La CI vérifie ces couches avec import-linter ([ADR 0008](adr/0008-brain-layers.md)).
+Les types de valeurs qui passent par les ports (commandes de mouvement, statuts, pistes lidar) et le modèle du monde sont dans `domain` ; `ports` ne contient que les interfaces, avec `Watch` et l'attente avec échéance `until`, qui comptent sur la `Clock` ([ADR 0010](adr/0010-clock-watch-motion-port.md), [ADR 0014](adr/0014-motion-plan-navigator.md)). La CI vérifie ces couches avec import-linter ([ADR 0008](adr/0008-brain-layers.md)).
 
 L'horloge est un port : en simulation, un match se joue en quelques secondes et les tests sont reproductibles. Contrat du port de mouvement : [ADR 0010](adr/0010-clock-watch-motion-port.md).
 
@@ -310,7 +310,7 @@ Toutes disponibles pour aarch64 en 3.14 : msgspec (messages, config, stratégies
 
 ### 5.5 Modèle du monde
 
-Un seul `WorldModel`, rempli par l'odométrie de la Teensy, les pistes lidar et le calcul déporté, et lu par la stratégie, la navigation, l'évitement et la télémétrie. Les données sont rangées dès réception : une décision lit l'état courant, sans attendre de paquet.
+Un seul `WorldModel`, rempli par l'odométrie de la Teensy, les pistes lidar et le calcul déporté, et lu par la stratégie, la navigation, l'évitement et la télémétrie. Les données sont rangées dès réception : une décision lit l'état courant, sans attendre de paquet. La navigation y lit les adversaires et nos constructions, mais prend la pose dans le statut de la Teensy, dont le `WorldModel` n'est qu'une copie ([ADR 0014](adr/0014-motion-plan-navigator.md)).
 
 - On lit un **snapshot immuable**, pour qu'un calcul ne voie pas les données changer en cours de route.
 - Chaque donnée garde **sa source et l'heure de sa mesure**, et a une **durée de vie** réglable au-delà de laquelle elle ne sert plus à décider.
@@ -592,8 +592,8 @@ L'asservissement est polaire : chaque déplacement est **une rotation sur place 
 | `move.mode` | Comportement |
 | --- | --- |
 | `forward` (défaut) | Tourne pour faire face à la cible, puis avance |
-| `reverse` | Tourne pour présenter l'arrière à la cible, puis recule (lentement, le lidar ne voit pas derrière) |
-| `auto` | Choisit `forward` ou `reverse` selon la rotation la plus courte ; recule seulement si la cible est proche (seuils dans la config) |
+| `reverse` | Recule sur la dernière ligne droite seulement, et au plus `reverse_max_distance` : avance jusque-là, tourne pour présenter l'arrière à la cible, puis recule (lentement, le lidar ne voit pas derrière, [ADR 0014](adr/0014-motion-plan-navigator.md)) |
+| `auto` | Choisit `forward` ou `reverse` selon la rotation la plus courte, celle vers la ligne suivante ou le cap final comprise ; recule seulement sur une ligne droite courte, jamais plus de `reverse_max_distance` d'affilée (seuils dans la config) |
 
 | `on_timeout` | Effet |
 | --- | --- |

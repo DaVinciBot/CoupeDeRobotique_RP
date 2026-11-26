@@ -14,6 +14,7 @@ from dvb_brain.domain.arena import Arena, ElementSpec, Side, ZoneKind
 from dvb_brain.domain.geometry import Vec2
 from dvb_brain.domain.strategy_model import mirror_strategy, parse_strategy
 from dvb_brain.domain.symmetry import mirror_side
+from dvb_brain.domain.world import WorldLifetimes, WorldModel
 
 EDITIONS = Path(__file__).parents[1]
 NAMES = sorted(path.parent.name for path in EDITIONS.glob("*/__init__.py"))
@@ -69,6 +70,16 @@ def test_end_zones_are_never_in_the_opponent_areas(edition: Edition, side: Side)
         for area in opponent_areas:
             overlap = zone.polygon.intersection(area.polygon).area
             assert overlap < AREA_TOLERANCE, f"{zone.id} overlaps {area.id}"
+
+
+def test_forbidden_zones_are_areas_on_the_table(edition: Edition, side: Side) -> None:
+    # The planner inflates them and removes them from the free space (ADR 0013, ADR 0014).
+    lifetimes = WorldLifetimes(lidar_tracks=0.3, remote=0.3, element_seen=2.0, odometry_history=2.0)
+    world = WorldModel(edition.arena.elements, lifetimes, now=0.0).snapshot(0.0)
+    table = box(0.0, 0.0, edition.arena.width, edition.arena.depth).buffer(TOLERANCE)
+    for polygon in edition.rules().forbidden_zones(side, world):
+        assert polygon.is_valid and polygon.area > 0.0
+        assert table.covers(polygon)
 
 
 def test_homologation_leaves_the_start_zone_does_an_action_and_ends(

@@ -2,11 +2,15 @@
   "schema_version": 1,
   "kind": "cdr.robot",
   "geometry": {
-    "radius_mm": 212
+    "radius_mm": 212,
+    "rear_mm": 150
   },
   "navigation": {
     "margin_mm": 20,
-    "turn_penalty_mm": 100
+    "turn_penalty_mm": 100,
+    "reverse_max_distance_mm": 300,
+    "reverse_min_gain_deg": 45,
+    "reverse_max_speed_mps": 0.2
   },
   "world": {
     "lidar_tracks_ttl_s": 0.3,
@@ -14,5 +18,11 @@
     "element_seen_ttl_s": 2,
     "odometry_history_s": 2
   },
-  "provisional": ["geometry.radius_mm"]
+  "provisional": [
+    "geometry.radius_mm",
+    "geometry.rear_mm",
+    "navigation.reverse_max_distance_mm",
+    "navigation.reverse_min_gain_deg",
+    "navigation.reverse_max_speed_mps"
+  ]
 }

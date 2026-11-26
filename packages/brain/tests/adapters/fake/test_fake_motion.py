@@ -14,7 +14,7 @@ import pytest_asyncio
 
 from dvb_brain.adapters.fake.clock import FakeClock
 from dvb_brain.adapters.fake.motion import FakeMotion
-from dvb_brain.domain.geometry import Pose
+from dvb_brain.domain.geometry import Pose, Vec2
 from dvb_brain.domain.motion import MotionState, MotionStatus, MoveCommand, MoveKind, StopMode
 
 # The tasks are checked after advance() instead of awaited: a broken fake fails an assertion
@@ -417,6 +417,34 @@ async def test_keeps_the_heartbeats_and_the_stops_sent(
 
     assert motion.heartbeats == [0.0, 0.05]
     assert motion.stops == [(0.05, StopMode.SMOOTH), (0.05, StopMode.URGENT)]
+
+
+async def test_keeps_the_moves_sent(clock: FakeClock, motion: FakeMotion) -> None:
+    goto = MoveCommand(MoveKind.GOTO, x=0.5, y=1.0, max_speed=0.5)
+    first = asyncio.create_task(motion.move(straight(0.1)))
+    await clock.advance(0)
+    with pytest.raises(RuntimeError):
+        await motion.move(goto)  # one move at a time: refused, so never sent
+    await clock.advance(2.0)
+    second = asyncio.create_task(motion.move(goto))
+    await clock.advance(3.0)
+
+    assert (first.done(), second.done()) == (True, True)
+    assert motion.moves == [straight(0.1), goto]
+
+
+async def test_missed_gotos_end_off_their_target(clock: FakeClock, motion: FakeMotion) -> None:
+    motion.miss_next_gotos(1, Vec2(0.01, -0.02), angle=0.05)
+    goto = MoveCommand(MoveKind.GOTO, x=0.5, y=1.0, theta=math.pi, max_speed=0.5, has_heading=True)
+
+    missed = asyncio.create_task(motion.move(goto))
+    await clock.advance(5.0)
+    assert missed.result().state is MotionState.ARRIVED
+    assert_pose(missed.result().pose, 0.51, 0.98, math.pi + 0.05 - 2 * math.pi)
+
+    exact = asyncio.create_task(motion.move(goto))
+    await clock.advance(5.0)
+    assert_pose(exact.result().pose, 0.5, 1.0, math.pi)
 
 
 async def test_a_cancelled_move_sends_a_smooth_stop(clock: FakeClock, motion: FakeMotion) -> None:
