@@ -593,7 +593,7 @@ L'asservissement est polaire : chaque déplacement est **une rotation sur place 
 | --- | --- |
 | `forward` (défaut) | Tourne pour faire face à la cible, puis avance |
 | `reverse` | Recule sur la dernière ligne droite seulement, et au plus `reverse_max_distance` : avance jusque-là, tourne pour présenter l'arrière à la cible, puis recule (lentement, le lidar ne voit pas derrière, [ADR 0014](adr/0014-motion-plan-navigator.md)) |
-| `auto` | Choisit `forward` ou `reverse` selon la rotation la plus courte, celle vers la ligne suivante ou le cap final comprise ; recule seulement si la cible est proche (seuils dans la config) |
+| `auto` | Choisit `forward` ou `reverse` selon la rotation la plus courte, celle vers la ligne suivante ou le cap final comprise ; recule seulement sur une ligne droite courte, jamais plus de `reverse_max_distance` d'affilée (seuils dans la config) |
 
 | `on_timeout` | Effet |
 | --- | --- |

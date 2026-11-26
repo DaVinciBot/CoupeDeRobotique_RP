@@ -21,11 +21,11 @@ Le planificateur (5.2, [ADR 0013](0013-navmap-planner.md)) rend une suite de poi
 
 **Un `GOTO` par point du chemin après le départ**, toujours en coordonnées absolues : `set_max_speed` (évitement, 6.2) ne peut renvoyer qu'un `GOTO` (ADR 0010), et une replanification repart de la cible absolue. `HAS_HEADING` et `theta` vont au dernier `GOTO` si l'étape donne un cap. Un chemin réduit au départ ne donne pas de `GOTO` vers sa propre position, dont la direction serait indéfinie : un `ROTATE_TO theta` si un cap est donné, sinon rien.
 
-**Recul borné.** Aucun `GOTO` en recul ne dépasse `reverse_max_distance`, quel que soit le mode, et aucun ne va plus vite que `reverse_max_speed` :
+**Recul borné.** Les `GOTO` en recul à la suite ne dépassent jamais `reverse_max_distance` à eux tous, quel que soit le mode, et aucun ne va plus vite que `reverse_max_speed` :
 
 - **`forward`** : tout en marche avant.
 - **`reverse`** : seul le dernier segment se fait en recul ; les précédents en marche avant. Si le dernier segment dépasse `reverse_max_distance`, il est coupé au point situé à `reverse_max_distance` de la cible : le robot y va en marche avant, fait demi-tour, et recule jusqu'à la cible. Une étape `reverse` veut présenter l'arrière à la cible ; elle n'a pas à reculer à l'aveugle sur tout un détour.
-- **`auto`** : segment par segment. Le cap au début d'un segment est celui qu'a laissé le précédent (le cap mesuré pour le premier). Pour chaque sens, on additionne la rotation avant le segment et la rotation de fin : vers le segment suivant, supposé en marche avant, ou vers `theta` au dernier segment (aucune sans cap). Le robot recule si le segment fait au plus `reverse_max_distance` **et** si le recul évite plus de `reverse_min_gain` de rotation. Compter la rotation de fin évite de reculer pour arriver dos au segment suivant et faire demi-tour.
+- **`auto`** : segment par segment. Le cap au début d'un segment est celui qu'a laissé le précédent (le cap mesuré pour le premier). Pour chaque sens, on additionne la rotation avant le segment et la rotation de fin : vers le segment suivant, supposé en marche avant, ou vers `theta` au dernier segment (aucune sans cap). Le robot recule si le segment, ajouté à ceux qu'il vient de faire en recul juste avant, fait au plus `reverse_max_distance` **et** si le recul évite plus de `reverse_min_gain` de rotation. Compter la rotation de fin évite de reculer pour arriver dos au segment suivant et faire demi-tour.
 
 **Vitesse.** `max_speed` de l'étape, ou `min(max_speed, reverse_max_speed)` en recul. Une `max_speed` qui n'est pas > 0 lève `ValueError` : 0 voudrait dire « limite de la Teensy » (ADR 0003), donc pleine vitesse. **Contrat pour 6.2** : un renvoi par `set_max_speed` ne remonte jamais au-dessus de la `max_speed` du `GOTO` en cours, sinon un recul repartirait au-dessus de `reverse_max_speed`.
 
@@ -33,7 +33,7 @@ Le planificateur (5.2, [ADR 0013](0013-navmap-planner.md)) rend une suite de poi
 
 ### Navigator (`services/navigator.py`)
 
-**`go_to(target: Move, deadline) -> NavResult`.** `deadline` est en secondes sur la `Clock`, obligatoire et finie : pour une étape sans `timeout_s`, l'exécuteur (7.3) passe la fin du match. Il n'y a pas de borne par mouvement en plus : une Teensy muette, non réglée ou en BAU relève du `SafetyMonitor` (8.2). Le `Navigator` fait au plus deux passages, le plan puis une correction :
+**`go_to(target: Move, deadline) -> NavResult`.** `deadline` est en secondes sur la `Clock`, obligatoire et finie (`ValueError` sinon, comme pour `push_until_blocked` et `recalibrate` : sur le robot, la `Clock` attendrait sans fin) : pour une étape sans `timeout_s`, l'exécuteur (7.3) passe la fin du match. Il n'y a pas de borne par mouvement en plus : une Teensy muette, non réglée ou en BAU relève du `SafetyMonitor` (8.2). Le `Navigator` fait au plus deux passages, le plan puis une correction :
 
 1. Il attend un statut autre que `MOVING`, borné par l'échéance : après une étape annulée, le robot freine encore et sa pose n'est pas celle de départ.
 2. `reached` : `ARRIVED`.
@@ -85,6 +85,7 @@ Toutes ces valeurs sont **provisoires**. `rear_mm` dépend de la méca : 150 mm 
 
 - **`ROTATE_BY` puis `STRAIGHT`** : relatifs, ils ne se renvoient pas par `set_max_speed` (ADR 0010), et une replanification ne repart pas d'une cible absolue.
 - **Tout le chemin en recul en mode `reverse`** : sur un détour, plusieurs segments à l'aveugle, sans zone de sécurité utile (8.4).
+- **`auto` borné segment par segment seulement** : plusieurs segments courts reculés à la suite iraient à l'aveugle sur plus de `reverse_max_distance`.
 - **`auto` sans regarder le segment suivant** : il peut reculer pour 180° gagnés puis refaire demi-tour vers le segment suivant.
 - **`auto` sur tout le chemin à la fois** (programmation dynamique) : peu de gain pour des chemins de quelques segments.
 - **Corriger jusqu'à l'échéance** : tourne en rond si la tolérance de l'étape est plus serrée que celle de la Teensy.
@@ -96,5 +97,5 @@ Toutes ces valeurs sont **provisoires**. `rear_mm` dépend de la méca : 150 mm 
 
 - **6.2** respecte le contrat de vitesse ci-dessus ; **6.3** intercepte `STOPPED` sur `ObstacleStop` avant `MOTION_FAULT`.
 - **7.4** aura besoin du planificateur du `Navigator` pour le temps de retour : une propriété s'ajoutera avec 7.4.
-- **8.1** recale avec `recalibrate` contre deux bordures.
+- **8.1** recale avec `recalibrate` contre deux bordures, après un `RESET_POSE` à la pose de départ approchée : `ROTATE_TO` vise un cap absolu. Elle décide aussi s'il faut vérifier la pose au contact avant de la garder (voir la case 8.1).
 - **Points à valider** : `rear_mm` et les seuils de recul ; tolérances des étapes au moins égales à `POSITION_TOLERANCE` et `ANGLE_TOLERANCE` de la Teensy, sinon la correction échoue toujours.

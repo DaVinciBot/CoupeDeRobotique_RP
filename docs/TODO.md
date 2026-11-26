@@ -234,13 +234,13 @@ Les jalons A à C ne demandent aucune carte Teensy, et les sections 12 à 14 ne 
 
 - [x] `moves_along(path, heading, mode, theta, max_speed, settings)` : un `GOTO` par point après le départ, `REVERSE` selon le mode, `HAS_HEADING` au dernier point si `theta` est donné ; un chemin réduit au départ donne `ROTATE_TO theta` ou rien (9.4, ADR 0003, ADR 0010, ADR 0014).
 - [x] Mode `reverse` : seule la dernière ligne droite recule, coupée à `reverse_max_distance` de la cible si elle est plus longue (ADR 0014).
-- [x] Mode `auto` : marche arrière seulement sous `reverse_max_distance` et si le gain de rotation dépasse `reverse_min_gain`, rotation vers la ligne suivante ou le cap final comprise (ADR 0014).
+- [x] Mode `auto` : marche arrière seulement sous `reverse_max_distance`, lignes reculées à la suite comprises, et si le gain de rotation dépasse `reverse_min_gain`, rotation vers la ligne suivante ou le cap final comprise (ADR 0014).
 - [x] Vitesse de marche arrière plafonnée à `reverse_max_speed` (lidar 270°, rien derrière) ; une `max_speed` qui n'est pas > 0 est refusée.
-- [x] Tests par table de cas, et Hypothesis : aucun recul plus long que `reverse_max_distance` ni plus rapide que `reverse_max_speed`.
+- [x] Tests par table de cas, et Hypothesis : aucun recul d'affilée plus long que `reverse_max_distance` ni plus rapide que `reverse_max_speed`.
 
 ### 5.4 Service `Navigator` — `services/navigator.py`
 
-- [x] `async go_to(target, deadline) -> NavResult` (`ARRIVED`, `BLOCKED_BY_OPPONENT` à partir de 6.3, `NO_PATH`, `TIMEOUT`, `MOTION_FAULT`) ; `deadline` finie, en secondes sur la `Clock` (ADR 0014).
+- [x] `async go_to(target, deadline) -> NavResult` (`ARRIVED`, `BLOCKED_BY_OPPONENT` à partir de 6.3, `NO_PATH`, `TIMEOUT`, `MOTION_FAULT`) ; `deadline` finie, en secondes sur la `Clock`, `ValueError` sinon (ADR 0014).
 - [x] Envoi des `MoveCommand` un par un, vérification de la tolérance en position et en angle à l'arrivée (9.3) ; hors tolérance, une seule correction, puis `MOTION_FAULT` (ADR 0014).
 - [x] Attentes bornées sur la `Clock` par `until` (`ports/deadline.py`), tiré de `Watch._next`, jamais par `asyncio.timeout` ni `asyncio.wait_for`, que `FakeClock` ne fait pas avancer (ADR 0010, ADR 0014).
 - [x] Cible absolue conservée lors d'une replanification ; pose lue dans le `MotionPort`, une fois le robot immobile (ADR 0014).
@@ -265,7 +265,7 @@ Les jalons A à C ne demandent aucune carte Teensy, et les sections 12 à 14 ne 
 
 - [ ] Tâche à la fréquence des pistes, lecture du snapshot.
 - [ ] Obstacle dans la zone → `stop(SMOOTH)` immédiat + événement `ObstacleStop`.
-- [ ] Obstacle plus loin sur la trajectoire → vitesse max réduite par `MotionPort.set_max_speed` (renvoi du `GOTO` en cours, ADR 0003, ADR 0010), seulement quand la vitesse plafond change : chaque renvoi remet à zéro la détection de blocage de la Teensy.
+- [ ] Obstacle plus loin sur la trajectoire → vitesse max réduite par `MotionPort.set_max_speed` (renvoi du `GOTO` en cours, ADR 0003, ADR 0010), seulement quand la vitesse plafond change : chaque renvoi remet à zéro la détection de blocage de la Teensy. Le renvoi ne dépasse jamais la `max_speed` du `GOTO` en cours, sinon un recul repartirait plus vite que `reverse_max_speed` (contrat de l'ADR 0014 ; le mécanisme se choisit ici, par exemple le port qui borne le renvoi).
 - [ ] Lidar muet depuis 300 ms → arrêt et aucun départ tant qu'il ne revient pas (8.5).
 - [ ] En profil `match`, la config refuse toute désactivation de l'évitement (désactivation volontaire = forfait, RG H.4).
 
@@ -324,6 +324,7 @@ Les jalons A à C ne demandent aucune carte Teensy, et les sections 12 à 14 ne 
 - [ ] `INIT` : attente des liens, vérification du profil `match` et de l'absence de ressource simulée (4.5).
 - [ ] `INIT` : envoi des 17 réglages d'asservissement (5.6) à la Teensy moteur, un `SET_CONTROL_PARAMS` par réglage, puis attente de `MotionStatus.configured` ; méthode du `MotionPort` à ajouter (ADR 0003, ADR 0010) (attend 12.1).
 - [ ] `CALIBRATING` : recalage contre deux bordures puis `RESET_POSE`, objectif < 30 s (préparation de 3 min, RG H.1) ; robot entièrement dans la salle du trône ensuite (RJ D.3.b). Un nouveau `CALIBRATE` recommence un recalage raté (ADR 0007).
+- [ ] Recalage par `Navigator.recalibrate` (ADR 0014) : d'abord un `RESET_POSE` à la pose de départ approchée, `ROTATE_TO` visant un cap absolu ; à trancher, vérifier que la pose au contact est proche de la bordure visée avant de la garder, un contact contre autre chose (rien n'est vu derrière) faussant la pose.
 - [ ] `ARMED` : tirette en place exigée, seul le front « retirée » compte (anti-rebond dans l'adaptateur, 15.3).
 - [ ] `RUNNING` : `MatchClock` créée au front (ADR 0010), envoi du départ au calcul déporté (× 3), lancement de l'exécuteur et de la fin de match.
 - [ ] Minuteur de fin indépendant de la stratégie : à 100 s moins `hard_stop_margin_s`, `stop(URGENT)`, `release_all(final=True)`, plus aucune commande (RG H.3 ; −50 pts si le robot bouge encore, RG H.4).
@@ -669,7 +670,7 @@ Chaque point bloque les cases indiquées.
 | Comportement d'un `MOVE` reçu pendant un autre, et vitesse max modifiable ou non en cours de mouvement. Proposé dans l'ADR 0003, à approuver | 12.1, 6.2 |
 | Écarts entre l'ADR 0003 et le firmware de `feat/asservissement-v1`, relevés par l'ADR 0010 : le `STOP` normal freine avec l'accélération du `MOVE` en cours et non à `MAX_ACCEL` réglé (zone de sécurité trop courte) ; comportements du firmware que l'ADR 0003 n'écrit pas (`STOP` normal sans effet moteurs libres, `MOVING` jusqu'à la fin du freinage, `MOVE` reçu pendant un freinage lancé une fois le robot arrêté) ; propositions : ignorer un `MOVE` qui reprend le `move_id` d'un mouvement fini, garder la détection de blocage quand un `MOVE` continue le mouvement en cours | 6.2, 12.1, 13.3, 15.1, 21.1 |
 | Empreinte réelle du robot en déplacement (rayon du cercle circonscrit, polygone), éléments portés et actionneurs sortis compris : jusqu'à 1400 mm de périmètre déployé (RG F). En attendant, rayon provisoire de 212 mm dans `config/robot.json`, listé dans `provisional` (ADR 0013) | 2.4, 5.1, 6.1, 7.4 |
-| Distance du centre du robot à sa face arrière, qui pousse contre une bordure au recalage. En attendant, 150 mm provisoires dans `config/robot.json` (`geometry.rear_mm`, ADR 0014) | 5.4, 8.1, 21.1 |
+| Distance du centre du robot (le point que suit la pose de l'odométrie) à sa face arrière, qui pousse contre une bordure au recalage ; face plane et sans actionneur qui dépasse, à confirmer. En attendant, 150 mm provisoires dans `config/robot.json` (`geometry.rear_mm`, ADR 0014) | 5.4, 8.1, 21.1 |
 | Seuils de marche arrière : longueur max (300 mm), gain de rotation min (45°) et vitesse max (0,2 m/s), provisoires dans `config/robot.json` (ADR 0014), à régler sur table | 5.3, 21.1 |
 | Tolérances des étapes de stratégie au moins égales à `POSITION_TOLERANCE` et `ANGLE_TOLERANCE` de la Teensy : la Teensy rend `ARRIVED` dans ses propres tolérances, et la correction du `Navigator` échouerait toujours (ADR 0014) | 5.4, 12.1, 21.1 |
 | Position, orientation et hauteur du lidar sur le robot | 9.1, 16.2 |
