@@ -444,13 +444,14 @@ Trois mécanismes indépendants : **un graphe de visibilité** pour trouver le c
 
 - La table est décrite dans `editions/cdr_2027/arena.json` (bordures, carrières, remparts, douves, cours, salles du trône, écuries) ; le côté jaune est le symétrique du bleu. La plateforme du calcul déporté, hors de l'aire de jeu, n'y est pas ([ADR 0002](adr/0002-arena-format.md)).
 - **Zones adverses interdites.** Entrer dans une « aire adverse à accès exclusif » donne un forfait (RG H.4). On interdit remparts, cour et salle du trône adverses.
-- Obstacles gonflés du rayon du robot + une marge (20 mm pour commencer) avec shapely : le robot devient un point.
+- Obstacles gonflés du rayon du robot + une marge (20 mm pour commencer) avec shapely : le robot devient un point. Les bordures aussi.
+- **Éléments de jeu encore en place** : ce sont aussi des obstacles, que le lidar ne voit peut-être pas (section 8.4). Pour prendre un élément, on vise une pose d'approche hors de l'obstacle, puis l'action finit par une courte ligne droite ([ADR 0013](adr/0013-navmap-planner.md)).
 
 ### 8.2 Chemin
 
 **Graphe de visibilité + A\*** : nœuds aux coins des obstacles gonflés, reliés quand le segment est libre. On obtient une suite de lignes droites, directement exécutable par la Teensy (tourner puis avancer). Les adversaires suivis sont ajoutés comme disques gonflés à chaque replanification.
 
-**Coût de calcul.** L'A\* qui ramait les années d'avant tournait sur une grille de 10 cm, soit environ 60 000 cases en Python pur. Ici, le graphe n'a qu'une centaine de nœuds : sa partie fixe (bordures, zones, nos constructions) est calculée une fois au chargement de la table et mise à jour seulement quand on pose une construction ; à chaque replanification, on n'ajoute que le départ, l'arrivée et les adversaires. On s'attend à quelques millisecondes, à mesurer sur la Pi. Le brain tourne en asyncio sur un seul thread : un calcul de quelques ms ne gêne pas les autres tâches (le heartbeat part toutes les 50 ms). Si la mesure dépasse une dizaine de ms, le calcul passe dans un thread (`asyncio.to_thread`, shapely libère le GIL).
+**Coût de calcul.** L'A\* qui ramait les années d'avant tournait sur une grille de 10 cm, soit environ 60 000 cases en Python pur. Ici, le graphe n'a qu'une centaine de nœuds : sa partie fixe (bordures, zones, éléments en place, nos constructions) est calculée une fois au chargement de la table, puis mise à jour seulement quand on pose une construction ou qu'on prend un élément ([ADR 0013](adr/0013-navmap-planner.md)) ; à chaque replanification, on n'ajoute que le départ, l'arrivée et les adversaires. On s'attend à quelques millisecondes, à mesurer sur la Pi. Le brain tourne en asyncio sur un seul thread : un calcul de quelques ms ne gêne pas les autres tâches (le heartbeat part toutes les 50 ms). Si la mesure dépasse une dizaine de ms, le calcul passe dans un thread (`asyncio.to_thread`, shapely libère le GIL).
 
 ### 8.3 Traitement du lidar (`dvb-lidar`)
 
