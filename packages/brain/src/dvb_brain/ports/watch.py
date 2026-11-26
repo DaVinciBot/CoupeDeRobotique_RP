@@ -9,6 +9,7 @@ import asyncio
 from collections.abc import Callable
 
 from dvb_brain.ports.clock import Clock
+from dvb_brain.ports.deadline import until
 
 
 class Watch[T]:
@@ -62,12 +63,8 @@ class Watch[T]:
         """Return the value that wakes this reader, or None at the deadline."""
         waiter: asyncio.Future[T] = asyncio.get_running_loop().create_future()
         self._waiters.append(waiter)
-        timer = asyncio.create_task(self._clock.sleep_until(deadline))
         try:
-            await asyncio.wait((waiter, timer), return_when=asyncio.FIRST_COMPLETED)
+            return await until(self._clock, waiter, deadline)
         finally:
-            timer.cancel()
-            if not waiter.done():
-                waiter.cancel()
+            if waiter in self._waiters:
                 self._waiters.remove(waiter)  # no leak when the values stop coming
-        return None if waiter.cancelled() else waiter.result()
