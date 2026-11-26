@@ -359,3 +359,12 @@ async def test_recalibrate_without_contact_keeps_the_odometry(
 
     assert result is NavResult.MOTION_FAULT
     assert_pose(last(fake_motion).pose, 0.15, 0.25, 0.0)
+
+
+@pytest.mark.parametrize("max_distance", [-0.1, 0.0, math.nan])
+async def test_recalibrate_refuses_a_distance_that_is_not_backwards(
+    clock: FakeClock, fake_motion: FakeMotion, navigator: Navigator, max_distance: float
+) -> None:
+    with pytest.raises(ValueError, match="max_distance"):
+        await run(clock, navigator.recalibrate(Border.X_MIN, max_distance, DEADLINE))
+    assert fake_motion.moves == []

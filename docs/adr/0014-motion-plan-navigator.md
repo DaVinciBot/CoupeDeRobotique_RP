@@ -46,12 +46,12 @@ Si la pose est encore hors tolérance après la correction : `MOTION_FAULT`. La 
 
 **`NavResult`** : `ARRIVED`, `BLOCKED_BY_OPPONENT`, `NO_PATH`, `TIMEOUT`, `MOTION_FAULT`. `BLOCKED_BY_OPPONENT` n'est rendu qu'à partir de 6.3, qui reconnaîtra un `STOPPED` dû à l'évitement (`ObstacleStop`), attendra, puis replanifiera. Le `RuntimeError` du port après `stop(URGENT)` n'est pas attrapé : la fin de match et le `FAULT` (8.1, 8.2) annulent l'exécuteur avant d'envoyer `stop(URGENT)`.
 
-**`push_until_blocked(distance, deadline) -> MotionStatus | None`** : une distance signée (négative = recul), comme le `MOVE` de l'ADR 0003, plutôt qu'un sens et une distance. Une distance nulle ou non finie lève `ValueError` : la Teensy l'ignorerait, et l'attente irait jusqu'à l'échéance. En recul, la poussée suit la règle de tout recul : `ValueError` au-delà de `reverse_max_distance`, et `max_speed` = `reverse_max_speed`. En avant, `max_speed` = 0, la limite de la Teensy : une poussée est déjà bornée par `PUSH_VOLTAGE` (ADR 0003). Rend le statut final (`BLOCKED` au contact, `ARRIVED` sans contact) ou `None` à l'échéance.
+**`push_until_blocked(distance, deadline) -> MotionStatus | None`** : une distance signée (négative = recul), comme le `MOVE` de l'ADR 0003, plutôt qu'un sens et une distance. Une distance nulle ou non finie lève `ValueError` : la Teensy l'ignorerait, et l'attente irait jusqu'à l'échéance. En recul, la poussée suit la règle de tout recul : `ValueError` au-delà de `reverse_max_distance`, et `max_speed` = `reverse_max_speed`. En avant, `max_speed` = 0, la limite de la Teensy : une poussée est déjà bornée par `PUSH_VOLTAGE` (ADR 0010). Rend le statut final (`BLOCKED` au contact, `ARRIVED` sans contact) ou `None` à l'échéance.
 
 **`recalibrate(border, max_distance, deadline) -> NavResult`** (architecture 7.2) : le robot se recale **par l'arrière**.
 
 1. `ROTATE_TO` le cap qui présente l'arrière à la bordure.
-2. Poussée en recul sur au plus `max_distance` : seul `BLOCKED` (contact) continue, sinon `MOTION_FAULT`.
+2. Poussée en recul sur au plus `max_distance`, qui doit être > 0 et au plus `reverse_max_distance` (`ValueError` sinon) : seul `BLOCKED` (contact) continue, sinon `MOTION_FAULT`.
 3. Attente d'un statut autre que `MOVING` (ADR 0010).
 4. `reset_pose`, borné par l'échéance : la coordonnée vaut `rear` (ou largeur − `rear`, profondeur − `rear`), le cap la normale à la bordure, l'autre coordonnée reste celle de l'odométrie.
 

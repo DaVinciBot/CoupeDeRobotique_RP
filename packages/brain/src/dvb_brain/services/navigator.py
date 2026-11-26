@@ -102,7 +102,7 @@ class Navigator:
                 f"distance must not back up over {self._settings.reverse_max_distance} m, "
                 f"got {distance}"
             )
-        # 0: the board limit, a push being bounded by its PUSH_VOLTAGE anyway (ADR 0003)
+        # 0: the board limit, a push being bounded by its PUSH_VOLTAGE anyway (ADR 0010)
         max_speed = self._settings.reverse_max_speed if distance < 0.0 else 0.0
         cmd = MoveCommand(MoveKind.PUSH_UNTIL_BLOCKED, distance=distance, max_speed=max_speed)
         return await self._move(cmd, deadline)
@@ -113,6 +113,9 @@ class Navigator:
         ARRIVED once the pose is set; MOTION_FAULT without contact within max_distance, or when
         a move stops; TIMEOUT at the deadline.
         """
+        if not (math.isfinite(max_distance) and max_distance > 0.0):
+            # The push goes backwards: a max_distance <= 0 would push forwards, or not at all
+            raise ValueError(f"max_distance must be finite and > 0, got {max_distance}")
         turn = MoveCommand(MoveKind.ROTATE_TO, theta=border_heading(border))
         turned = await self._move(turn, deadline)
         if turned is None:
