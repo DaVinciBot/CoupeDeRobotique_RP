@@ -173,9 +173,12 @@ class FakeMotion:
         self._silent = False
         self._emergency_stop = False
         self._block_after: float | None = None
+        self._misses = 0
+        self._miss = Pose(0.0, 0.0, 0.0)
         # What the board received
         self.heartbeats: list[float] = []
         self.stops: list[tuple[float, StopMode]] = []
+        self.moves: list[MoveCommand] = []  # one per move(); a set_max_speed resend not counted
 
     # Motion port
 
@@ -188,6 +191,7 @@ class FakeMotion:
         done: asyncio.Future[MotionStatus] = asyncio.get_running_loop().create_future()
         self._move = (self._last_move_id, done)
         self._goto = (self._last_move_id, cmd) if cmd.kind is MoveKind.GOTO else None
+        self.moves.append(cmd)
         if not self._silent:
             self._start(self._last_move_id, cmd)
         try:
@@ -259,6 +263,14 @@ class FakeMotion:
     def block_after(self, distance: float) -> None:
         """Make the next translation end BLOCKED after distance m."""
         self._block_after = distance
+
+    def miss_next_gotos(self, count: int, offset: Vec2, angle: float = 0.0) -> None:
+        """Make the next count GOTOs end off their target by offset, and off their heading.
+
+        The odometry sees the miss, as after a slip of the wheels: the status shows it.
+        """
+        self._misses = count
+        self._miss = Pose(offset.x, offset.y, angle)
 
     def silence(self) -> None:
         """The board stops answering: no status any more, every command is lost."""
@@ -350,6 +362,12 @@ class FakeMotion:
             case MoveKind.STRAIGHT | MoveKind.PUSH_UNTIL_BLOCKED:
                 segments = (self._translation(pose, now, cmd.distance, speed, accel),)
             case MoveKind.GOTO:
+                if self._misses > 0:
+                    self._misses -= 1
+                    miss = self._miss
+                    cmd = replace(
+                        cmd, x=cmd.x + miss.x, y=cmd.y + miss.y, theta=cmd.theta + miss.theta
+                    )
                 segments = self._goto_segments(pose, now, cmd, speed, accel)
                 line = len(braking) + 1
         push = cmd.kind is MoveKind.PUSH_UNTIL_BLOCKED
