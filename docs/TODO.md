@@ -213,22 +213,22 @@ Les jalons A à C ne demandent aucune carte Teensy, et les sections 12 à 14 ne 
 
 ### 5.1 Carte de navigation — `domain/navmap.py`
 
-- [ ] Obstacles statiques depuis `Arena` : bordures, `FORBIDDEN`, `EXCLUSIVE_OPPONENT`, éléments fixes, nos constructions.
-- [ ] Gonflage `shapely.buffer(robot_radius + margin)`, marge de 20 mm dans la config (8.1).
-- [ ] Espace libre = table réduite du rayon du robot.
-- [ ] Obstacles dynamiques : un disque gonflé par piste adverse.
-- [ ] Zones interdites conditionnelles de `MatchRules.forbidden_zones(world)`.
+- [x] Obstacles statiques depuis `Arena` : bordures, `FORBIDDEN`, `EXCLUSIVE_OPPONENT`, éléments fixes (zones `OBSTACLE`), éléments encore en place selon notre état, nos constructions (ADR 0013).
+- [x] Gonflage `shapely.buffer(robot_radius + margin)`, marge de 20 mm dans la config (8.1). Coins coupés par une tangente, disques circonscrits : jamais moins que le jeu (ADR 0013).
+- [x] Espace libre = table réduite du rayon du robot, plus la marge (ADR 0013).
+- [x] Obstacles dynamiques : un disque gonflé par piste adverse.
+- [x] Zones interdites conditionnelles de `MatchRules.forbidden_zones(world)` : le planificateur les reçoit ; la méthode arrive avec la case 7.2.
 
 ### 5.2 Planificateur — `domain/planner.py`
 
-- [ ] Nœuds : sommets des obstacles gonflés simplifiés, départ, arrivée.
-- [ ] Arêtes : segment entièrement dans l'espace libre (tester les cas de tangence).
-- [ ] Partie statique précalculée ; recalcul seulement quand `our_constructions` change.
-- [ ] A\* (`heapq`), heuristique euclidienne, coût = longueur + pénalité par virage (réglable).
-- [ ] Départ dans un obstacle gonflé → projection sur le bord libre le plus proche ; arrivée dans un obstacle → `None` avec la raison.
-- [ ] `Path` : points, longueur, `estimated_duration(speed, accel, rot_speed)`.
-- [ ] Tests Hypothesis : aucun segment ne coupe un obstacle ; chemin trouvé quand une grille fine en trouve un.
-- [ ] Benchmark sur la table 2027 avec 2 adversaires, objectif < 10 ms sur la Pi 5 ; sinon `asyncio.to_thread` (8.2).
+- [x] Nœuds : sommets des obstacles gonflés simplifiés, départ, arrivée.
+- [x] Arêtes : segment entièrement dans l'espace libre (tester les cas de tangence).
+- [x] Partie statique précalculée ; recalcul seulement quand `our_constructions` ou les éléments en place changent (ADR 0013).
+- [x] A\* (`heapq`), heuristique euclidienne, coût = longueur + pénalité par virage (réglable).
+- [x] Départ dans un obstacle gonflé → projection sur le bord libre le plus proche ; arrivée dans un obstacle → `NoPath` avec la raison.
+- [x] `Path` : points, longueur, `estimated_duration(speed, accel, rot_speed)`.
+- [x] Tests Hypothesis : aucun segment ne coupe un obstacle ; chemin trouvé quand une grille fine en trouve un.
+- [ ] Benchmark sur la table 2027 avec 2 adversaires, objectif < 10 ms sur la Pi 5 ; sinon `asyncio.to_thread` (8.2). Écrit (`editions/cdr_2027/tests/test_navigation.py`) : 1,1 ms par requête et 2,0 ms par recalcul de la partie fixe sur Mac ; reste la mesure sur la Pi.
 
 ### 5.3 Chemin → mouvements — `domain/motion_plan.py`
 
@@ -666,10 +666,10 @@ Chaque point bloque les cases indiquées.
 | Variante exacte du CRC-16. Proposé : CRC-16/CCITT-FALSE (ADR 0003, à approuver) | 12.3 |
 | Comportement d'un `MOVE` reçu pendant un autre, et vitesse max modifiable ou non en cours de mouvement. Proposé dans l'ADR 0003, à approuver | 12.1, 6.2 |
 | Écarts entre l'ADR 0003 et le firmware de `feat/asservissement-v1`, relevés par l'ADR 0010 : le `STOP` normal freine avec l'accélération du `MOVE` en cours et non à `MAX_ACCEL` réglé (zone de sécurité trop courte) ; comportements du firmware que l'ADR 0003 n'écrit pas (`STOP` normal sans effet moteurs libres, `MOVING` jusqu'à la fin du freinage, `MOVE` reçu pendant un freinage lancé une fois le robot arrêté) ; propositions : ignorer un `MOVE` qui reprend le `move_id` d'un mouvement fini, garder la détection de blocage quand un `MOVE` continue le mouvement en cours | 6.2, 12.1, 13.3, 15.1, 21.1 |
-| Empreinte réelle du robot (rayon, polygone, actionneurs rentrés) | 2.4, 5.1, 6.1, 7.4 |
+| Empreinte réelle du robot (rayon, polygone, actionneurs rentrés). En attendant, rayon provisoire de 212 mm dans `config/robot.json`, listé dans `provisional` (ADR 0013) | 2.4, 5.1, 6.1, 7.4 |
 | Position, orientation et hauteur du lidar sur le robot | 9.1, 16.2 |
 | Séquences des mécanismes (prise de pierres, construction, Graal, lanceur) | 7.1, 14 |
-| Poses d'approche de la stratégie `homologation` (carrière `quarry_front_4`, tour `blue_tower_front_outer`), selon l'empreinte du robot et les mécanismes ; sens de `element_id` pour `pick_stones` (une pierre ou toute la carrière) | 7.1, 21.2 |
+| Poses d'approche de la stratégie `homologation` (carrière `quarry_front_4`, tour `blue_tower_front_outer`), selon l'empreinte du robot et les mécanismes ; sens de `element_id` pour `pick_stones` (une pierre ou toute la carrière). La pose de l'étape `quarry`, (2250, 300), est dans les pierres gonflées : le planificateur la refuse (ADR 0013) | 7.1, 21.2 |
 | GPIO, pull-up et niveau logique de la tirette | 15.3 |
 | Câblage du BAU conforme à R1, R2 et R8 du document d'asservissement | 13.3, 8.2 |
 | Variante ROS 2 et pilote du TiM561, résolution angulaire réelle | 11.3, 16.1 |
