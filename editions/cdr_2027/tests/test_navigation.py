@@ -20,10 +20,6 @@ from dvb_brain.domain.world import Track, WorldModel, WorldSnapshot
 EDITION = Path(__file__).parents[1]
 ROBOT_CONFIG = EDITION.parents[1] / "config" / "robot.json"
 
-BLUE_THRONE_ROOM = Vec2(2.75, 1.0)
-YELLOW_THRONE_ROOM = Vec2(0.25, 1.0)
-TABLE_CENTRE = Vec2(1.5, 1.0)
-
 
 @pytest.fixture(scope="module")
 def arena() -> Arena:
@@ -40,6 +36,15 @@ def world(arena: Arena, config: RobotConfig) -> WorldSnapshot:
     return WorldModel(arena.elements, config.world, now=0.0).snapshot(0.0)
 
 
+def centre_of(arena: Arena, zone_id: str) -> Vec2:
+    centroid = arena.zone(zone_id).polygon.centroid
+    return Vec2(centroid.x, centroid.y)
+
+
+def table_centre(arena: Arena) -> Vec2:
+    return Vec2(arena.width / 2, arena.depth / 2)
+
+
 def planner(arena: Arena, config: RobotConfig, world: WorldSnapshot, side: Side) -> Planner:
     return Planner(arena, side, config.geometry, config.navigation, world)
 
@@ -48,23 +53,26 @@ def opponent(x: float, y: float) -> Track:
     return Track(id=1, center=Vec2(x, y), radius=0.2, velocity=Vec2(0, 0), confirmed=True)
 
 
-@pytest.mark.parametrize(
-    ("side", "throne_room"), [(Side.BLUE, BLUE_THRONE_ROOM), (Side.YELLOW, YELLOW_THRONE_ROOM)]
-)
+@pytest.mark.parametrize("side", [Side.BLUE, Side.YELLOW])
 def test_robot_goes_from_its_throne_room_to_the_centre_and_back(
-    arena: Arena, config: RobotConfig, world: WorldSnapshot, side: Side, throne_room: Vec2
+    arena: Arena, config: RobotConfig, world: WorldSnapshot, side: Side
 ) -> None:
     navigation = planner(arena, config, world, side)
+    throne_room = centre_of(arena, f"{side.value}_throne_room")
 
-    assert isinstance(navigation.plan(throne_room, TABLE_CENTRE), PlannedPath)
-    assert isinstance(navigation.plan(TABLE_CENTRE, throne_room), PlannedPath)
+    assert isinstance(navigation.plan(throne_room, table_centre(arena)), PlannedPath)
+    assert isinstance(navigation.plan(table_centre(arena), throne_room), PlannedPath)
 
 
 def test_opponent_castle_is_out_of_reach(
     arena: Arena, config: RobotConfig, world: WorldSnapshot
 ) -> None:
     # RG H.4: entering an exclusive area of the opponent is a forfeit.
-    result = planner(arena, config, world, Side.BLUE).plan(BLUE_THRONE_ROOM, YELLOW_THRONE_ROOM)
+    navigation = planner(arena, config, world, Side.BLUE)
+
+    result = navigation.plan(
+        centre_of(arena, "blue_throne_room"), centre_of(arena, "yellow_throne_room")
+    )
 
     assert result == NoPath(NoPathReason.GOAL_IN_OBSTACLE)
 
@@ -83,7 +91,9 @@ def test_benchmark_request_with_two_opponents(
     # One opponent on each side of the direct line: the path goes around the upper one.
     opponents = [opponent(2.0, 0.6), opponent(1.9, 1.5)]
 
-    result = benchmark(navigation.plan, BLUE_THRONE_ROOM, Vec2(1.1, 1.6), opponents)
+    start = centre_of(arena, "blue_throne_room")
+
+    result = benchmark(navigation.plan, start, Vec2(1.1, 1.6), opponents)
 
     assert isinstance(result, PlannedPath)
     assert len(result.points) > 2
