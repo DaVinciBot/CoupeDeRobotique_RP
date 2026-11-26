@@ -57,13 +57,18 @@ def static_obstacles(arena: Arena, side: Side, world: WorldSnapshot) -> tuple[Po
         *arena.zones_of(ZoneKind.EXCLUSIVE_OPPONENT, mirror_side(side)),
         *(zone for zone in arena.zones.values() if ZoneKind.OBSTACLE in zone.kinds),
     ]
-    elements = [
-        arena.elements[element_id].footprint()
-        for element_id, element in world.our_elements.items()
-        if element.value.present
-    ]
+    elements = [arena.elements[element_id].footprint() for element_id in elements_in_place(world)]
     constructions = [c.value.footprint for c in world.our_constructions.values()]
     return (*(zone.polygon for zone in zones), *elements, *constructions)
+
+
+def elements_in_place(world: WorldSnapshot) -> tuple[str, ...]:
+    """Return the ids of the elements still at their place by our own state, in table order.
+
+    Our own state changes only by our actions (ADR 0013): a view of the remote vision that goes
+    stale does not change the static obstacles. An element the opponent took stays an obstacle.
+    """
+    return tuple(i for i, element in world.our_elements.items() if element.value.present)
 
 
 def dynamic_obstacles(
