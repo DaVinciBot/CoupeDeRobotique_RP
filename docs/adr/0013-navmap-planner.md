@@ -30,7 +30,7 @@ Les zones `CONSTRUCTION`, `STORAGE`, `START`, `END` et `OTHER` ne bloquent rien.
 
 **Obstacles dynamiques**, passés à chaque planification : un disque de rayon `track.radius + clearance` par piste adverse, et des polygones interdits selon l'état du match, gonflés de `clearance`. Ces polygones viendront de `MatchRules.forbidden_zones(world)`, que la case 7.2 ajoute au socle ; d'ici là, le planificateur se contente de les accepter.
 
-**Gonflage simplifié mais prudent.** Un obstacle est gonflé par `buffer(clearance / cos(π / (4q)), quad_segs=q)`, avec q petit. Le polygone obtenu est circonscrit à l'arc de rayon `clearance` : ses cordes restent au moins à `clearance` de l'obstacle. Ses rares sommets donnent un graphe d'une centaine de nœuds. Un `buffer(clearance)` simple aurait ses sommets sur l'arc et ses cordes à l'intérieur : avec q = 2 et le rayon provisoire, la corde mangerait 18 mm des 20 mm de marge.
+**Gonflage simplifié mais prudent.** Un polygone est gonflé par `buffer(clearance, join_style="mitre", mitre_limit=1)`. Ses côtés reculent d'exactement `clearance`, et chaque coin est coupé par une droite tangente au cercle de rayon `clearance` : le polygone couvre tout le gonflage exact, avec deux sommets par coin au lieu d'un arc. Un disque, comme un adversaire, devient le polygone régulier à 8 côtés qui lui est circonscrit. Sur la table 2027, côté bleu, avec le rayon provisoire, l'espace libre n'est jamais à moins de 232 mm d'un obstacle. Il a 33 nœuds, et ses arêtes fixes se calculent en 1 ms sur PC.
 
 **Nœuds et tangence.** Les nœuds sont les sommets convexes des obstacles gonflés, pris sur les anneaux du polygone d'espace libre lui-même. Une arête est valide si l'espace libre fermé contient le segment (`covers`). Comme nœuds et polygone ont les mêmes coordonnées, les prédicats exacts de GEOS acceptent un segment le long d'une arête ou qui passe par un sommet.
 
@@ -63,7 +63,9 @@ Ces sections sont décodées vers `RobotGeometry` (`domain/robot.py`) et `Naviga
 - **Donner aux carrières le rôle `obstacle` dans `arena.json`** : aucun code de plus, mais une carrière vide resterait interdite tout le match, et chacune bloque environ 0,8 × 0,6 m une fois gonflée.
 - **Éléments en place d'après `element(id)`**, la vue fusionnée : chaque vue du calcul déporté qui se périme relancerait le calcul de la partie fixe.
 - **Une pénalité qui dépend de l'angle du virage** : l'A\* devrait chercher sur les couples (nœud, prédécesseur), pour un gain faible tant que la pénalité n'est pas réglée sur table.
-- **Simplifier le polygone gonflé (`simplify`)** : il peut rentrer dans l'obstacle, de l'ordre de la tolérance. Le gonflage circonscrit ne fait que grossir.
+- **`buffer` arrondi**, `buffer(clearance, quad_segs=q)` : les sommets sont sur l'arc et les cordes à l'intérieur. Avec q = 2, une corde mangerait 18 mm des 20 mm de marge.
+- **`buffer` arrondi circonscrit**, `buffer(clearance / cos(π / 4q), quad_segs=q)` : il est prudent, mais il grossit aussi les côtés droits, de 19 mm pour q = 2. Il donne 66 nœuds au lieu de 33 sur la table 2027.
+- **Simplifier le polygone gonflé (`simplify`)** : il peut rentrer dans l'obstacle, de l'ordre de la tolérance.
 - **Tout recalculer à chaque requête** : la TODO et l'architecture demandent une partie fixe précalculée, et le benchmark le justifie.
 
 ## Conséquences

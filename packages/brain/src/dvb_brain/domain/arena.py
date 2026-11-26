@@ -81,6 +81,10 @@ class ElementSpec:
     size: Size
     mirror_id: str  # id of the symmetric element; its own id when on the axis
 
+    def footprint(self) -> Polygon:
+        """Return the rectangle the element covers on the table, in metres."""
+        return _rectangle(self.pose, self.size.length, self.size.width)
+
 
 def _no_element_tags() -> Mapping[str, frozenset[int]]:
     return MappingProxyType({})
@@ -265,12 +269,17 @@ def _zone_polygon(raw: _ZoneFile) -> Polygon:
     if raw.rect_mm is not None:
         rect = raw.rect_mm
         frame = Pose(mm_to_m(rect.x), mm_to_m(rect.y), deg_to_rad(rect.theta_deg))
-        half_length, half_width = mm_to_m(rect.length) / 2, mm_to_m(rect.width) / 2
-        corners = [(-1, -1), (1, -1), (1, 1), (-1, 1)]
-        points = [frame.to_world(Vec2(u * half_length, v * half_width)) for u, v in corners]
-        return Polygon([(p.x, p.y) for p in points])
+        return _rectangle(frame, mm_to_m(rect.length), mm_to_m(rect.width))
     assert raw.polygon_mm is not None  # checked by parse_arena
     return Polygon([(mm_to_m(x), mm_to_m(y)) for x, y in raw.polygon_mm])
+
+
+def _rectangle(frame: Pose, length: float, width: float) -> Polygon:
+    """Return the rectangle centred on frame, its length along the heading of frame."""
+    half_length, half_width = length / 2, width / 2
+    corners = [(-1, -1), (1, -1), (1, 1), (-1, 1)]
+    points = [frame.to_world(Vec2(u * half_length, v * half_width)) for u, v in corners]
+    return Polygon([(p.x, p.y) for p in points])
 
 
 def _to_zone(raw: _ZoneFile) -> Zone:
