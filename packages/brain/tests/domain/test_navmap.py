@@ -245,12 +245,12 @@ def test_dynamic_obstacles_are_inflated_discs_around_the_tracks() -> None:
 
 
 def test_dynamic_obstacles_inflate_the_forbidden_polygons() -> None:
-    forbidden = box(0.5, 0.4, 0.6, 0.5)
+    forbidden = box(0.52, 0.41, 0.62, 0.51)
 
     obstacles = dynamic_obstacles(CLEARANCE, [], [forbidden])
 
-    assert obstacles.contains(Point(0.6 + CLEARANCE - 0.001, 0.45))
-    assert not obstacles.contains(Point(0.6 + CLEARANCE + 0.001, 0.45))
+    assert obstacles.contains(Point(0.62 + CLEARANCE - 0.001, 0.46))
+    assert not obstacles.contains(Point(0.62 + CLEARANCE + 0.001, 0.46))
 
 
 def test_no_dynamic_obstacle_gives_an_empty_shape() -> None:

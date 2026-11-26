@@ -196,7 +196,7 @@ def test_passage_between_two_obstacles(gap: float, passes: bool) -> None:
     lower, upper = box(0.95, 0.15, 1.05, 0.45), box(0.95, 0.45 + gap, 1.05, 0.85)
     planner = planner_for(make_arena(lower, upper))
 
-    result = planner.plan(Vec2(0.5, 0.5), Vec2(1.5, 0.5))
+    result = planner.plan(Vec2(0.5, 0.55), Vec2(1.5, 0.55))
 
     if passes:
         assert_clear(planner, as_path(result))
@@ -238,7 +238,7 @@ def test_start_in_an_inflated_obstacle_is_projected_on_the_free_space() -> None:
     planner = planner_for(make_arena())
     start = Vec2(0.5, 0.05)  # closer to the bottom border than the clearance
 
-    path = as_path(planner.plan(start, Vec2(1.5, 0.5)))
+    path = as_path(planner.plan(start, Vec2(1.5, 0.55)))
 
     assert path.points[0] == start
     projection = path.points[1]
@@ -305,7 +305,7 @@ def test_updated_keeps_the_planner_while_nothing_static_changes() -> None:
     arena = make_arena(elements=[CRATE])
     model = world_of(arena)
     planner = planner_for(arena, model)
-    model.update_tracks(TrackSet(1.5, (opponent(1.5, 0.5),)))
+    model.update_tracks(TrackSet(1.5, (opponent(1.6, 0.5),)))
     seen_taken = ElementState(
         present=False, taken=True, placed_at=None, carried_by_us=False, confidence=0.9
     )
