@@ -28,6 +28,10 @@ class NavigationSettings:
 
     margin: float  # m, kept between the robot and any obstacle, on top of its radius
     turn_penalty: float  # m, added to the length of a path for each stop to turn
+    # Backwards, the lidar sees nothing (270 degrees): short and slow only (ADR 0014)
+    reverse_max_distance: float  # m, longest straight line backwards
+    reverse_min_gain: float  # rad, rotation that auto must save to go backwards
+    reverse_max_speed: float  # m/s
 
 
 def inflate(shape: BaseGeometry, distance: float) -> BaseGeometry:

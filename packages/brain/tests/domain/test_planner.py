@@ -75,8 +75,14 @@ def planner_for(
     return Planner(
         arena,
         Side.BLUE,
-        RobotGeometry(radius=RADIUS),
-        NavigationSettings(margin=MARGIN, turn_penalty=turn_penalty),
+        RobotGeometry(radius=RADIUS, rear=RADIUS),
+        NavigationSettings(
+            margin=MARGIN,
+            turn_penalty=turn_penalty,
+            reverse_max_distance=0.3,
+            reverse_min_gain=0.8,
+            reverse_max_speed=0.2,
+        ),
         snapshot,
     )
 
