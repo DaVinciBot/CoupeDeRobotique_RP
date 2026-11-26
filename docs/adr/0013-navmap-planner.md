@@ -64,7 +64,7 @@ Ces sections sont décodées vers `RobotGeometry` (`domain/robot.py`) et `Naviga
 - **Éléments en place d'après `element(id)`**, la vue fusionnée : chaque vue du calcul déporté qui se périme relancerait le calcul de la partie fixe.
 - **Une pénalité qui dépend de l'angle du virage** : l'A\* devrait chercher sur les couples (nœud, prédécesseur), pour un gain faible tant que la pénalité n'est pas réglée sur table.
 - **`buffer` arrondi**, `buffer(clearance, quad_segs=q)` : les sommets sont sur l'arc et les cordes à l'intérieur. Avec q = 2, une corde mangerait 18 mm des 20 mm de marge.
-- **`buffer` arrondi circonscrit**, `buffer(clearance / cos(π / 4q), quad_segs=q)` : il est prudent, mais il grossit aussi les côtés droits, de 19 mm pour q = 2. Il donne 66 nœuds au lieu de 33 sur la table 2027.
+- **`buffer` arrondi circonscrit**, `buffer(clearance / cos(π / 4q), quad_segs=q)` : il est prudent, mais il grossit aussi les côtés droits, de 19 mm pour q = 2. Il donne 66 nœuds au lieu de 34 sur la table 2027.
 - **Simplifier le polygone gonflé (`simplify`)** : il peut rentrer dans l'obstacle, de l'ordre de la tolérance.
 - **Tout recalculer à chaque requête** : la TODO et l'architecture demandent une partie fixe précalculée, et le benchmark le justifie.
 
