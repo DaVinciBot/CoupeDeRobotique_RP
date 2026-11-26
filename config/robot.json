@@ -1,10 +1,18 @@
 {
   "schema_version": 1,
   "kind": "cdr.robot",
+  "geometry": {
+    "radius_mm": 212
+  },
+  "navigation": {
+    "margin_mm": 20,
+    "turn_penalty_mm": 100
+  },
   "world": {
     "lidar_tracks_ttl_s": 0.3,
     "remote_ttl_s": 0.3,
     "element_seen_ttl_s": 2,
     "odometry_history_s": 2
-  }
+  },
+  "provisional": ["geometry.radius_mm"]
 }

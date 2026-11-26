@@ -265,6 +265,14 @@ def test_parse_arena_reads_elements() -> None:
     assert element.mirror_id == "crate_yellow"
 
 
+def test_element_footprint_is_its_rectangle_with_the_length_along_its_heading() -> None:
+    element = parse_arena(encode(valid_document())).elements["crate_blue"]
+
+    # Pose (0.7, 1.5) at 90 degrees, 0.2 m long and 0.1 m wide: the length is along y.
+    assert element.footprint().bounds == pytest.approx((0.65, 1.4, 0.75, 1.6))
+    assert element.footprint().area == pytest.approx(0.02)
+
+
 def test_parse_arena_normalizes_element_heading() -> None:
     document = valid_document()
     document["elements"][0]["pose"]["theta_deg"] = 270
