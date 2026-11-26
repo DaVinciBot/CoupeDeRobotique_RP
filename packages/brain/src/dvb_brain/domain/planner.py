@@ -17,7 +17,7 @@ from typing import cast
 import numpy as np
 import shapely
 from numpy.typing import NDArray
-from shapely import Point, Polygon, STRtree
+from shapely import LineString, Point, Polygon, STRtree
 from shapely.geometry.base import BaseGeometry
 from shapely.ops import nearest_points
 
@@ -32,9 +32,9 @@ from dvb_brain.domain.navmap import (
 from dvb_brain.domain.robot import RobotGeometry
 from dvb_brain.domain.world import Track, WorldSnapshot
 
-# A start in an obstacle is moved this far inside the free space: projected on its very
-# boundary, it falls outside about one time in five, by rounding (ADR 0013).
-_START_INSET = 1e-4  # m
+# A start in an obstacle leaves it for a point this far inside the free space: on its very
+# boundary, the point falls outside about one time in five, by rounding (ADR 0013).
+_EXIT_INSET = 1e-4  # m
 
 # DE-9IM pattern: the interior of a dynamic obstacle meets the interior of a segment.
 _CUTS = "T********"
@@ -124,43 +124,58 @@ class Planner:
     ) -> Path | NoPath:
         """Return the cheapest path from start to goal: length plus a penalty per turn.
 
-        A start in an obstacle is first moved to the nearest free point (ADR 0013). forbidden
-        are the conditional forbidden zones of the rules (MatchRules.forbidden_zones, TODO 7.2).
+        The path always begins at start, even in an obstacle: it then leaves it first (ADR 0013).
+        forbidden are the conditional forbidden zones of the rules (MatchRules.forbidden_zones,
+        TODO 7.2).
         """
         dynamic = dynamic_obstacles(self.clearance, opponents, forbidden)
         shapely.prepare(dynamic)
-        if not self._is_free(goal, dynamic):
+        goal_point = Point(goal.x, goal.y)
+        if not self.navmap.free.covers(goal_point) or dynamic.contains_properly(goal_point):
             return NoPath(NoPathReason.GOAL_IN_OBSTACLE)
-        prefix: tuple[Vec2, ...] = ()
-        if not self._is_free(start, dynamic):
-            projected = self._project(start, dynamic)
-            if projected is None:
-                return NoPath(NoPathReason.UNREACHABLE)
-            prefix, start = (start,), projected
         if start == goal:
-            return Path((*prefix, start))
+            return Path((start,))
+        exit_points = self._exit(start, dynamic)
+        if exit_points is None:
+            return NoPath(NoPathReason.UNREACHABLE)
 
-        nodes, edges = self._graph(start, goal, dynamic)
+        source = exit_points[-1] if exit_points else start
+        nodes, edges = self._graph(source, goal, dynamic)
         weights = np.hypot(*(nodes[edges[:, 0]] - nodes[edges[:, 1]]).T)
         weights += self._settings.turn_penalty
         route = _a_star(nodes, edges, weights, source=len(nodes) - 2, target=len(nodes) - 1)
         if route is None:
             return NoPath(NoPathReason.UNREACHABLE)
         inner = (Vec2(float(nodes[k, 0]), float(nodes[k, 1])) for k in route[1:-1])
-        return Path((*prefix, start, *inner, goal))
+        # An exit point within the margin of the start is dropped: the robot goes straight on, and
+        # each point of its first line is then within the margin of the line from that exit
+        # point, so at least its radius away from any obstacle (ADR 0013).
+        kept = (p for p in exit_points if (p - start).norm() > self._settings.margin)
+        return Path((start, *kept, *inner, goal))
 
-    def _is_free(self, point: Vec2, dynamic: BaseGeometry) -> bool:
-        p = Point(point.x, point.y)
-        return self.navmap.free.covers(p) and not dynamic.contains_properly(p)
+    def _exit(self, start: Vec2, dynamic: BaseGeometry) -> tuple[Vec2, ...] | None:
+        """Return the points that take start out of the obstacles: none when it is free.
 
-    def _project(self, start: Vec2, dynamic: BaseGeometry) -> Vec2 | None:
-        """Return the free point nearest to start, a little inside the free space."""
-        free = self.navmap.free if dynamic.is_empty else self.navmap.free.difference(dynamic)
-        inner = free.buffer(-_START_INSET)
-        if inner.is_empty:
-            return None
-        nearest = nearest_points(inner, Point(start.x, start.y))[0]
-        return Vec2(nearest.x, nearest.y)
+        Out of a static obstacle by the nearest free point: each point of that line is closer to
+        the free space than start, never deeper in an obstacle. Then out of a dynamic obstacle by
+        the nearest point clear of it, but only along a line in the static free space: crossing
+        an element or an exclusive area of the opponent (RG H.4) is worse than waiting. None when
+        there is no such way out (ADR 0013).
+        """
+        points: list[Vec2] = []
+        here = start
+        if not self.navmap.free.covers(Point(here.x, here.y)):
+            nearest = _nearest(self.navmap.free, here)
+            if nearest is None:
+                return None
+            here = nearest
+            points.append(here)
+        if dynamic.contains_properly(Point(here.x, here.y)):
+            out = _nearest(self.navmap.free.difference(dynamic), here)
+            if out is None or not self.navmap.free.covers(_line(here, out)):
+                return None
+            points.append(out)
+        return tuple(points)
 
     def _graph(
         self, start: Vec2, goal: Vec2, dynamic: BaseGeometry
@@ -185,6 +200,19 @@ class Planner:
         if not dynamic.is_empty:
             free &= ~shapely.relate_pattern(dynamic, lines, _CUTS)
         return nodes, np.concatenate([edges, np.stack([i[free], j[free]], axis=1)])
+
+
+def _nearest(region: BaseGeometry, point: Vec2) -> Vec2 | None:
+    """Return the point of region nearest to point, a little inside it, or None if empty."""
+    inner = region.buffer(-_EXIT_INSET)
+    if inner.is_empty:
+        return None
+    nearest = nearest_points(inner, Point(point.x, point.y))[0]
+    return Vec2(nearest.x, nearest.y)
+
+
+def _line(a: Vec2, b: Vec2) -> LineString:
+    return LineString([(a.x, a.y), (b.x, b.y)])
 
 
 def _line_duration(distance: float, speed: float, accel: float) -> float:

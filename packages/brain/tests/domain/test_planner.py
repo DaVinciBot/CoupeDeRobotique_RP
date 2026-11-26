@@ -1,3 +1,4 @@
+import heapq
 import math
 import random
 from collections import deque
@@ -273,6 +274,30 @@ def test_start_next_to_an_opponent_is_projected_out_of_it() -> None:
     assert_clear(planner, Path(path.points[1:]), opponents=opponents)
 
 
+def test_start_a_hair_inside_an_inflated_obstacle_goes_straight_on() -> None:
+    # A robot stopped on a line along an inflated obstacle is often a hair inside it: no
+    # quarter turn to step out, and the first line keeps within the margin of the free space.
+    planner = planner_for(make_arena(box(0.9, 0.3, 1.1, 0.7)))  # inflated top side at y = 0.8
+    start = Vec2(1.0, 0.8 - 0.0002)
+
+    path = as_path(planner.plan(start, Vec2(1.7, 0.85)))
+
+    assert path.points[0] == start
+    assert (path.points[1] - start).norm() > MARGIN
+    assert planner.navmap.free.buffer(MARGIN).covers(line(path.points[0], path.points[1]))
+    assert_clear(planner, Path(path.points[1:]))
+
+
+def test_start_never_crosses_a_static_obstacle_to_leave_a_dynamic_one() -> None:
+    # The nearest point out of the forbidden zone is beyond the rock: crossing it is refused.
+    planner = planner_for(make_arena(box(0.95, 0.0, 1.05, 0.6)))
+    forbidden = [box(0.3, 0.0, 1.0, 1.0)]
+
+    result = planner.plan(Vec2(0.8, 0.35), Vec2(1.7, 0.5), forbidden=forbidden)
+
+    assert result == NoPath(NoPathReason.UNREACHABLE)
+
+
 def test_goal_in_an_inflated_obstacle_has_no_path() -> None:
     planner = planner_for(make_arena(box(0.95, 0.3, 1.05, 0.7)))
 
@@ -432,15 +457,46 @@ def grid_connects(free: BaseGeometry, start: tuple[int, int], goal: tuple[int, i
     return False
 
 
-@settings(max_examples=100, deadline=None)
+def shortest_length(free: BaseGeometry, start: Vec2, goal: Vec2) -> float:
+    """Dijkstra on the visibility graph of all the vertices of free, built from scratch.
+
+    Without turn penalty, a shortest path only turns at vertices: this is its exact length.
+    """
+    points = np.unique(shapely.get_coordinates(free), axis=0)
+    points = np.concatenate([points, [[start.x, start.y], [goal.x, goal.y]]])
+    i, j = np.triu_indices(len(points), 1)
+    visible = shapely.covers(free, shapely.linestrings(np.stack([points[i], points[j]], axis=1)))
+    neighbours: list[list[tuple[int, float]]] = [[] for _ in points]
+    for a, b in zip(i[visible].tolist(), j[visible].tolist(), strict=True):
+        weight = math.dist(points[a], points[b])
+        neighbours[a].append((b, weight))
+        neighbours[b].append((a, weight))
+    source, target = len(points) - 2, len(points) - 1
+    best = {source: 0.0}
+    queue = [(0.0, source)]
+    while queue:
+        cost_here, node = heapq.heappop(queue)
+        if node == target:
+            return cost_here
+        for neighbour, weight in neighbours[node]:
+            if cost_here + weight < best.get(neighbour, math.inf):
+                best[neighbour] = cost_here + weight
+                heapq.heappush(queue, (cost_here + weight, neighbour))
+    return math.inf
+
+
+@settings(max_examples=200, deadline=None)
 @given(
     obstacles=st.lists(obstacle, max_size=5),
     opponents=st.lists(track, max_size=2),
     start=left_cell,
     goal=right_cell,
 )
-def test_paths_stay_clear_and_are_found_when_a_fine_grid_finds_one(
-    obstacles: list[Polygon], opponents: list[Track], start: tuple[int, int], goal: tuple[int, int]
+def test_paths_are_clear_shortest_and_found_when_a_fine_grid_finds_one(
+    obstacles: list[Polygon],
+    opponents: list[Track],
+    start: tuple[int, int],
+    goal: tuple[int, int],
 ) -> None:
     arena = make_arena(*obstacles, width=TABLE, depth=TABLE)
     planner = planner_for(arena)
@@ -453,5 +509,6 @@ def test_paths_stay_clear_and_are_found_when_a_fine_grid_finds_one(
         assert result.points[0] == centre(start)
         assert result.points[-1] == centre(goal)
         assert_clear(planner, result, opponents=opponents)
+        assert result.length <= shortest_length(free, centre(start), centre(goal)) + 1e-9
     if grid_connects(free, start, goal):
         assert isinstance(result, Path), result

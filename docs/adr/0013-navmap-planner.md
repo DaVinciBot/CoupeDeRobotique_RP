@@ -34,14 +34,19 @@ Les zones `CONSTRUCTION`, `STORAGE`, `START`, `END` et `OTHER` ne bloquent rien.
 
 **Nœuds et tangence.** Les nœuds sont les sommets convexes des obstacles gonflés, pris sur les anneaux du polygone d'espace libre lui-même. Une arête est valide si l'espace libre fermé contient le segment (`covers`). Comme nœuds et polygone ont les mêmes coordonnées, les prédicats exacts de GEOS acceptent un segment le long d'une arête ou qui passe par un sommet.
 
-**Coût d'un chemin : longueur + `turn_penalty` × (segments − 1).** Avec l'asservissement polaire, le robot s'arrête à chaque sommet pour tourner. Une pénalité constante par segment ne dépend que de l'arête : l'A\* reste sur les nœuds, sans état (nœud, prédécesseur), et l'heuristique euclidienne reste admissible. La pénalité vaut 100 mm au départ, à régler sur la table.
+**Coût d'un chemin : longueur + `turn_penalty` × (segments − 1).** Avec l'asservissement polaire, le robot s'arrête à chaque sommet pour tourner. Une pénalité constante par segment ne dépend que de l'arête : l'A\* reste sur les nœuds, sans état (nœud, prédécesseur), et l'heuristique euclidienne reste admissible. La pénalité vaut 100 mm au départ, à régler sur la table. Avec la pénalité, le chemin rendu est le moins cher parmi ceux qui ne tournent qu'aux nœuds. Un chemin qui tournerait en plein espace libre, avec moins de virages, pourrait coûter moins : on l'accepte. Sans pénalité, le chemin rendu est le plus court.
 
 **Résultat : `Path`, ou `NoPath(reason)`**, comme le `Refused` de l'[ADR 0007](0007-match-state-machine.md). `NoPathReason` vaut :
 
 - `GOAL_IN_OBSTACLE` : l'arrivée est dans un obstacle gonflé, adversaire compris ;
-- `UNREACHABLE` : aucun chemin, par exemple quand départ et arrivée sont dans deux morceaux séparés de l'espace libre.
+- `UNREACHABLE` : aucun chemin, par exemple quand départ et arrivée sont dans deux morceaux séparés de l'espace libre, ou quand le départ ne peut sortir d'un obstacle dynamique sans traverser un obstacle fixe.
 
-Un départ dans un obstacle gonflé est projeté sur l'espace libre réduit de 0,1 mm : le chemin rendu commence par le départ, puis passe par ce point. Ce premier segment sert à sortir de l'obstacle gonflé et n'est vérifié contre rien. Quand le robot s'est arrêté au bord d'un obstacle gonflé, il peut ne faire qu'une fraction de millimètre : la case 5.3 devra ignorer un segment plus court que la tolérance de position (9.3). Sur le bord exact, le point projeté tombe souvent juste dehors à cause des flottants, et aucune arête n'en part.
+**Départ dans un obstacle.** Le chemin rendu commence toujours par le départ, et le robot sort de l'obstacle en deux temps :
+
+1. S'il est dans un obstacle fixe gonflé, il va au point libre le plus proche. Chaque point de cette ligne est plus près de l'espace libre que le départ : le robot ne s'enfonce jamais plus.
+2. Si ce point est dans un obstacle dynamique, il va au point le plus proche hors de celui-ci, mais seulement par une ligne qui reste dans l'espace libre fixe. Sinon, le résultat est `UNREACHABLE` : traverser un élément ou une aire exclusive adverse (forfait, RG H.4) est pire qu'attendre.
+
+Ces points sont pris 0,1 mm à l'intérieur de l'espace libre : sur son bord exact, ils tombent souvent juste dehors à cause des flottants, et aucune arête n'en part. Un point de sortie à moins de `margin` du départ n'est pas gardé. C'est le cas d'un robot arrêté sur une ligne qui longe un obstacle, que le bruit d'odométrie met un peu dedans : il repart tout droit, sans quart de tour. Chaque point de sa première ligne reste alors à moins de `margin` de la ligne calculée depuis le point de sortie, donc à au moins son rayon de tout obstacle.
 
 **`Path.estimated_duration(speed, accel, rot_speed)`** compte un trapèze de vitesse par segment et |Δθ| / `rot_speed` à chaque sommet intérieur. La rotation initiale et le cap final ne sont pas comptés : la case 5.3 connaît `theta`, et la fin de match (7.4) les ajoutera à son temps de retour.
 
