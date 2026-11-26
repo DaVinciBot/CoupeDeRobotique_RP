@@ -1,6 +1,6 @@
 # ADR 0006 — Interface `Edition` et chargement d'une édition
 
-- **Statut** : proposé
+- **Statut** : proposé ; amendé par l'[ADR 0014](0014-motion-plan-navigator.md) (`MatchRules.forbidden_zones(side, world)` prend le côté)
 - **Date** : 2026-11-13
 - **Cases** : [TODO 2.7](../TODO.md#27-interface-edition)
 
