@@ -144,6 +144,15 @@ def test_auto_counts_the_turn_towards_the_next_line() -> None:
     assert [move.reverse for move in moves] == [False, False]
 
 
+def test_auto_never_backs_up_more_than_the_limit_in_a_row() -> None:
+    # Facing away, two short lines then a final heading rear first: each line alone would back
+    # up, both together would go 0.56 m blind.
+    route = path((1.0, 1.0), (1.28, 1.0), (1.522, 1.14))
+    moves = plan(route, MoveMode.AUTO, heading=math.pi, theta=math.radians(-150))
+
+    assert [move.reverse for move in moves] == [True, False]
+
+
 @pytest.mark.parametrize(("theta", "backwards"), [(None, False), (math.pi, True)])
 def test_auto_counts_the_final_heading(theta: float | None, backwards: bool) -> None:
     # Facing +y, the line to +x needs a quarter turn either way: the final heading decides.
@@ -178,7 +187,7 @@ points = st.tuples(st.floats(0.0, 3.0), st.floats(0.0, 2.0))
     st.none() | st.floats(-math.pi, math.pi),
     st.floats(0.05, 2.0),
 )
-def test_no_goto_backs_up_far_or_fast(
+def test_no_plan_backs_up_far_or_fast(
     route: list[tuple[float, float]],
     heading: float,
     mode: MoveMode,
@@ -189,11 +198,13 @@ def test_no_goto_backs_up_far_or_fast(
     moves = moves_along(path(*route), heading, mode, theta, speed, SETTINGS)
 
     starts = [Vec2(*route[0]), *(Vec2(move.x, move.y) for move in moves)]
+    backed = 0.0  # m, backwards in a row
     for start, move in zip(starts, moves, strict=False):
         assert move.kind is MoveKind.GOTO
         assert move.max_speed <= speed
+        backed = backed + (Vec2(move.x, move.y) - start).norm() if move.reverse else 0.0
+        assert backed <= SETTINGS.reverse_max_distance + 1e-9
         if move.reverse:
-            assert (Vec2(move.x, move.y) - start).norm() <= SETTINGS.reverse_max_distance + 1e-9
             assert move.max_speed <= SETTINGS.reverse_max_speed
     last = moves[-1]
     assert (last.x, last.y) == route[-1]

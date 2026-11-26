@@ -361,10 +361,27 @@ async def test_recalibrate_without_contact_keeps_the_odometry(
     assert_pose(last(fake_motion).pose, 0.15, 0.25, 0.0)
 
 
-@pytest.mark.parametrize("max_distance", [-0.1, 0.0, math.nan])
-async def test_recalibrate_refuses_a_distance_that_is_not_backwards(
+@pytest.mark.parametrize("max_distance", [-0.1, 0.0, math.nan, 0.31])
+async def test_recalibrate_refuses_a_push_that_is_not_backwards_or_too_long(
     clock: FakeClock, fake_motion: FakeMotion, navigator: Navigator, max_distance: float
 ) -> None:
     with pytest.raises(ValueError, match="max_distance"):
         await run(clock, navigator.recalibrate(Border.X_MIN, max_distance, DEADLINE))
+    assert fake_motion.moves == []
+
+
+@pytest.mark.parametrize("deadline", [math.inf, math.nan])
+@pytest.mark.parametrize("call", ["go_to", "push_until_blocked", "recalibrate"])
+async def test_a_deadline_that_is_not_finite_is_refused(
+    fake_motion: FakeMotion, navigator: Navigator, call: str, deadline: float
+) -> None:
+    # On the robot, the clock would wait for ever (ADR 0010: no wait without a bound).
+    with pytest.raises(ValueError, match="deadline"):
+        match call:
+            case "go_to":
+                await navigator.go_to(target(1.25, 0.25), deadline)
+            case "push_until_blocked":
+                await navigator.push_until_blocked(-0.1, deadline)
+            case _:
+                await navigator.recalibrate(Border.X_MIN, 0.1, deadline)
     assert fake_motion.moves == []

@@ -2,7 +2,7 @@
 
 Each point after the start becomes a GOTO, absolute: the avoidance can send it again with another
 max speed (ADR 0010), and a new plan starts again from the absolute target. Backwards, the lidar
-sees nothing (270 degrees, architecture 8.4): no GOTO backs up over more than
+sees nothing (270 degrees, architecture 8.4): the GOTOs backwards in a row never go over
 reverse_max_distance, nor faster than reverse_max_speed, whatever the mode.
 """
 
@@ -75,18 +75,21 @@ def _auto(
     """Choose the direction of each line: backwards if short and saving enough rotation.
 
     A line is compared with the turn before it and the turn after it, towards the next line,
-    taken forwards, or towards theta after the last one (ADR 0014).
+    taken forwards, or towards theta after the last one. Lines backwards in a row never add up
+    to more than reverse_max_distance (ADR 0014).
     """
     directions = [(b - a).angle() for a, b in pairwise(points)]
     lengths = [(b - a).norm() for a, b in pairwise(points)]
     backwards: list[bool] = []
+    backed = 0.0  # m, backwards in a row before this line
     for i, (direction, length) in enumerate(zip(directions, lengths, strict=True)):
         then = directions[i + 1] if i + 1 < len(directions) else theta
         saved = _turns(heading, direction, then) - _turns(heading, direction + math.pi, then)
         backwards_line = (
-            length <= settings.reverse_max_distance and saved > settings.reverse_min_gain
+            backed + length <= settings.reverse_max_distance and saved > settings.reverse_min_gain
         )
         backwards.append(backwards_line)
+        backed = backed + length if backwards_line else 0.0
         heading = direction + math.pi if backwards_line else direction
     return backwards
 

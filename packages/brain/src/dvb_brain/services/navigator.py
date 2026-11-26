@@ -70,6 +70,7 @@ class Navigator:
         Each new plan, the correction included, goes from the measured pose to the absolute
         target. Cancelling go_to stops the robot (ADR 0010).
         """
+        _check_deadline(deadline)
         status = await self._still(deadline)
         if status is None:
             return NavResult.TIMEOUT
@@ -95,6 +96,7 @@ class Navigator:
         Return the final status, BLOCKED on contact or ARRIVED after |distance| without one, or
         None at the deadline. Backwards, the lidar sees nothing: short and slow (ADR 0014).
         """
+        _check_deadline(deadline)
         if not (math.isfinite(distance) and distance != 0.0):
             raise ValueError(f"distance must be finite and not 0, got {distance}")
         if distance < -self._settings.reverse_max_distance:
@@ -113,9 +115,13 @@ class Navigator:
         ARRIVED once the pose is set; MOTION_FAULT without contact within max_distance, or when
         a move stops; TIMEOUT at the deadline.
         """
-        if not (math.isfinite(max_distance) and max_distance > 0.0):
-            # The push goes backwards: a max_distance <= 0 would push forwards, or not at all
-            raise ValueError(f"max_distance must be finite and > 0, got {max_distance}")
+        _check_deadline(deadline)
+        # Before the turn, not after it: the push goes backwards, short (ADR 0014)
+        if not 0.0 < max_distance <= self._settings.reverse_max_distance:
+            raise ValueError(
+                f"max_distance must be > 0 and at most {self._settings.reverse_max_distance} m, "
+                f"got {max_distance}"
+            )
         turn = MoveCommand(MoveKind.ROTATE_TO, theta=border_heading(border))
         turned = await self._move(turn, deadline)
         if turned is None:
@@ -174,3 +180,9 @@ class Navigator:
     async def _reset_pose(self, pose: Pose) -> bool:
         await self._motion.reset_pose(pose)
         return True  # until gives None at the deadline only
+
+
+def _check_deadline(deadline: float) -> None:
+    """Refuse a deadline that is not finite: on the robot, the Clock would wait for ever."""
+    if not math.isfinite(deadline):
+        raise ValueError(f"deadline must be finite, got {deadline}")
